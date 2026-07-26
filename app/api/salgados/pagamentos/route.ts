@@ -1,3 +1,4 @@
+import { criarPedidoPix, PagarmeApiError } from "@/lib/pagarme";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
 import { type NextRequest, NextResponse } from "next/server";
@@ -14,29 +15,86 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Busca os dados do Pagar.me (usando o mock por enquanto)
-    const pagarMeResponse = await fetch(
-      "https://mocki.io/v1/829833c1-1d2b-49c2-bcc3-70e22bee4d56",
-    );
-    if (!pagarMeResponse.ok) {
-      throw new Error("Erro ao gerar pedido no gateway de pagamento");
+    const [divida, colaborador] = await Promise.all([
+      prisma.dividas.findUnique({
+        where: { id: Number(divida_id) },
+        select: { id: true, item: true, valor: true },
+      }),
+      prisma.colaboradores.findUnique({
+        where: { id: Number(colaborador_id) },
+        select: {
+          nome: true,
+          email: true,
+          document: true,
+          country_code: true,
+          area_code: true,
+          number: true,
+        },
+      }),
+    ]);
+
+    if (!divida) {
+      return NextResponse.json(
+        { error: "Dívida não encontrada" },
+        { status: 404 },
+      );
     }
-    const pagarMeData = await pagarMeResponse.json();
+
+    if (!colaborador) {
+      return NextResponse.json(
+        { error: "Colaborador não encontrado" },
+        { status: 404 },
+      );
+    }
+
+    if (
+      !colaborador.document ||
+      !colaborador.country_code ||
+      !colaborador.area_code ||
+      !colaborador.number
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Complete o CPF e o telefone do colaborador antes de gerar o pagamento via Pix",
+        },
+        { status: 400 },
+      );
+    }
+
+    const valorEmCentavos = Math.round(Number(divida.valor) * 100);
+
+    // Gera o pedido/QR code Pix na Pagar.me
+    const pagarMeData = await criarPedidoPix({
+      itemCode: String(divida.id),
+      itemDescricao: divida.item || "Pagamento de dívida",
+      valorEmCentavos,
+      cliente: {
+        nome: colaborador.nome,
+        email: colaborador.email,
+        documento: colaborador.document,
+        telefone: {
+          countryCode: colaborador.country_code,
+          areaCode: colaborador.area_code,
+          number: colaborador.number,
+        },
+      },
+    });
 
     const status = pagarMeData.status;
     const charge = pagarMeData.charges?.[0];
     const lastTransaction = charge?.last_transaction;
     const qr_code = lastTransaction?.qr_code;
-
-    // Como o mock retorna uma data de 2027, geramos a expiração de 24 horas a partir de agora:
-    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expires_at = lastTransaction?.expires_at
+      ? new Date(lastTransaction.expires_at)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const charge_id = charge?.id;
     const gateway_id = lastTransaction?.gateway_id;
 
     // Verifica se já existe um pagamento para esta dívida
     const pagamentoExistente = await prisma.pagamentos.findFirst({
-      where: { divida_id: Number(divida_id) },
+      where: { divida_id: divida.id },
       select: { id: true },
     });
 
@@ -60,7 +118,7 @@ export async function POST(req: NextRequest) {
       // Se não existe, cria a linha pela primeira vez
       pagamento = await prisma.pagamentos.create({
         data: {
-          divida_id: Number(divida_id),
+          divida_id: divida.id,
           colaborador_id: Number(colaborador_id),
           status,
           qr_code,
@@ -73,6 +131,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(serializeDecimals(pagamento), { status: 201 });
   } catch (error) {
+    if (error instanceof PagarmeApiError) {
+      console.error("Erro retornado pela Pagar.me:", error.details);
+      return NextResponse.json(
+        {
+          error: "Erro ao gerar pedido no gateway de pagamento",
+          detalhes: error.details,
+        },
+        { status: 502 },
+      );
+    }
     console.error("Erro ao gerar / atualizar pagamento: ", error);
     return NextResponse.json(
       { error: "Erro interno ao gerar pagamento" },
