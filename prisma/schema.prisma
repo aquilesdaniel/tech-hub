@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model certificacoes {
+  id              Int           @id @default(autoincrement())
+  colaborador_id  Int
+  nome            String        @db.VarChar(200)
+  tipo            String        @db.VarChar(100)
+  instituicao     String        @db.VarChar(200)
+  data_obtencao   DateTime      @db.Date
+  data_vencimento DateTime?     @db.Date
+  url_credencial  String?
+  observacoes     String?
+  created_at      DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?     @default(now()) @db.Timestamptz(6)
+  colaboradores   colaboradores @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model colaboradores {
+  id                   Int             @id @default(autoincrement())
+  setor_id             Int?
+  nome                 String          @db.VarChar
+  email                String?         @unique @db.VarChar
+  senha                String?         @db.VarChar
+  tipo                 String?         @default("user") @db.VarChar
+  departamento         String          @db.VarChar
+  cargo                String?         @db.VarChar
+  data_admissao        DateTime?       @db.Timestamptz(6)
+  status               String?         @default("ativo") @db.VarChar
+  admin_permanente     Boolean?        @default(false)
+  admin_temporario_ate DateTime?       @db.Timestamptz(6)
+  total_gasto_salgados Decimal?        @default(0) @db.Decimal(10, 2)
+  country_code         String?         @db.VarChar
+  area_code            String?         @db.VarChar
+  number               String?         @db.VarChar
+  document             String?         @db.VarChar
+  created_at           DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?       @default(now()) @db.Timestamptz(6)
+  recipient_id         String?         @db.VarChar
+  certificacoes        certificacoes[]
+  setores              setores?        @relation(fields: [setor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dividas              dividas[]
+  emprestimos          emprestimos[]
+  pagamentos           pagamentos[]
+}
+
+model dividas {
+  id             Int           @id @default(autoincrement())
+  colaborador_id Int
+  item           String        @db.VarChar(100)
+  motivo         String?
+  data_inicio    DateTime      @db.Date
+  valor          Decimal       @db.Decimal(10, 2)
+  pago           Boolean?      @default(false)
+  created_at     DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?     @default(now()) @db.Timestamptz(6)
+  colaboradores  colaboradores @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pagamentos     pagamentos[]
+}
+
+model emprestimos {
+  id                      Int           @id @default(autoincrement())
+  livro_id                Int
+  colaborador_id          Int
+  data_emprestimo         DateTime      @db.Date
+  data_prevista_devolucao DateTime      @db.Date
+  data_real_devolucao     DateTime?     @db.Date
+  status                  String?       @default("emprestado") @db.VarChar(20)
+  created_at              DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime?     @default(now()) @db.Timestamptz(6)
+  colaboradores           colaboradores @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  livros                  livros        @relation(fields: [livro_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model livros {
+  id          Int           @id @default(autoincrement())
+  titulo      String        @db.VarChar(200)
+  autor       String        @db.VarChar(100)
+  genero      String?       @db.VarChar(50)
+  isbn        String?       @db.VarChar(20)
+  disponivel  Boolean?      @default(true)
+  capa        String?       @db.VarChar(255)
+  created_at  DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime?     @default(now()) @db.Timestamptz(6)
+  emprestimos emprestimos[]
+}
+
+model pagamentos {
+  id             Int            @id @default(autoincrement())
+  divida_id      Int?
+  colaborador_id Int?
+  status         String?        @db.VarChar
+  qr_code        String?        @db.VarChar
+  expires_at     DateTime?      @db.Timestamptz(6)
+  charge_id      String?        @db.VarChar
+  gateway_id     String?        @db.VarChar
+  created_at     DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?      @default(now()) @db.Timestamptz(6)
+  colaboradores  colaboradores? @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pagamentos_colaboradores_id_fkey")
+  dividas        dividas?       @relation(fields: [divida_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pagamentos_dividas_id_fkey")
+}
+
+model setores {
+  id            Int             @id @default(autoincrement())
+  nome          String          @db.VarChar(100)
+  descricao     String?
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  colaboradores colaboradores[]
+}

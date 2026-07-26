@@ -1,4 +1,5 @@
-import { query } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
+import { isRecordNotFoundError } from "@/lib/prisma-errors";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -8,33 +9,26 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const id = params.id;
+    const id = Number(params.id);
 
-    // Buscar setor
-    const setorResult = await query("SELECT * FROM setores WHERE id = $1", [
-      id,
-    ]);
+    const setor = await prisma.setores.findUnique({
+      where: { id },
+      include: {
+        colaboradores: {
+          select: { id: true, nome: true, email: true, cargo: true, status: true },
+          orderBy: { nome: "asc" },
+        },
+      },
+    });
 
-    if (setorResult.length === 0) {
+    if (!setor) {
       return NextResponse.json(
         { error: "Setor não encontrado" },
         { status: 404 },
       );
     }
 
-    // Buscar colaboradores do setor
-    const colaboradoresResult = await query(
-      "SELECT id, nome, email, cargo, status FROM colaboradores WHERE setor_id = $1 ORDER BY nome ASC",
-      [id],
-    );
-
-    // Combinar resultados
-    const result = {
-      ...setorResult[0],
-      colaboradores: colaboradoresResult,
-    };
-
-    return NextResponse.json(result);
+    return NextResponse.json(setor);
   } catch (error) {
     console.error("Erro ao buscar setor:", error);
     return NextResponse.json(
@@ -50,7 +44,7 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   try {
-    const id = params.id;
+    const id = Number(params.id);
     const body = await req.json();
     const { nome, descricao } = body;
 
@@ -63,10 +57,11 @@ export async function PUT(
     }
 
     // Verificar se o setor existe
-    const existingSetor = await query("SELECT id FROM setores WHERE id = $1", [
-      id,
-    ]);
-    if (existingSetor.length === 0) {
+    const existingSetor = await prisma.setores.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existingSetor) {
       return NextResponse.json(
         { error: "Setor não encontrado" },
         { status: 404 },
@@ -74,16 +69,13 @@ export async function PUT(
     }
 
     // Atualizar setor
-    const result = await query(
-      `UPDATE setores 
-       SET nome = $1, descricao = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING *`,
-      [nome, descricao || "", id],
-    );
+    const setor = await prisma.setores.update({
+      where: { id },
+      data: { nome, descricao: descricao || "", updated_at: new Date() },
+    });
 
     revalidatePath("/admin");
-    return NextResponse.json(result[0]);
+    return NextResponse.json(setor);
   } catch (error) {
     console.error("Erro ao atualizar setor:", error);
     return NextResponse.json(
@@ -99,15 +91,14 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const id = params.id;
+    const id = Number(params.id);
 
     // Verificar se há colaboradores no setor
-    const colaboradores = await query(
-      "SELECT COUNT(*) as total FROM colaboradores WHERE setor_id = $1",
-      [id],
-    );
+    const totalColaboradores = await prisma.colaboradores.count({
+      where: { setor_id: id },
+    });
 
-    if (Number.parseInt(colaboradores[0].total) > 0) {
+    if (totalColaboradores > 0) {
       return NextResponse.json(
         { error: "Não é possível excluir um setor que possui colaboradores" },
         { status: 400 },
@@ -115,11 +106,17 @@ export async function DELETE(
     }
 
     // Excluir setor
-    await query("DELETE FROM setores WHERE id = $1", [id]);
+    await prisma.setores.delete({ where: { id } });
 
     revalidatePath("/admin");
     return NextResponse.json({ message: "Setor excluído com sucesso" });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return NextResponse.json(
+        { error: "Setor não encontrado" },
+        { status: 404 },
+      );
+    }
     console.error("Erro ao excluir setor:", error);
     return NextResponse.json(
       { error: "Erro ao excluir setor" },

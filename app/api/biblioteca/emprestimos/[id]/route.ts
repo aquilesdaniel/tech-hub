@@ -1,4 +1,4 @@
-import { query } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -8,32 +8,29 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const id = params.id;
-    const result = await query(
-      `SELECT 
-        e.*,
-        l.titulo as livro_titulo,
-        l.autor as livro_autor,
-        c.nome as colaborador_nome
-      FROM 
-        emprestimos e
-      JOIN 
-        livros l ON e.livro_id = l.id
-      JOIN 
-        colaboradores c ON e.colaborador_id = c.id
-      WHERE 
-        e.id = $1`,
-      [id],
-    );
+    const id = Number(params.id);
+    const emprestimo = await prisma.emprestimos.findUnique({
+      where: { id },
+      include: {
+        livros: { select: { titulo: true, autor: true } },
+        colaboradores: { select: { nome: true } },
+      },
+    });
 
-    if (result.length === 0) {
+    if (!emprestimo) {
       return NextResponse.json(
         { error: "Empréstimo não encontrado" },
         { status: 404 },
       );
     }
 
-    return NextResponse.json(result[0]);
+    const { livros, colaboradores, ...rest } = emprestimo;
+    return NextResponse.json({
+      ...rest,
+      livro_titulo: livros.titulo,
+      livro_autor: livros.autor,
+      colaborador_nome: colaboradores.nome,
+    });
   } catch (error) {
     console.error("Erro ao buscar empréstimo:", error);
     return NextResponse.json(
@@ -49,57 +46,53 @@ export async function PATCH(
   { params }: { params: { id: string } },
 ) {
   try {
-    const id = params.id;
+    const id = Number(params.id);
     const body = await req.json();
     const { data_real_devolucao, status } = body;
 
-    // Buscar empréstimo para obter o livro_id
-    const emprestimoResult = await query(
-      "SELECT livro_id FROM emprestimos WHERE id = $1",
-      [id],
-    );
+    const emprestimo = await prisma.$transaction(async (tx) => {
+      // Buscar empréstimo para obter o livro_id
+      const existente = await tx.emprestimos.findUnique({
+        where: { id },
+        select: { livro_id: true },
+      });
 
-    if (emprestimoResult.length === 0) {
+      if (!existente) {
+        throw new Error("EMPRESTIMO_NAO_ENCONTRADO");
+      }
+
+      // Atualizar empréstimo
+      const atualizado = await tx.emprestimos.update({
+        where: { id },
+        data: {
+          data_real_devolucao: data_real_devolucao
+            ? new Date(data_real_devolucao)
+            : null,
+          status: status || "devolvido",
+          updated_at: new Date(),
+        },
+      });
+
+      // Se o status for 'devolvido', atualizar disponibilidade do livro
+      if (status === "devolvido" || !status) {
+        await tx.livros.update({
+          where: { id: existente.livro_id },
+          data: { disponivel: true, updated_at: new Date() },
+        });
+      }
+
+      return atualizado;
+    });
+
+    revalidatePath("/biblioteca");
+    return NextResponse.json(emprestimo);
+  } catch (error) {
+    if (error instanceof Error && error.message === "EMPRESTIMO_NAO_ENCONTRADO") {
       return NextResponse.json(
         { error: "Empréstimo não encontrado" },
         { status: 404 },
       );
     }
-
-    const livroId = emprestimoResult[0].livro_id;
-
-    // Iniciar transação
-    await query("BEGIN");
-
-    try {
-      // Atualizar empréstimo
-      const result = await query(
-        `UPDATE emprestimos 
-         SET data_real_devolucao = $1, status = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3
-         RETURNING *`,
-        [data_real_devolucao, status || "devolvido", id],
-      );
-
-      // Se o status for 'devolvido', atualizar disponibilidade do livro
-      if (status === "devolvido" || !status) {
-        await query(
-          "UPDATE livros SET disponivel = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-          [livroId],
-        );
-      }
-
-      // Confirmar transação
-      await query("COMMIT");
-
-      revalidatePath("/biblioteca");
-      return NextResponse.json(result[0]);
-    } catch (error) {
-      // Reverter transação em caso de erro
-      await query("ROLLBACK");
-      throw error;
-    }
-  } catch (error) {
     console.error("Erro ao atualizar empréstimo:", error);
     return NextResponse.json(
       { error: "Erro ao atualizar empréstimo" },

@@ -1,4 +1,4 @@
-import { query } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -23,38 +23,34 @@ export async function POST(req: NextRequest) {
     const novoStatus = data.status; // Ex: paid
 
     // Busca o pagamento correspondente pelo charge_id
-    const pagamentos = await query(
-      `SELECT id, divida_id FROM pagamentos WHERE charge_id = $1`,
-      [chargeId],
-    );
+    const pagamento = await prisma.pagamentos.findFirst({
+      where: { charge_id: chargeId },
+      select: { id: true, divida_id: true },
+    });
 
     // Caso não exista a cobrança mapeada no nosso banco
-    if (pagamentos.length === 0) {
+    if (!pagamento) {
       return NextResponse.json(
         { error: "Pagamento referente a este charge_id não encontrado." },
         { status: 404 },
       );
     }
 
-    const dividaId = pagamentos[0].divida_id;
+    await prisma.$transaction(async (tx) => {
+      // Atualiza o status e data de alteração na tabela de pagamentos
+      await tx.pagamentos.update({
+        where: { id: pagamento.id },
+        data: { status: novoStatus, updated_at: new Date() },
+      });
 
-    // Atualiza o status e data de alteração na tabela de pagamentos
-    await query(
-      `UPDATE pagamentos 
-       SET status = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE charge_id = $2`,
-      [novoStatus, chargeId],
-    );
-
-    // Se o webhook informou que foi pago, reflete na tabela de dividas também
-    if (novoStatus === "paid") {
-      await query(
-        `UPDATE dividas 
-         SET pago = true, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [dividaId],
-      );
-    }
+      // Se o webhook informou que foi pago, reflete na tabela de dividas também
+      if (novoStatus === "paid" && pagamento.divida_id) {
+        await tx.dividas.update({
+          where: { id: pagamento.divida_id },
+          data: { pago: true, updated_at: new Date() },
+        });
+      }
+    });
 
     return NextResponse.json(
       { message: "Webhook processado com sucesso e status atualizado." },

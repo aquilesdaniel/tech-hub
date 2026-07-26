@@ -1,4 +1,4 @@
-import { query, serializeForJSON } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 // Lista de emails de admins permanentes
@@ -27,23 +27,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const colaboradores = await query(`
-      SELECT 
-        id, 
-        nome, 
-        email, 
-        tipo, 
-        departamento, 
-        cargo,
-        admin_permanente,
-        admin_temporario_ate,
-        status,
-        created_at
-      FROM colaboradores 
-      ORDER BY nome ASC
-    `);
+    const colaboradores = await prisma.colaboradores.findMany({
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        tipo: true,
+        departamento: true,
+        cargo: true,
+        admin_permanente: true,
+        admin_temporario_ate: true,
+        status: true,
+        created_at: true,
+      },
+      orderBy: { nome: "asc" },
+    });
 
-    return NextResponse.json(serializeForJSON(colaboradores));
+    return NextResponse.json(colaboradores);
   } catch (error) {
     console.error("Erro ao listar colaboradores:", error);
     return NextResponse.json(
@@ -88,24 +88,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o colaborador existe
-    const colaboradorResult = await query(
-      "SELECT id, nome, email, admin_permanente FROM colaboradores WHERE id = $1",
-      [colaborador_id],
-    );
+    const colaborador = await prisma.colaboradores.findUnique({
+      where: { id: Number(colaborador_id) },
+      select: { id: true, nome: true, email: true, admin_permanente: true },
+    });
 
-    if (colaboradorResult.length === 0) {
+    if (!colaborador) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
       );
     }
 
-    const colaborador = colaboradorResult[0];
-
     // Não permitir definir admin temporário para admin permanente
     if (
       colaborador.admin_permanente ||
-      ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase())
+      (colaborador.email &&
+        ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase()))
     ) {
       return NextResponse.json(
         {
@@ -117,17 +116,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Atualizar colaborador
-    await query(
-      `UPDATE colaboradores 
-       SET admin_temporario_ate = $1, tipo = 'admin', updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2`,
-      [admin_ate, colaborador_id],
-    );
+    await prisma.colaboradores.update({
+      where: { id: colaborador.id },
+      data: {
+        admin_temporario_ate: dataAdmin,
+        tipo: "admin",
+        updated_at: new Date(),
+      },
+    });
 
     return NextResponse.json({
       message: `Admin temporário definido para ${
         colaborador.nome
-      } até ${new Date(admin_ate).toLocaleDateString("pt-BR")}`,
+      } até ${dataAdmin.toLocaleDateString("pt-BR")}`,
     });
   } catch (error) {
     console.error("Erro ao definir admin temporário:", error);
@@ -164,24 +165,23 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verificar se o colaborador existe e não é admin permanente
-    const colaboradorResult = await query(
-      "SELECT id, nome, email, admin_permanente FROM colaboradores WHERE id = $1",
-      [colaborador_id],
-    );
+    const colaborador = await prisma.colaboradores.findUnique({
+      where: { id: Number(colaborador_id) },
+      select: { id: true, nome: true, email: true, admin_permanente: true },
+    });
 
-    if (colaboradorResult.length === 0) {
+    if (!colaborador) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
       );
     }
 
-    const colaborador = colaboradorResult[0];
-
     // Não permitir remover admin permanente
     if (
       colaborador.admin_permanente ||
-      ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase())
+      (colaborador.email &&
+        ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase()))
     ) {
       return NextResponse.json(
         { error: "Não é possível remover privilégios de admin permanente" },
@@ -190,12 +190,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Remover privilégios de admin temporário
-    await query(
-      `UPDATE colaboradores 
-       SET admin_temporario_ate = NULL, tipo = 'user', updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1`,
-      [colaborador_id],
-    );
+    await prisma.colaboradores.update({
+      where: { id: colaborador.id },
+      data: {
+        admin_temporario_ate: null,
+        tipo: "user",
+        updated_at: new Date(),
+      },
+    });
 
     return NextResponse.json({
       message: `Privilégios de admin removidos para ${colaborador.nome}`,

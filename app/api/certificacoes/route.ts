@@ -1,4 +1,5 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -7,28 +8,23 @@ export async function GET(request: NextRequest) {
     const colaborador_id = searchParams.get("colaborador_id");
     const tipo = searchParams.get("tipo");
 
-    let sqlQuery =
-      "SELECT c.*, col.nome as colaborador_nome FROM certificacoes c JOIN colaboradores col ON c.colaborador_id = col.id";
-    const params: any[] = [];
+    const where: Prisma.certificacoesWhereInput = {};
 
-    const conditions = [];
-    if (colaborador_id) {
-      conditions.push("c.colaborador_id = $" + (params.length + 1));
-      params.push(colaborador_id);
-    }
-    if (tipo) {
-      conditions.push("c.tipo = $" + (params.length + 1));
-      params.push(tipo);
-    }
+    if (colaborador_id) where.colaborador_id = Number(colaborador_id);
+    if (tipo) where.tipo = tipo;
 
-    if (conditions.length > 0) {
-      sqlQuery += " WHERE " + conditions.join(" AND ");
-    }
+    const certificacoes = await prisma.certificacoes.findMany({
+      where,
+      include: { colaboradores: { select: { nome: true } } },
+      orderBy: { data_obtencao: "desc" },
+    });
 
-    sqlQuery += " ORDER BY c.data_obtencao DESC";
+    const data = certificacoes.map(({ colaboradores, ...cert }) => ({
+      ...cert,
+      colaborador_nome: colaboradores.nome,
+    }));
 
-    const certificacoes = await query(sqlQuery, params);
-    return NextResponse.json(serializeForJSON(certificacoes));
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Erro ao buscar certificações:", error);
     return NextResponse.json(
@@ -62,25 +58,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sqlQuery = `
-      INSERT INTO certificacoes (colaborador_id, nome, tipo, instituicao, data_obtencao, data_vencimento, url_credencial, observacoes, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-      RETURNING id
-    `;
-
-    const result = await query(sqlQuery, [
-      colaborador_id,
-      nome,
-      tipo,
-      instituicao,
-      data_obtencao,
-      data_vencimento || null,
-      url_credencial || null,
-      observacoes || null,
-    ]);
+    const certificacao = await prisma.certificacoes.create({
+      data: {
+        colaborador_id: Number(colaborador_id),
+        nome,
+        tipo,
+        instituicao,
+        data_obtencao: new Date(data_obtencao),
+        data_vencimento: data_vencimento ? new Date(data_vencimento) : null,
+        url_credencial: url_credencial || null,
+        observacoes: observacoes || null,
+      },
+      select: { id: true },
+    });
 
     return NextResponse.json(
-      { message: "Certificação criada com sucesso", id: result[0]?.id },
+      { message: "Certificação criada com sucesso", id: certificacao.id },
       { status: 201 },
     );
   } catch (error) {

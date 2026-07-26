@@ -1,4 +1,5 @@
-import { query, serializeForJSON } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
+import { serializeDecimals } from "@/lib/serialize";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -28,56 +29,49 @@ export async function POST(req: NextRequest) {
     const qr_code = lastTransaction?.qr_code;
 
     // Como o mock retorna uma data de 2027, geramos a expiração de 24 horas a partir de agora:
-    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const charge_id = charge?.id;
     const gateway_id = lastTransaction?.gateway_id;
 
     // Verifica se já existe um pagamento para esta dívida
-    const pagamentoExistente = await query(
-      `SELECT id FROM pagamentos WHERE divida_id = $1`,
-      [divida_id],
-    );
+    const pagamentoExistente = await prisma.pagamentos.findFirst({
+      where: { divida_id: Number(divida_id) },
+      select: { id: true },
+    });
 
-    let result;
+    let pagamento;
 
-    if (pagamentoExistente.length > 0) {
+    if (pagamentoExistente) {
       // Se já existe, atualiza a linha (Renova as 24 horas e troca o usuário que gerou)
-      result = await query(
-        `UPDATE pagamentos 
-         SET colaborador_id = $1, status = $2, qr_code = $3, expires_at = $4, charge_id = $5, gateway_id = $6, updated_at = CURRENT_TIMESTAMP
-         WHERE divida_id = $7
-         RETURNING *`,
-        [
-          colaborador_id,
+      pagamento = await prisma.pagamentos.update({
+        where: { id: pagamentoExistente.id },
+        data: {
+          colaborador_id: Number(colaborador_id),
           status,
           qr_code,
           expires_at,
           charge_id,
           gateway_id,
-          divida_id,
-        ],
-      );
+          updated_at: new Date(),
+        },
+      });
     } else {
       // Se não existe, cria a linha pela primeira vez
-      result = await query(
-        `INSERT INTO pagamentos 
-         (divida_id, colaborador_id, status, qr_code, expires_at, charge_id, gateway_id) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-         RETURNING *`,
-        [
-          divida_id,
-          colaborador_id,
+      pagamento = await prisma.pagamentos.create({
+        data: {
+          divida_id: Number(divida_id),
+          colaborador_id: Number(colaborador_id),
           status,
           qr_code,
           expires_at,
           charge_id,
           gateway_id,
-        ],
-      );
+        },
+      });
     }
 
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(serializeDecimals(pagamento), { status: 201 });
   } catch (error) {
     console.error("Erro ao gerar / atualizar pagamento: ", error);
     return NextResponse.json(
@@ -101,20 +95,17 @@ export async function GET(req: NextRequest) {
     }
 
     // Busca o último pagamento gerado para essa dívida
-    const result = await query(
-      `SELECT * FROM pagamentos 
-       WHERE divida_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [divida_id],
-    );
+    const pagamento = await prisma.pagamentos.findFirst({
+      where: { divida_id: Number(divida_id) },
+      orderBy: { created_at: "desc" },
+    });
 
     // Se não existir, retornamos nulo com sucesso (200)
-    if (result.length === 0) {
+    if (!pagamento) {
       return NextResponse.json(null);
     }
 
-    return NextResponse.json(serializeForJSON(result[0]));
+    return NextResponse.json(serializeDecimals(pagamento));
   } catch (error) {
     console.error("Erro ao buscar pagamento:", error);
     return NextResponse.json(

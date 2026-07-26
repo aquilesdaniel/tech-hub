@@ -1,4 +1,6 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
+import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -15,78 +17,72 @@ export async function GET(req: NextRequest) {
     const motivosOnly = searchParams.get("motivos_only");
 
     if (motivosOnly === "true") {
-      const result = await query(
-        "SELECT DISTINCT motivo FROM dividas WHERE motivo IS NOT NULL AND motivo != ''",
-      );
-      const motivos = result.map((r: any) => r.motivo);
-      return NextResponse.json(serializeForJSON(motivos));
+      const result = await prisma.dividas.findMany({
+        where: { AND: [{ motivo: { not: null } }, { motivo: { not: "" } }] },
+        distinct: ["motivo"],
+        select: { motivo: true },
+      });
+      return NextResponse.json(result.map((r) => r.motivo));
     }
 
-    let sqlQuery = `
-      SELECT 
-        d.*,
-        c.nome as colaborador_nome
-      FROM 
-        dividas d
-      JOIN 
-        colaboradores c ON d.colaborador_id = c.id
-      WHERE 1=1
-    `;
+    const where: Prisma.dividasWhereInput = {};
 
-    const params: any[] = [];
+    if (pago === "true") where.pago = true;
+    else if (pago === "false") where.pago = false;
 
-    if (pago === "true") {
-      sqlQuery += ` AND d.pago = true`;
-    } else if (pago === "false") {
-      sqlQuery += ` AND d.pago = false`;
-    }
+    if (colaboradorId) where.colaborador_id = Number(colaboradorId);
 
-    if (colaboradorId) {
-      sqlQuery += ` AND d.colaborador_id = $${params.length + 1}`;
-      params.push(colaboradorId);
-    }
-
-    if (motivo && motivo !== "todos") {
-      sqlQuery += ` AND d.motivo = $${params.length + 1}`;
-      params.push(motivo);
-    }
+    if (motivo && motivo !== "todos") where.motivo = motivo;
 
     if (search) {
-      sqlQuery += ` AND (c.nome ILIKE $${params.length + 1} OR d.item ILIKE $${params.length + 1})`;
-      params.push(`%${search}%`);
+      where.OR = [
+        { colaboradores: { nome: { contains: search, mode: "insensitive" } } },
+        { item: { contains: search, mode: "insensitive" } },
+      ];
     }
 
     // Se estiver usando paginação
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
-      const offset = (pageNum - 1) * limitNum;
+      const skip = (pageNum - 1) * limitNum;
 
-      // Primeiro, conta o total
-      const countQuery = `SELECT COUNT(*) FROM (${sqlQuery}) AS count_query`;
-      const countResult = await query(countQuery, params);
-      const total = parseInt(countResult[0].count);
+      const [dividas, total] = await prisma.$transaction([
+        prisma.dividas.findMany({
+          where,
+          include: { colaboradores: { select: { nome: true } } },
+          orderBy: { data_inicio: "desc" },
+          skip,
+          take: limitNum,
+        }),
+        prisma.dividas.count({ where }),
+      ]);
 
-      // Adiciona ordenação e limite
-      sqlQuery += " ORDER BY d.data_inicio DESC";
-      sqlQuery += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(limitNum, offset);
-
-      const dividas = await query(sqlQuery, params);
+      const data = dividas.map(({ colaboradores, ...divida }) => ({
+        ...divida,
+        colaborador_nome: colaboradores.nome,
+      }));
 
       return NextResponse.json({
-        data: serializeForJSON(dividas),
+        data: serializeDecimals(data),
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
       });
     }
 
-    sqlQuery += " ORDER BY d.data_inicio DESC";
+    const dividas = await prisma.dividas.findMany({
+      where,
+      include: { colaboradores: { select: { nome: true } } },
+      orderBy: { data_inicio: "desc" },
+    });
 
-    const dividas = await query(sqlQuery, params);
+    const data = dividas.map(({ colaboradores, ...divida }) => ({
+      ...divida,
+      colaborador_nome: colaboradores.nome,
+    }));
 
-    return NextResponse.json(serializeForJSON(dividas));
+    return NextResponse.json(serializeDecimals(data));
   } catch (error) {
     console.error("Erro ao buscar dívidas:", error);
     return NextResponse.json(
@@ -110,24 +106,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Inserir nova dívida
-    const result = await query(
-      `INSERT INTO dividas 
-       (colaborador_id, item, motivo, data_inicio, valor, pago) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING *`,
-      [
-        colaborador_id,
+    const divida = await prisma.dividas.create({
+      data: {
+        colaborador_id: Number(colaborador_id),
         item,
-        motivo || "",
-        data_inicio || new Date().toISOString().split("T")[0],
+        motivo: motivo || "",
+        data_inicio: data_inicio ? new Date(data_inicio) : new Date(),
         valor,
-        false,
-      ],
-    );
+        pago: false,
+      },
+    });
 
     revalidatePath("/salgados");
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(serializeDecimals(divida), { status: 201 });
   } catch (error) {
     console.error("Erro ao criar dívida:", error);
     return NextResponse.json(

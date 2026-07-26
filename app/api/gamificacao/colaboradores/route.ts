@@ -1,54 +1,52 @@
-import { query } from "@/lib/db";
-import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function GET() {
   try {
-    // Query para buscar estatísticas de certificações por colaborador
-    const colaboradoresStats = await query(`
-      SELECT 
-        c.id,
-        c.nome,
-        c.email,
-        c.departamento,
-        COUNT(cert.id) as total_certificacoes,
-        COUNT(CASE WHEN cert.tipo = 'Certificação Senior' THEN 1 END) as certificacoes_senior,
-        COUNT(CASE WHEN cert.tipo != 'Certificação Senior' THEN 1 END) as outras_certificacoes,
-        MAX(cert.data_obtencao) as ultima_certificacao
-      FROM colaboradores c
-      LEFT JOIN certificacoes cert ON c.id = cert.colaborador_id
-      GROUP BY c.id, c.nome, c.email, c.departamento
-      ORDER BY total_certificacoes DESC
-    `);
+    const colaboradores = await prisma.colaboradores.findMany({
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        departamento: true,
+        certificacoes: { select: { tipo: true, data_obtencao: true } },
+      },
+      orderBy: { certificacoes: { _count: "desc" } },
+    });
 
-    // Para cada colaborador, buscar a distribuição de tipos de certificação
-    const colaboradoresComTipos = await Promise.all(
-      colaboradoresStats.map(async (colaborador: any) => {
-        const tiposCert = await query(
-          `
-          SELECT tipo, COUNT(*) as quantidade
-          FROM certificacoes
-          WHERE colaborador_id = $1
-          GROUP BY tipo
-        `,
-          [colaborador.id],
-        );
+    const resultado = colaboradores.map(({ certificacoes, ...colaborador }) => {
+      const total_certificacoes = certificacoes.length;
+      const certificacoes_senior = certificacoes.filter(
+        (c) => c.tipo === "Certificação Senior",
+      ).length;
+      const outras_certificacoes = total_certificacoes - certificacoes_senior;
 
-        const tipos_certificacao = tiposCert.reduce((acc: any, tipo: any) => {
-          acc[tipo.tipo] = parseInt(tipo.quantidade);
+      const ultima_certificacao = certificacoes.reduce<Date | null>(
+        (max, c) => (!max || c.data_obtencao > max ? c.data_obtencao : max),
+        null,
+      );
+
+      const tipos_certificacao = certificacoes.reduce<Record<string, number>>(
+        (acc, c) => {
+          acc[c.tipo] = (acc[c.tipo] ?? 0) + 1;
           return acc;
-        }, {});
+        },
+        {},
+      );
 
-        return {
-          ...colaborador,
-          total_certificacoes: parseInt(colaborador.total_certificacoes),
-          certificacoes_senior: parseInt(colaborador.certificacoes_senior),
-          outras_certificacoes: parseInt(colaborador.outras_certificacoes),
-          tipos_certificacao,
-        };
-      }),
-    );
+      return {
+        ...colaborador,
+        total_certificacoes,
+        certificacoes_senior,
+        outras_certificacoes,
+        ultima_certificacao,
+        tipos_certificacao,
+      };
+    });
 
-    return NextResponse.json(colaboradoresComTipos);
+    return NextResponse.json(resultado);
   } catch (error) {
     console.error("Erro ao buscar estatísticas dos colaboradores:", error);
     return NextResponse.json(

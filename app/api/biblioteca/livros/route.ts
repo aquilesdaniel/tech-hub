@@ -1,4 +1,5 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -10,32 +11,26 @@ export async function GET(req: NextRequest) {
     const disponivel = searchParams.get("disponivel");
     const search = searchParams.get("search");
 
-    let sqlQuery = "SELECT * FROM livros WHERE 1=1";
-    const params: any[] = [];
+    const where: Prisma.livrosWhereInput = {};
 
-    if (genero && genero !== "todos") {
-      sqlQuery += ` AND genero = $${params.length + 1}`;
-      params.push(genero);
-    }
+    if (genero && genero !== "todos") where.genero = genero;
 
-    if (disponivel === "true") {
-      sqlQuery += ` AND disponivel = true`;
-    } else if (disponivel === "false") {
-      sqlQuery += ` AND disponivel = false`;
-    }
+    if (disponivel === "true") where.disponivel = true;
+    else if (disponivel === "false") where.disponivel = false;
 
     if (search) {
-      sqlQuery += ` AND (titulo ILIKE $${params.length + 1} OR autor ILIKE $${
-        params.length + 1
-      })`;
-      params.push(`%${search}%`);
+      where.OR = [
+        { titulo: { contains: search, mode: "insensitive" } },
+        { autor: { contains: search, mode: "insensitive" } },
+      ];
     }
 
-    sqlQuery += " ORDER BY titulo ASC";
+    const livros = await prisma.livros.findMany({
+      where,
+      orderBy: { titulo: "asc" },
+    });
 
-    const livros = await query(sqlQuery, params);
-
-    return NextResponse.json(serializeForJSON(livros));
+    return NextResponse.json(livros);
   } catch (error) {
     console.error("Erro ao buscar livros:", error);
     return NextResponse.json(
@@ -67,15 +62,19 @@ export async function POST(req: NextRequest) {
       )}`;
 
     // Inserir novo livro
-    const result = await query(
-      `INSERT INTO livros (titulo, autor, genero, isbn, disponivel, capa) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING *`,
-      [titulo, autor, genero || "", isbn || "", true, capaUrl],
-    );
+    const livro = await prisma.livros.create({
+      data: {
+        titulo,
+        autor,
+        genero: genero || "",
+        isbn: isbn || "",
+        disponivel: true,
+        capa: capaUrl,
+      },
+    });
 
     revalidatePath("/biblioteca");
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(livro, { status: 201 });
   } catch (error) {
     console.error("Erro ao adicionar livro:", error);
     return NextResponse.json(

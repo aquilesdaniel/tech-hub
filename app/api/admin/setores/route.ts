@@ -1,36 +1,49 @@
-import { query, serializeForJSON } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
 // GET - Listar todos os setores com contagem de colaboradores
 export async function GET() {
   try {
-    const result = await query(`
-      SELECT 
-        s.id, 
-        s.nome, 
-        s.descricao, 
-        s.created_at,
-        s.updated_at,
-        COUNT(c.id) AS total_colaboradores,
-        (
-          SELECT c2.nome 
-          FROM colaboradores c2 
-          WHERE c2.setor_id = s.id 
-          ORDER BY c2.cargo DESC 
-          LIMIT 1
-        ) AS responsavel
-      FROM 
-        setores s
-      LEFT JOIN 
-        colaboradores c ON s.id = c.setor_id AND c.status = 'ativo'
-      GROUP BY 
-        s.id
-      ORDER BY 
-        s.nome ASC
-    `);
+    const [setores, contagens] = await prisma.$transaction([
+      prisma.setores.findMany({
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          created_at: true,
+          updated_at: true,
+          colaboradores: {
+            orderBy: { cargo: "desc" },
+            take: 1,
+            select: { nome: true },
+          },
+        },
+        orderBy: { nome: "asc" },
+      }),
+      prisma.colaboradores.groupBy({
+        by: ["setor_id"],
+        where: { status: "ativo" },
+        orderBy: { setor_id: "asc" },
+        _count: true,
+      }),
+    ]);
 
-    return NextResponse.json(serializeForJSON(result));
+    const contagemPorSetor = new Map(
+      contagens.map((c) => [c.setor_id, c._count]),
+    );
+
+    const result = setores.map((setor) => ({
+      id: setor.id,
+      nome: setor.nome,
+      descricao: setor.descricao,
+      created_at: setor.created_at,
+      updated_at: setor.updated_at,
+      total_colaboradores: contagemPorSetor.get(setor.id) ?? 0,
+      responsavel: setor.colaboradores[0]?.nome ?? null,
+    }));
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Erro ao buscar setores:", error);
     return NextResponse.json(
@@ -55,11 +68,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Verificar se o setor já existe
-    const existingSetor = await query(
-      "SELECT id FROM setores WHERE nome = $1",
-      [nome],
-    );
-    if (existingSetor.length > 0) {
+    const existingSetor = await prisma.setores.findFirst({
+      where: { nome },
+      select: { id: true },
+    });
+    if (existingSetor) {
       return NextResponse.json(
         { error: "Este setor já existe" },
         { status: 409 },
@@ -67,13 +80,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Inserir novo setor
-    const result = await query(
-      `INSERT INTO setores (nome, descricao) VALUES ($1, $2) RETURNING *`,
-      [nome, descricao || ""],
-    );
+    const setor = await prisma.setores.create({
+      data: { nome, descricao: descricao || "" },
+    });
 
     revalidatePath("/admin");
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(setor, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar setor:", error);
     return NextResponse.json({ error: "Erro ao criar setor" }, { status: 500 });

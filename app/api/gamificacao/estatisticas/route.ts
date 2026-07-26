@@ -1,73 +1,66 @@
-import { query } from "@/lib/db";
-import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function GET() {
   try {
-    // Total de colaboradores
-    const totalColaboradores = await query(`
-      SELECT COUNT(*) as total FROM colaboradores
-    `);
+    const seisMesesAtras = new Date();
+    seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
 
-    // Total de certificações
-    const totalCertificacoes = await query(`
-      SELECT COUNT(*) as total FROM certificacoes
-    `);
+    const [
+      totalColaboradores,
+      totalCertificacoes,
+      certificacoesPorColaborador,
+      colaboradorMaisCertificacoes,
+      tipoMaisPopular,
+      certificacoesRecentes,
+    ] = await prisma.$transaction([
+      prisma.colaboradores.count(),
+      prisma.certificacoes.count(),
+      prisma.certificacoes.groupBy({
+        by: ["colaborador_id"],
+        orderBy: { colaborador_id: "asc" },
+      }),
+      prisma.colaboradores.findFirst({
+        orderBy: { certificacoes: { _count: "desc" } },
+        select: { nome: true },
+      }),
+      prisma.certificacoes.groupBy({
+        by: ["tipo"],
+        _count: { _all: true },
+        orderBy: { _count: { tipo: "desc" } },
+        take: 1,
+      }),
+      prisma.certificacoes.findMany({
+        where: { data_obtencao: { gte: seisMesesAtras } },
+        select: { data_obtencao: true },
+      }),
+    ]);
 
-    // Média de certificações por colaborador
-    const mediaCertificacoes = await query(`
-      SELECT AVG(cert_count) as media
-      FROM (
-        SELECT COUNT(*) as cert_count
-        FROM certificacoes
-        GROUP BY colaborador_id
-      ) as subquery
-    `);
+    const mediaCertificacoesPorColaborador =
+      certificacoesPorColaborador.length > 0
+        ? totalCertificacoes / certificacoesPorColaborador.length
+        : 0;
 
-    // Colaborador com mais certificações
-    const colaboradorMaisCert = await query(`
-      SELECT c.nome, COUNT(cert.id) as total
-      FROM colaboradores c
-      LEFT JOIN certificacoes cert ON c.id = cert.colaborador_id
-      GROUP BY c.id, c.nome
-      ORDER BY total DESC
-      LIMIT 1
-    `);
+    const crescimentoPorMes = new Map<string, number>();
+    for (const cert of certificacoesRecentes) {
+      const mes = cert.data_obtencao.toISOString().slice(0, 7);
+      crescimentoPorMes.set(mes, (crescimentoPorMes.get(mes) ?? 0) + 1);
+    }
 
-    // Tipo de certificação mais popular
-    const tipoMaisPopular = await query(`
-      SELECT tipo, COUNT(*) as total
-      FROM certificacoes
-      GROUP BY tipo
-      ORDER BY total DESC
-      LIMIT 1
-    `);
+    const crescimento_mensal = Array.from(crescimentoPorMes.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, certificacoes]) => ({ mes, certificacoes }));
 
-    // Crescimento mensal (últimos 6 meses)
-    const crescimentoMensal = await query(`
-      SELECT 
-        TO_CHAR(data_obtencao, 'YYYY-MM') as mes,
-        COUNT(*) as certificacoes
-      FROM certificacoes
-      WHERE data_obtencao >= NOW() - INTERVAL '6 months'
-      GROUP BY TO_CHAR(data_obtencao, 'YYYY-MM')
-      ORDER BY mes
-    `);
-
-    const estatisticasGerais = {
-      total_colaboradores: parseInt(totalColaboradores[0]?.total || 0),
-      total_certificacoes: parseInt(totalCertificacoes[0]?.total || 0),
-      media_certificacoes_por_colaborador: parseFloat(
-        mediaCertificacoes[0]?.media || 0,
-      ),
-      colaborador_mais_certificacoes: colaboradorMaisCert[0]?.nome || "N/A",
-      tipo_certificacao_mais_popular: tipoMaisPopular[0]?.tipo || "N/A",
-      crescimento_mensal: crescimentoMensal.map((item: any) => ({
-        mes: item.mes,
-        certificacoes: parseInt(item.certificacoes),
-      })),
-    };
-
-    return NextResponse.json(estatisticasGerais);
+    return NextResponse.json({
+      total_colaboradores: totalColaboradores,
+      total_certificacoes: totalCertificacoes,
+      media_certificacoes_por_colaborador: mediaCertificacoesPorColaborador,
+      colaborador_mais_certificacoes: colaboradorMaisCertificacoes?.nome ?? "N/A",
+      tipo_certificacao_mais_popular: tipoMaisPopular[0]?.tipo ?? "N/A",
+      crescimento_mensal,
+    });
   } catch (error) {
     console.error("Erro ao buscar estatísticas gerais:", error);
     return NextResponse.json(

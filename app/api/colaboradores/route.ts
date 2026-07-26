@@ -1,4 +1,6 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
+import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -10,37 +12,35 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const search = searchParams.get("search");
 
-    let sqlQuery = `
-      SELECT c.*, s.nome as setor_nome
-      FROM colaboradores c
-      LEFT JOIN setores s ON c.setor_id = s.id
-      WHERE 1=1
-    `;
-
-    const params: any[] = [];
+    const where: Prisma.colaboradoresWhereInput = {};
 
     if (departamento && departamento !== "todos") {
-      sqlQuery += ` AND c.departamento = $${params.length + 1}`;
-      params.push(departamento);
+      where.departamento = departamento;
     }
 
     if (status && status !== "todos") {
-      sqlQuery += ` AND c.status = $${params.length + 1}`;
-      params.push(status);
+      where.status = status;
     }
 
     if (search) {
-      sqlQuery += ` AND (c.nome ILIKE $${params.length + 1} OR c.email ILIKE $${
-        params.length + 1
-      })`;
-      params.push(`%${search}%`);
+      where.OR = [
+        { nome: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
     }
 
-    sqlQuery += " ORDER BY c.nome ASC";
+    const colaboradores = await prisma.colaboradores.findMany({
+      where,
+      include: { setores: { select: { nome: true } } },
+      orderBy: { nome: "asc" },
+    });
 
-    const colaboradores = await query(sqlQuery, params);
+    const result = colaboradores.map(({ setores, ...colaborador }) => ({
+      ...colaborador,
+      setor_nome: setores?.nome ?? null,
+    }));
 
-    return NextResponse.json(serializeForJSON(colaboradores));
+    return NextResponse.json(serializeDecimals(result));
   } catch (error) {
     console.error("Erro ao buscar colaboradores:", error);
     return NextResponse.json(
@@ -65,11 +65,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Verificar se o email já existe
-    const existingUser = await query(
-      "SELECT id FROM colaboradores WHERE email = $1",
-      [email],
-    );
-    if (existingUser.length > 0) {
+    const existingUser = await prisma.colaboradores.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existingUser) {
       return NextResponse.json(
         { error: "Este email já está em uso" },
         { status: 409 },
@@ -77,24 +77,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Inserir novo colaborador
-    const result = await query(
-      `INSERT INTO colaboradores 
-       (nome, email, departamento, cargo, data_admissao, status, setor_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING *`,
-      [
+    const colaborador = await prisma.colaboradores.create({
+      data: {
         nome,
         email,
         departamento,
-        cargo || "Colaborador",
-        new Date().toISOString().split("T")[0],
-        "ativo",
-        setor_id || null,
-      ],
-    );
+        cargo: cargo || "Colaborador",
+        data_admissao: new Date(),
+        status: "ativo",
+        setor_id: setor_id ? Number(setor_id) : null,
+      },
+    });
 
     revalidatePath("/admin");
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(serializeDecimals(colaborador), { status: 201 });
   } catch (error) {
     console.error("Erro ao criar colaborador:", error);
     return NextResponse.json(

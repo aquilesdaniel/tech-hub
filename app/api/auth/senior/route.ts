@@ -1,5 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
+
+const ADMINS_PERMANENTES = [
+  "weliton.ribeiro@prismainformatica.com.br",
+  "edson@prismainformatica.com.br",
+  "ivan@prismainformatica.com.br",
+  "jose.xavier@prismainformatica.com.br",
+  "everson.freire@prismainformatica.com.br",
+];
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,44 +85,55 @@ export async function POST(req: NextRequest) {
     const userData = await userResponse.json();
 
     // Verificar se o colaborador já existe no banco local
-    let localUser;
+    let localUser: {
+      id: number;
+      nome: string;
+      email: string | null;
+      tipo: string | null;
+      departamento: string;
+      cargo: string | null;
+      admin_permanente: boolean | null;
+      admin_temporario_ate: Date | null;
+    };
+
     try {
-      const existingUsers = await query(
-        `SELECT id, nome, email, tipo, departamento, cargo, admin_permanente, admin_temporario_ate 
-         FROM colaboradores WHERE email = $1`,
-        [userData.email],
-      );
+      const existingUser = await prisma.colaboradores.findUnique({
+        where: { email: userData.email },
+        select: {
+          id: true,
+          nome: true,
+          email: true,
+          tipo: true,
+          departamento: true,
+          cargo: true,
+          admin_permanente: true,
+          admin_temporario_ate: true,
+        },
+      });
 
-      if (existingUsers.length > 0) {
+      if (existingUser) {
         // Colaborador já existe - verificar status de admin
-        localUser = existingUsers[0];
-
-        // Lista de emails de admins permanentes
-        const adminsPermanentes = [
-          "weliton.ribeiro@prismainformatica.com.br",
-          "edson@prismainformatica.com.br",
-          "ivan@prismainformatica.com.br",
-          "jose.xavier@prismainformatica.com.br",
-          "everson.freire@prismainformatica.com.br",
-        ];
+        localUser = existingUser;
 
         let isAdmin = false;
-        let motivoAdmin = "";
 
         // Verificar se é admin permanente
         if (
-          adminsPermanentes.includes(userData.email.toLowerCase()) ||
+          ADMINS_PERMANENTES.includes(userData.email.toLowerCase()) ||
           localUser.admin_permanente
         ) {
           isAdmin = true;
-          motivoAdmin = "permanente";
 
           // Garantir que está marcado como admin permanente no banco
           if (!localUser.admin_permanente) {
-            await query(
-              "UPDATE colaboradores SET admin_permanente = TRUE, tipo = 'admin', updated_at = CURRENT_TIMESTAMP WHERE email = $1",
-              [userData.email],
-            );
+            await prisma.colaboradores.update({
+              where: { email: userData.email },
+              data: {
+                admin_permanente: true,
+                tipo: "admin",
+                updated_at: new Date(),
+              },
+            });
           }
         }
         // Verificar se é admin temporário
@@ -124,55 +143,55 @@ export async function POST(req: NextRequest) {
 
           if (dataExpiracao >= hoje) {
             isAdmin = true;
-            motivoAdmin = "temporario";
           } else {
             // Admin temporário expirado - remover privilégios
-            await query(
-              "UPDATE colaboradores SET admin_temporario_ate = NULL, tipo = 'user', updated_at = CURRENT_TIMESTAMP WHERE email = $1",
-              [userData.email],
-            );
+            await prisma.colaboradores.update({
+              where: { email: userData.email },
+              data: {
+                admin_temporario_ate: null,
+                tipo: "user",
+                updated_at: new Date(),
+              },
+            });
           }
         }
 
         // Atualizar tipo se necessário
         const newTipo = isAdmin ? "admin" : "user";
         if (localUser.tipo !== newTipo) {
-          await query(
-            "UPDATE colaboradores SET tipo = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2",
-            [newTipo, userData.email],
-          );
+          await prisma.colaboradores.update({
+            where: { email: userData.email },
+            data: { tipo: newTipo, updated_at: new Date() },
+          });
           localUser.tipo = newTipo;
         }
       } else {
         // Colaborador não existe - criar novo
-        const adminsPermanentes = [
-          "weliton.ribeiro@prismainformatica.com.br",
-          "edson@prismainformatica.com.br",
-          "ivan@prismainformatica.com.br",
-          "jose.xavier@prismainformatica.com.br",
-          "everson.freire@prismainformatica.com.br",
-        ];
-
-        const isAdminPermanente = adminsPermanentes.includes(
+        const isAdminPermanente = ADMINS_PERMANENTES.includes(
           userData.email.toLowerCase(),
         );
         const tipoUsuario = isAdminPermanente ? "admin" : "user";
 
-        const newUserResult = await query(
-          `INSERT INTO colaboradores (nome, email, tipo, departamento, cargo, admin_permanente, created_at, updated_at) 
-           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-           RETURNING id, nome, email, tipo, departamento, cargo, admin_permanente, admin_temporario_ate`,
-          [
-            userData.fullName,
-            userData.email,
-            tipoUsuario,
-            userData.tenantDomain || "Senior Platform",
-            userData.integration?.integrationName || "Colaborador",
-            isAdminPermanente,
-          ],
-        );
-
-        localUser = newUserResult[0];
+        localUser = await prisma.colaboradores.create({
+          data: {
+            nome: userData.fullName,
+            email: userData.email,
+            tipo: tipoUsuario,
+            departamento: userData.tenantDomain || "Senior Platform",
+            cargo: userData.integration?.integrationName || "Colaborador",
+            admin_permanente: isAdminPermanente,
+          },
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            tipo: true,
+            departamento: true,
+            cargo: true,
+            admin_permanente: true,
+            admin_temporario_ate: true,
+          },
+        });
       }
     } catch (dbError) {
       console.error("Erro ao verificar/criar colaborador:", dbError);

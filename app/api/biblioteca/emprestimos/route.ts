@@ -1,4 +1,5 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -9,38 +10,28 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const colaboradorId = searchParams.get("colaborador_id");
 
-    let sqlQuery = `
-      SELECT 
-        e.*,
-        l.titulo as livro_titulo,
-        l.autor as livro_autor,
-        c.nome as colaborador_nome
-      FROM 
-        emprestimos e
-      JOIN 
-        livros l ON e.livro_id = l.id
-      JOIN 
-        colaboradores c ON e.colaborador_id = c.id
-      WHERE 1=1
-    `;
+    const where: Prisma.emprestimosWhereInput = {};
 
-    const params: any[] = [];
+    if (status && status !== "todos") where.status = status;
+    if (colaboradorId) where.colaborador_id = Number(colaboradorId);
 
-    if (status && status !== "todos") {
-      sqlQuery += ` AND e.status = $${params.length + 1}`;
-      params.push(status);
-    }
+    const emprestimos = await prisma.emprestimos.findMany({
+      where,
+      include: {
+        livros: { select: { titulo: true, autor: true } },
+        colaboradores: { select: { nome: true } },
+      },
+      orderBy: { data_emprestimo: "desc" },
+    });
 
-    if (colaboradorId) {
-      sqlQuery += ` AND e.colaborador_id = $${params.length + 1}`;
-      params.push(colaboradorId);
-    }
+    const data = emprestimos.map(({ livros, colaboradores, ...emprestimo }) => ({
+      ...emprestimo,
+      livro_titulo: livros.titulo,
+      livro_autor: livros.autor,
+      colaborador_nome: colaboradores.nome,
+    }));
 
-    sqlQuery += " ORDER BY e.data_emprestimo DESC";
-
-    const emprestimos = await query(sqlQuery, params);
-
-    return NextResponse.json(serializeForJSON(emprestimos));
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Erro ao buscar empréstimos:", error);
     return NextResponse.json(
@@ -54,12 +45,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
-      livro_id,
-      colaborador_id,
-      data_emprestimo,
-      data_prevista_devolucao,
-    } = body;
+    const { livro_id, colaborador_id, data_emprestimo, data_prevista_devolucao } =
+      body;
 
     // Validação básica
     if (
@@ -74,64 +61,56 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verificar se o livro está disponível
-    const livroResult = await query(
-      "SELECT disponivel FROM livros WHERE id = $1",
-      [livro_id],
-    );
+    const emprestimo = await prisma.$transaction(async (tx) => {
+      // Verificar se o livro está disponível
+      const livro = await tx.livros.findUnique({
+        where: { id: Number(livro_id) },
+        select: { disponivel: true },
+      });
 
-    if (livroResult.length === 0) {
+      if (!livro) {
+        throw new Error("LIVRO_NAO_ENCONTRADO");
+      }
+
+      if (!livro.disponivel) {
+        throw new Error("LIVRO_INDISPONIVEL");
+      }
+
+      // Criar empréstimo
+      const novoEmprestimo = await tx.emprestimos.create({
+        data: {
+          livro_id: Number(livro_id),
+          colaborador_id: Number(colaborador_id),
+          data_emprestimo: new Date(data_emprestimo),
+          data_prevista_devolucao: new Date(data_prevista_devolucao),
+          status: "emprestado",
+        },
+      });
+
+      // Atualizar disponibilidade do livro
+      await tx.livros.update({
+        where: { id: Number(livro_id) },
+        data: { disponivel: false, updated_at: new Date() },
+      });
+
+      return novoEmprestimo;
+    });
+
+    revalidatePath("/biblioteca");
+    return NextResponse.json(emprestimo, { status: 201 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "LIVRO_NAO_ENCONTRADO") {
       return NextResponse.json(
         { error: "Livro não encontrado" },
         { status: 404 },
       );
     }
-
-    if (!livroResult[0].disponivel) {
+    if (error instanceof Error && error.message === "LIVRO_INDISPONIVEL") {
       return NextResponse.json(
         { error: "Este livro não está disponível para empréstimo" },
         { status: 400 },
       );
     }
-
-    // Iniciar transação
-    await query("BEGIN");
-
-    try {
-      // Criar empréstimo
-      const emprestimoResult = await query(
-        `INSERT INTO emprestimos 
-         (livro_id, colaborador_id, data_emprestimo, data_prevista_devolucao, status) 
-         VALUES ($1, $2, $3, $4, $5) 
-         RETURNING *`,
-        [
-          livro_id,
-          colaborador_id,
-          data_emprestimo,
-          data_prevista_devolucao,
-          "emprestado",
-        ],
-      );
-
-      // Atualizar disponibilidade do livro
-      await query(
-        "UPDATE livros SET disponivel = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-        [livro_id],
-      );
-
-      // Confirmar transação
-      await query("COMMIT");
-
-      revalidatePath("/biblioteca");
-      return NextResponse.json(serializeForJSON(emprestimoResult[0]), {
-        status: 201,
-      });
-    } catch (error) {
-      // Reverter transação em caso de erro
-      await query("ROLLBACK");
-      throw error;
-    }
-  } catch (error) {
     console.error("Erro ao criar empréstimo:", error);
     return NextResponse.json(
       { error: "Erro ao criar empréstimo" },
