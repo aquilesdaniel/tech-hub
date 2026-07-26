@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Busca os dados do Pagar.me (usando o mock por enquanto)
     const pagarMeResponse = await fetch(
-      "https://mocki.io/v1/91b4e1e6-58aa-43b6-9eae-dd609c312b29",
+      "https://mocki.io/v1/829833c1-1d2b-49c2-bcc3-70e22bee4d56",
     );
     if (!pagarMeResponse.ok) {
       throw new Error("Erro ao gerar pedido no gateway de pagamento");

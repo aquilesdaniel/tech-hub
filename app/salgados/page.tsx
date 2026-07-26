@@ -689,7 +689,7 @@ export default function SalgadosPage() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <CardTitle>Dívidas Pendentes</CardTitle>
-                      <CardDescription>
+                      <CardDescription className="mt-1.5">
                         Colaboradores com dívidas pendentes de salgados
                       </CardDescription>
                     </div>

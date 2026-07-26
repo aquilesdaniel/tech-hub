@@ -250,7 +250,7 @@ export default function HomePage() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md">
+            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
               <CardHeader className="text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
@@ -292,21 +292,22 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                  <Link href="/biblioteca">
-                    <div className="mt-4">
-                      <Button
-                        className="w-full bg-blue-600 hover:bg-blue-700"
-                        size="lg"
-                      >
-                        Acessar Biblioteca
-                      </Button>
-                    </div>
-                  </Link>
                 </div>
               </CardContent>
+
+              <div className="mt-auto px-6 pb-6">
+                <Link href="/biblioteca">
+                  <Button
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    size="lg"
+                  >
+                    Acessar Biblioteca
+                  </Button>
+                </Link>
+              </div>
             </Card>
 
-            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md">
+            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
               <CardHeader className="text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <Award className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
@@ -344,18 +345,19 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                  <Link href="/certificacoes">
-                    <div className="mt-4">
-                      <Button
-                        className="w-full bg-green-600 hover:bg-green-700"
-                        size="lg"
-                      >
-                        Acessar Certificações
-                      </Button>
-                    </div>
-                  </Link>
                 </div>
               </CardContent>
+
+              <div className="mt-auto px-6 pb-6">
+                <Link href="/certificacoes">
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    size="lg"
+                  >
+                    Acessar Certificações
+                  </Button>
+                </Link>
+              </div>
             </Card>
 
             {user?.tipo === "admin" && (

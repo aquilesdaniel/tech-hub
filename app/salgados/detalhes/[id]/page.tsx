@@ -150,7 +150,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
+            <Card className="flex flex-col h-full">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -168,7 +168,8 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+
+              <CardContent className="flex flex-col flex-grow">
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Nome</p>
@@ -184,27 +185,26 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
                     <p className="text-sm font-medium text-gray-500">Motivo</p>
                     <p className="text-gray-900">{divida.motivo}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Data de Registro
-                      </p>
-                      <p className="text-gray-900 flex items-center gap-2">
-                        <CalendarDays className="w-4 h-4 text-gray-400" />
-                        {new Date(divida.data_inicio).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-500">Valor</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {Number(divida.valor).toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </p>
-                    </div>
+                </div>
+
+                <div className="mt-auto pt-6 flex justify-between items-end">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Data de Registro
+                    </p>
+                    <p className="text-gray-900 flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-gray-400" />
+                      {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-500">Valor</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {Number(divida.valor).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -219,7 +219,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
                   <CardTitle>Emissor do Pagamento</CardTitle>
                 </div>
                 <CardDescription>
-                  Quem gerou e pagou esta cobrança pelo Pagar.me
+                  Quem gerou e pagou esta cobrança
                 </CardDescription>
               </CardHeader>
               <CardContent>
