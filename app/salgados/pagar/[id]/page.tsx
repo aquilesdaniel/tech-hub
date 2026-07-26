@@ -122,7 +122,9 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
     const checarStatus = async () => {
       try {
-        const res = await fetch(`/api/pagamentos?divida_id=${params.id}`);
+        const res = await fetch(
+          `/api/salgados/pagamentos?divida_id=${params.id}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (data && data.status) {
@@ -207,7 +209,9 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
     const carregarDados = async () => {
       try {
         // 1. Busca a dívida
-        const responseDivida = await fetch(`/api/dividas/${params.id}`);
+        const responseDivida = await fetch(
+          `/api/salgados/dividas/${params.id}`,
+        );
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
         }
@@ -216,7 +220,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
         // 2. Busca pagamento existente (se houver)
         const responsePagamento = await fetch(
-          `/api/pagamentos?divida_id=${params.id}`,
+          `/api/salgados/pagamentos?divida_id=${params.id}`,
         );
         if (responsePagamento.ok) {
           const pagExistente = await responsePagamento.json();
@@ -275,7 +279,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
   //   setIsProcessing(true);
 
   //   try {
-  //     const response = await fetch(`/api/dividas/${divida.id}`, {
+  //     const response = await fetch(`/api/salgados/dividas/${divida.id}`, {
   //       method: "PATCH",
   //       headers: { "Content-Type": "application/json" },
   //       body: JSON.stringify({ pago: true }),
@@ -398,7 +402,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
     // PASSO B: CRIA A REQUISIÇÃO DO QR CODE
     // =======================================================================
     try {
-      const response = await fetch(`/api/pagamentos`, {
+      const response = await fetch(`/api/salgados/pagamentos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

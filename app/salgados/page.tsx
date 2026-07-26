@@ -176,10 +176,10 @@ export default function SalgadosPage() {
 
       const [dividasRes, salgadosPagosRes, colaboradoresRes, motivosRes] =
         await Promise.all([
-          fetch(`/api/dividas?${paramsPendentes.toString()}`),
-          fetch(`/api/dividas?${paramsPagas.toString()}`),
+          fetch(`/api/salgados/dividas?${paramsPendentes.toString()}`),
+          fetch(`/api/salgados/dividas?${paramsPagas.toString()}`),
           fetch("/api/colaboradores"),
-          fetch("/api/dividas?motivos_only=true"),
+          fetch("/api/salgados/dividas?motivos_only=true"),
         ]);
 
       if (dividasRes.ok && salgadosPagosRes.ok && colaboradoresRes.ok) {
@@ -232,7 +232,7 @@ export default function SalgadosPage() {
 
   const marcarComoPago = async (dividaId: number) => {
     try {
-      const response = await fetch(`/api/dividas/${dividaId}`, {
+      const response = await fetch(`/api/salgados/dividas/${dividaId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pago: true }),
@@ -333,7 +333,7 @@ export default function SalgadosPage() {
     }
 
     try {
-      const response = await fetch("/api/dividas", {
+      const response = await fetch("/api/salgados/dividas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -407,7 +407,7 @@ export default function SalgadosPage() {
   //   }
 
   //   try {
-  //     const response = await fetch("/api/dividas", {
+  //     const response = await fetch("/api/salgados/dividas", {
   //       method: "POST",
   //       headers: { "Content-Type": "application/json" },
   //       body: JSON.stringify({

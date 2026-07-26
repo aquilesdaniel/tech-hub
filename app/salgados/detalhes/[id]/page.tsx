@@ -73,7 +73,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
     const carregarDados = async () => {
       try {
         // 1. Busca a dívida
-        const responseDivida = await fetch(`/api/dividas/${params.id}`);
+        const responseDivida = await fetch(`/api/salgados/dividas/${params.id}`);
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
         }
@@ -82,7 +82,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
 
         // 2. Busca pagamento existente
         const responsePagamento = await fetch(
-          `/api/pagamentos?divida_id=${params.id}`,
+          `/api/salgados/pagamentos?divida_id=${params.id}`,
         );
         if (responsePagamento.ok) {
           const pagData = await responsePagamento.json();

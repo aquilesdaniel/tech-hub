@@ -56,9 +56,9 @@ export default function HomePage() {
         certificacoesRes,
         colaboradoresRes,
       ] = await Promise.all([
-        fetch("/api/dividas"),
-        fetch("/api/livros"),
-        fetch("/api/emprestimos"),
+        fetch("/api/salgados/dividas"),
+        fetch("/api/biblioteca/livros"),
+        fetch("/api/biblioteca/emprestimos"),
         fetch("/api/certificacoes"),
         fetch("/api/colaboradores"),
       ]);

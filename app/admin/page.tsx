@@ -137,7 +137,7 @@ export default function AdminPage() {
       const [colaboradoresRes, setoresRes, usuariosAdminRes] =
         await Promise.all([
           fetch("/api/colaboradores"),
-          fetch("/api/setores"),
+          fetch("/api/admin/setores"),
           fetch(`/api/admin/usuarios?user_email=${user?.email}`),
         ]);
 
@@ -338,7 +338,7 @@ export default function AdminPage() {
     }
 
     try {
-      const response = await fetch("/api/setores", {
+      const response = await fetch("/api/admin/setores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSetor),

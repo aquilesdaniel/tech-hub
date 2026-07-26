@@ -98,9 +98,9 @@ export default function BibliotecaPage() {
   const fetchData = async () => {
     try {
       const [livrosRes, colaboradoresRes, emprestimosRes] = await Promise.all([
-        fetch("/api/livros"),
+        fetch("/api/biblioteca/livros"),
         fetch("/api/colaboradores"),
-        fetch("/api/emprestimos"),
+        fetch("/api/biblioteca/emprestimos"),
       ]);
 
       const livrosData = await livrosRes.json();
@@ -148,7 +148,7 @@ export default function BibliotecaPage() {
     }
 
     try {
-      const response = await fetch("/api/livros", {
+      const response = await fetch("/api/biblioteca/livros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,7 +195,7 @@ export default function BibliotecaPage() {
       );
 
       // Criar empréstimo
-      await fetch("/api/emprestimos", {
+      await fetch("/api/biblioteca/emprestimos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -208,7 +208,7 @@ export default function BibliotecaPage() {
       });
 
       // Atualizar disponibilidade do livro
-      await fetch(`/api/livros/${selectedLivro.id}`, {
+      await fetch(`/api/biblioteca/livros/${selectedLivro.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disponivel: false }),
@@ -231,7 +231,7 @@ export default function BibliotecaPage() {
   const devolverLivro = async (emprestimoId: number, livroId: number) => {
     try {
       // Atualizar empréstimo
-      await fetch(`/api/emprestimos/${emprestimoId}`, {
+      await fetch(`/api/biblioteca/emprestimos/${emprestimoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -241,7 +241,7 @@ export default function BibliotecaPage() {
       });
 
       // Atualizar disponibilidade do livro
-      await fetch(`/api/livros/${livroId}`, {
+      await fetch(`/api/biblioteca/livros/${livroId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disponivel: true }),
@@ -294,7 +294,7 @@ export default function BibliotecaPage() {
     setCapaLoading(true);
     try {
       const response = await fetch(
-        `/api/livros/buscar-capa?titulo=${encodeURIComponent(
+        `/api/biblioteca/livros/buscar-capa?titulo=${encodeURIComponent(
           newLivro.titulo,
         )}&autor=${encodeURIComponent(newLivro.autor)}`,
       );
