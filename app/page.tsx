@@ -2,15 +2,8 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useAuth } from "@/contexts/auth-context";
+import { Button, Card } from "@heroui/react";
 import {
   AlertCircle,
   Award,
@@ -148,7 +141,7 @@ export default function HomePage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <Navbar />
 
         <div className="container mx-auto px-4 py-6 sm:py-8">
@@ -165,20 +158,20 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8 max-w-7xl mx-auto">
             <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md">
-              <CardHeader className="text-center pb-4">
+              <Card.Header className="text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-orange-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <Cookie className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
                 </div>
-                <CardTitle className="text-xl sm:text-2xl">
+                <Card.Title className="text-xl sm:text-2xl">
                   Controle de Salgados
-                </CardTitle>
-                <CardDescription className="text-sm sm:text-base">
+                </Card.Title>
+                <Card.Description className="text-sm sm:text-base">
                   {user?.tipo === "admin"
                     ? "Gerencie todas as dívidas de salgados e marque como pagos"
                     : "Visualize e quite suas dívidas de salgados"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div className="bg-red-50 p-3 rounded-lg">
@@ -247,24 +240,24 @@ export default function HomePage() {
                     </div>
                   </Link>
                 </div>
-              </CardContent>
+              </Card.Content>
             </Card>
 
             <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
-              <CardHeader className="text-center pb-4">
+              <Card.Header className="text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                 </div>
-                <CardTitle className="text-xl sm:text-2xl">
+                <Card.Title className="text-xl sm:text-2xl">
                   Biblioteca
-                </CardTitle>
-                <CardDescription className="text-sm sm:text-base">
+                </Card.Title>
+                <Card.Description className="text-sm sm:text-base">
                   {user?.tipo === "admin"
                     ? "Controle completo de empréstimos e catálogo de livros"
                     : "Empreste livros e acompanhe seus empréstimos"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div className="bg-blue-50 p-3 rounded-lg">
@@ -293,7 +286,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
 
               <div className="mt-auto px-6 pb-6">
                 <Link href="/biblioteca">
@@ -308,20 +301,20 @@ export default function HomePage() {
             </Card>
 
             <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
-              <CardHeader className="text-center pb-4">
+              <Card.Header className="text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <Award className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
                 </div>
-                <CardTitle className="text-xl sm:text-2xl">
+                <Card.Title className="text-xl sm:text-2xl">
                   Certificações
-                </CardTitle>
-                <CardDescription className="text-sm sm:text-base">
+                </Card.Title>
+                <Card.Description className="text-sm sm:text-base">
                   {user?.tipo === "admin"
                     ? "Gerencie certificações de todos os colaboradores"
                     : "Adicione e visualize suas certificações profissionais"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div className="bg-green-50 p-3 rounded-lg">
@@ -346,7 +339,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
 
               <div className="mt-auto px-6 pb-6">
                 <Link href="/certificacoes">
@@ -362,18 +355,18 @@ export default function HomePage() {
 
             {user?.tipo === "admin" && (
               <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md lg:col-span-2 xl:col-span-1">
-                <CardHeader className="text-center pb-4">
+                <Card.Header className="text-center pb-4">
                   <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                     <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl">
+                  <Card.Title className="text-xl sm:text-2xl">
                     Gamificação
-                  </CardTitle>
-                  <CardDescription className="text-sm sm:text-base">
+                  </Card.Title>
+                  <Card.Description className="text-sm sm:text-base">
                     Rankings e estatísticas de certificações
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content className="text-center">
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                       <div className="bg-yellow-50 p-3 rounded-lg">
@@ -404,24 +397,24 @@ export default function HomePage() {
                       </div>
                     </Link>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
             )}
 
             {user?.tipo === "admin" && (
               <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md lg:col-span-2 xl:col-span-1">
-                <CardHeader className="text-center pb-4">
+                <Card.Header className="text-center pb-4">
                   <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-purple-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                     <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl">
+                  <Card.Title className="text-xl sm:text-2xl">
                     Painel Admin
-                  </CardTitle>
-                  <CardDescription className="text-sm sm:text-base">
+                  </Card.Title>
+                  <Card.Description className="text-sm sm:text-base">
                     Gerencie colaboradores e setores da empresa
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content className="text-center">
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                       <div className="bg-purple-50 p-3 rounded-lg">
@@ -452,7 +445,7 @@ export default function HomePage() {
                       </div>
                     </Link>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
             )}
           </div>
@@ -460,9 +453,9 @@ export default function HomePage() {
           {user?.tipo !== "admin" && (
             <div className="mt-8 sm:mt-12 max-w-4xl mx-auto">
               <Card className="border-l-4 border-l-blue-500 bg-blue-50/50">
-                <CardContent className="p-4 sm:p-6">
+                <Card.Content className="p-4 sm:p-6">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                     <div>
                       <h3 className="font-semibold text-blue-900 mb-1">
                         Informações Importantes
@@ -479,7 +472,7 @@ export default function HomePage() {
                       </ul>
                     </div>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
             </div>
           )}

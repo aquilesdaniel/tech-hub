@@ -1,24 +1,12 @@
 "use client";
 
-import type React from "react";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, LogIn, Building } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Alert, Button, Card, Input, Label, toast } from "@heroui/react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import type React from "react";
+import { useState } from "react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -27,7 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const { login, isLoading } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +28,7 @@ export default function LoginPage() {
     const success = await login(username, password);
 
     if (success) {
-      toast({
-        title: "Login realizado com sucesso!",
+      toast("Login realizado com sucesso!", {
         description: "Bem-vindo ao sistema Senior.",
       });
       router.push("/");
@@ -52,7 +38,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-4">
           <div className="mx-auto flex justify-center mb-6">
@@ -68,13 +54,15 @@ export default function LoginPage() {
         </div>
 
         <Card className="shadow-xl border-0">
-          <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl text-center">Fazer Login</CardTitle>
-            <CardDescription className="text-center">
+          <Card.Header className="space-y-1 pb-6">
+            <Card.Title className="text-2xl text-center">
+              Fazer Login
+            </Card.Title>
+            <Card.Description className="text-center">
               Entre com suas credenciais da Senior para acessar o sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </Card.Description>
+          </Card.Header>
+          <Card.Content>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username">Usuário Senior</Label>
@@ -104,7 +92,7 @@ export default function LoginPage() {
                     variant="ghost"
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onPress={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-gray-400" />
@@ -116,15 +104,15 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                <Alert status="danger">
+                  <Alert.Description>{error}</Alert.Description>
                 </Alert>
               )}
 
               <Button
                 type="submit"
                 className="w-full h-11"
-                disabled={isLoading}
+                isDisabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
@@ -157,7 +145,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
       </div>
     </div>

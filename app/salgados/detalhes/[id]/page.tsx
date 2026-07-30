@@ -2,17 +2,7 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
+import { Badge, Button, Card, Separator, toast } from "@heroui/react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -22,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 interface Divida {
   id: number;
@@ -59,9 +49,13 @@ interface Colaborador {
   document: string;
 }
 
-export default function DetalhesPage({ params }: { params: { id: string } }) {
+export default function DetalhesPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const router = useRouter();
-  const { toast } = useToast();
 
   const [divida, setDivida] = useState<Divida | null>(null);
   const [pagamento, setPagamento] = useState<Pagamento | null>(null);
@@ -73,7 +67,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
     const carregarDados = async () => {
       try {
         // 1. Busca a dívida
-        const responseDivida = await fetch(`/api/salgados/dividas/${params.id}`);
+        const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
         }
@@ -82,7 +76,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
 
         // 2. Busca pagamento existente
         const responsePagamento = await fetch(
-          `/api/salgados/pagamentos?divida_id=${params.id}`,
+          `/api/salgados/pagamentos?divida_id=${id}`,
         );
         if (responsePagamento.ok) {
           const pagData = await responsePagamento.json();
@@ -101,10 +95,8 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
-        toast({
-          title: "Erro",
+        toast.danger("Erro", {
           description: "Não foi possível carregar os detalhes desta cobrança.",
-          variant: "destructive",
         });
         router.push("/salgados");
       } finally {
@@ -113,7 +105,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
     };
 
     carregarDados();
-  }, [params.id, router, toast]);
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -129,7 +121,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -151,25 +143,25 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="flex flex-col h-full">
-              <CardHeader>
+              <Card.Header>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
                       <User className="w-5 h-5 text-blue-600" />
                     </div>
-                    <CardTitle>Devedor</CardTitle>
+                    <Card.Title>Devedor</Card.Title>
                   </div>
                   {divida.pago ? (
                     <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
                       Pago
                     </Badge>
                   ) : (
-                    <Badge variant="destructive">Pendente</Badge>
+                    <Badge color="danger">Pendente</Badge>
                   )}
                 </div>
-              </CardHeader>
+              </Card.Header>
 
-              <CardContent className="flex flex-col flex-grow">
+              <Card.Content className="flex flex-col grow">
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Nome</p>
@@ -207,22 +199,22 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
                     </p>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
             </Card>
 
             <Card>
-              <CardHeader>
+              <Card.Header>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
                     <CreditCard className="w-5 h-5 text-purple-600" />
                   </div>
-                  <CardTitle>Emissor do Pagamento</CardTitle>
+                  <Card.Title>Emissor do Pagamento</Card.Title>
                 </div>
-                <CardDescription>
+                <Card.Description>
                   Quem gerou e pagou esta cobrança
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
                 {colaboradorPagador ? (
                   <div className="space-y-4">
                     <div>
@@ -355,7 +347,7 @@ export default function DetalhesPage({ params }: { params: { id: string } }) {
                     )}
                   </div>
                 )}
-              </CardContent>
+              </Card.Content>
             </Card>
           </div>
         </div>

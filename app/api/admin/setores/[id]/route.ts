@@ -6,10 +6,11 @@ import { type NextRequest, NextResponse } from "next/server";
 // GET - Buscar setor por ID com colaboradores
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
 
     const setor = await prisma.setores.findUnique({
       where: { id },
@@ -41,10 +42,11 @@ export async function GET(
 // PUT - Atualizar setor
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const body = await req.json();
     const { nome, descricao } = body;
 
@@ -88,10 +90,11 @@ export async function PUT(
 // DELETE - Remover setor (apenas se não tiver colaboradores)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
 
     // Verificar se há colaboradores no setor
     const totalColaboradores = await prisma.colaboradores.count({

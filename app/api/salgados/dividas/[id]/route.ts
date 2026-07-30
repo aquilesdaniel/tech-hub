@@ -7,10 +7,11 @@ import { type NextRequest, NextResponse } from "next/server";
 // GET - Buscar dívida por ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const divida = await prisma.dividas.findUnique({
       where: { id },
       include: { colaboradores: { select: { nome: true } } },
@@ -41,10 +42,11 @@ const CAMPOS_ATUALIZAVEIS = ["item", "motivo", "data_inicio", "valor", "pago"] a
 // PATCH - Atualizar dívida (marcar como paga)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const body = await req.json();
 
     const data: Prisma.dividasUpdateInput = {};

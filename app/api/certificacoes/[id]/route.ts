@@ -5,10 +5,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const certificacao = await prisma.certificacoes.findUnique({
       where: { id },
       include: { colaboradores: { select: { nome: true } } },
@@ -49,10 +50,11 @@ const CAMPOS_DATA = new Set(["data_obtencao", "data_vencimento"]);
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const body = await request.json();
 
     const data: Prisma.certificacoesUpdateInput = {};
@@ -95,10 +97,11 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     await prisma.certificacoes.delete({ where: { id } });
 
     return NextResponse.json({ message: "Certificação removida com sucesso" });

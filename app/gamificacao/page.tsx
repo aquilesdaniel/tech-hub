@@ -2,24 +2,8 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
-import { useToast } from "@/hooks/use-toast";
+import { Badge, Button, Card, ListBox, Select, toast } from "@heroui/react";
 import {
   ArrowLeft,
   Award,
@@ -76,7 +60,6 @@ export default function GamificacaoPage() {
     useState<StatisticasGerais | null>(null);
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [ordenacao, setOrdenacao] = useState("total_desc");
-  const { toast } = useToast();
 
   useEffect(() => {
     if (user?.tipo === "admin") {
@@ -100,10 +83,8 @@ export default function GamificacaoPage() {
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível carregar os dados de gamificação.",
-        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -204,9 +185,9 @@ export default function GamificacaoPage() {
   if (user?.tipo !== "admin") {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center">
           <Card className="max-w-md">
-            <CardContent className="p-6 text-center">
+            <Card.Content className="p-6 text-center">
               <h2 className="text-xl font-semibold mb-2">Acesso Restrito</h2>
               <p className="text-gray-600 mb-4">
                 Este módulo está disponível apenas para administradores.
@@ -214,7 +195,7 @@ export default function GamificacaoPage() {
               <Link href="/">
                 <Button>Voltar ao Dashboard</Button>
               </Link>
-            </CardContent>
+            </Card.Content>
           </Card>
         </div>
       </ProtectedRoute>
@@ -233,7 +214,7 @@ export default function GamificacaoPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -257,7 +238,7 @@ export default function GamificacaoPage() {
           {estatisticasGerais && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card>
-                <CardContent className="p-6">
+                <Card.Content className="p-6">
                   <div className="flex items-center">
                     <div className="p-2 bg-blue-100 rounded-lg">
                       <Users className="w-6 h-6 text-blue-600" />
@@ -271,11 +252,11 @@ export default function GamificacaoPage() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
+                <Card.Content className="p-6">
                   <div className="flex items-center">
                     <div className="p-2 bg-green-100 rounded-lg">
                       <Award className="w-6 h-6 text-green-600" />
@@ -289,11 +270,11 @@ export default function GamificacaoPage() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
+                <Card.Content className="p-6">
                   <div className="flex items-center">
                     <div className="p-2 bg-purple-100 rounded-lg">
                       <Target className="w-6 h-6 text-purple-600" />
@@ -309,11 +290,11 @@ export default function GamificacaoPage() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
+                <Card.Content className="p-6">
                   <div className="flex items-center">
                     <div className="p-2 bg-yellow-100 rounded-lg">
                       <Trophy className="w-6 h-6 text-yellow-600" />
@@ -327,7 +308,7 @@ export default function GamificacaoPage() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
             </div>
           )}
@@ -335,13 +316,13 @@ export default function GamificacaoPage() {
           {/* Gráficos */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card>
-              <CardHeader>
-                <CardTitle>Top 10 - Certificações por Colaborador</CardTitle>
-                <CardDescription>
+              <Card.Header>
+                <Card.Title>Top 10 - Certificações por Colaborador</Card.Title>
+                <Card.Description>
                   Ranking dos colaboradores com mais certificações
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={dadosGraficoBarras}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -352,17 +333,17 @@ export default function GamificacaoPage() {
                     <Bar dataKey="outras" fill="#82ca9d" name="Outras" />
                   </BarChart>
                 </ResponsiveContainer>
-              </CardContent>
+              </Card.Content>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>Distribuição por Tipo</CardTitle>
-                <CardDescription>
+              <Card.Header>
+                <Card.Title>Distribuição por Tipo</Card.Title>
+                <Card.Description>
                   Proporção de cada tipo de certificação
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -387,57 +368,85 @@ export default function GamificacaoPage() {
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
-              </CardContent>
+              </Card.Content>
             </Card>
           </div>
 
           {/* Filtros e Ranking */}
           <Card>
-            <CardHeader>
+            <Card.Header>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <CardTitle>Ranking de Certificações</CardTitle>
-                  <CardDescription>
+                  <Card.Title>Ranking de Certificações</Card.Title>
+                  <Card.Description>
                     Classificação completa dos colaboradores
-                  </CardDescription>
+                  </Card.Description>
                 </div>
                 <div className="flex sm:flex-row flex-col sm:w-fit w-full gap-2">
-                  <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-                    <SelectTrigger className="sm:w-48 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todas</SelectItem>
-                      <SelectItem value="senior">Senior</SelectItem>
-                      <SelectItem value="outras">Outras</SelectItem>
-                    </SelectContent>
+                  <Select
+                    value={filtroTipo}
+                    onChange={(value) => setFiltroTipo(value as string)}
+                  >
+                    <Select.Trigger className="sm:w-48 w-full">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="todos" textValue="Todas">
+                          Todas
+                        </ListBox.Item>
+                        <ListBox.Item id="senior" textValue="Senior">
+                          Senior
+                        </ListBox.Item>
+                        <ListBox.Item id="outras" textValue="Outras">
+                          Outras
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
                   </Select>
-                  <Select value={ordenacao} onValueChange={setOrdenacao}>
-                    <SelectTrigger className="sm:w-48 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="total_desc">Total (Maior)</SelectItem>
-                      <SelectItem value="senior_desc">
-                        Senior (Maior)
-                      </SelectItem>
-                      <SelectItem value="outras_desc">
-                        Outras (Maior)
-                      </SelectItem>
-                      <SelectItem value="nome">Nome (A-Z)</SelectItem>
-                    </SelectContent>
+                  <Select
+                    value={ordenacao}
+                    onChange={(value) => setOrdenacao(value as string)}
+                  >
+                    <Select.Trigger className="sm:w-48 w-full">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="total_desc" textValue="Total (Maior)">
+                          Total (Maior)
+                        </ListBox.Item>
+                        <ListBox.Item
+                          id="senior_desc"
+                          textValue="Senior (Maior)"
+                        >
+                          Senior (Maior)
+                        </ListBox.Item>
+                        <ListBox.Item
+                          id="outras_desc"
+                          textValue="Outras (Maior)"
+                        >
+                          Outras (Maior)
+                        </ListBox.Item>
+                        <ListBox.Item id="nome" textValue="Nome (A-Z)">
+                          Nome (A-Z)
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
                   </Select>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </Card.Header>
+            <Card.Content>
               <div className="space-y-4">
                 {colaboradoresFiltrados.map((colaborador, index) => (
                   <Card
                     key={colaborador.id}
                     className="border-l-4 border-l-blue-500"
                   >
-                    <CardContent className="p-4">
+                    <Card.Content className="p-4">
                       <div className="flex sm:flex-row flex-col items-center sm:items-start justify-between gap-2">
                         <div className="flex sm:flex-row flex-col items-center gap-4">
                           <div className="flex items-center gap-2">
@@ -492,11 +501,11 @@ export default function GamificacaoPage() {
                           )}
                         </div>
                       </div>
-                    </CardContent>
+                    </Card.Content>
                   </Card>
                 ))}
               </div>
-            </CardContent>
+            </Card.Content>
           </Card>
         </div>
       </div>

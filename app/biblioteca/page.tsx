@@ -2,36 +2,19 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/auth-context";
-import { useToast } from "@/hooks/use-toast";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Tabs,
+  toast,
+} from "@heroui/react";
 import { ArrowLeft, BookOpen, Plus, Search, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -89,7 +72,6 @@ export default function BibliotecaPage() {
     colaboradorId: "",
     dias: "14",
   });
-  const { toast } = useToast();
 
   useEffect(() => {
     fetchData();
@@ -139,10 +121,8 @@ export default function BibliotecaPage() {
 
   const adicionarLivro = async () => {
     if (!newLivro.titulo || !newLivro.autor || !newLivro.genero) {
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
-        variant: "destructive",
       });
       return;
     }
@@ -167,8 +147,7 @@ export default function BibliotecaPage() {
         setIsAddLivroOpen(false);
         setNewLivro({ titulo: "", autor: "", genero: "", isbn: "", capa: "" });
 
-        toast({
-          title: "Livro adicionado!",
+        toast("Livro adicionado!", {
           description: "Novo livro foi adicionado ao catálogo.",
         });
       }
@@ -179,10 +158,8 @@ export default function BibliotecaPage() {
 
   const emprestarLivro = async () => {
     if (!selectedLivro || !newEmprestimo.colaboradorId) {
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Selecione um colaborador.",
-        variant: "destructive",
       });
       return;
     }
@@ -219,8 +196,7 @@ export default function BibliotecaPage() {
       setSelectedLivro(null);
       setNewEmprestimo({ colaboradorId: "", dias: "14" });
 
-      toast({
-        title: "Empréstimo realizado!",
+      toast("Empréstimo realizado!", {
         description: "Livro emprestado com sucesso.",
       });
     } catch (error) {
@@ -249,8 +225,7 @@ export default function BibliotecaPage() {
 
       fetchData();
 
-      toast({
-        title: "Devolução realizada!",
+      toast("Devolução realizada!", {
         description: "Livro devolvido com sucesso.",
       });
     } catch (error) {
@@ -283,10 +258,8 @@ export default function BibliotecaPage() {
 
   const buscarCapa = async () => {
     if (!newLivro.titulo) {
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Digite o título do livro para buscar a capa",
-        variant: "destructive",
       });
       return;
     }
@@ -310,17 +283,14 @@ export default function BibliotecaPage() {
           isbn: data.isbn || newLivro.isbn,
         });
 
-        toast({
-          title: "Capa encontrada!",
+        toast("Capa encontrada!", {
           description: "A capa do livro foi carregada automaticamente.",
         });
       }
     } catch (error) {
       console.error("Erro ao buscar capa:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível buscar a capa do livro",
-        variant: "destructive",
       });
     } finally {
       setCapaLoading(false);
@@ -353,7 +323,7 @@ export default function BibliotecaPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -373,7 +343,7 @@ export default function BibliotecaPage() {
 
           <div className="grid lg:grid-cols-4 gap-6 mb-8">
             <Card>
-              <CardContent className="p-6">
+              <Card.Content className="p-6">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <BookOpen className="w-6 h-6 text-blue-600" />
@@ -387,11 +357,11 @@ export default function BibliotecaPage() {
                     </p>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <Card.Content className="p-6">
                 <div className="flex items-center">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <BookOpen className="w-6 h-6 text-green-600" />
@@ -405,11 +375,11 @@ export default function BibliotecaPage() {
                     </p>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <Card.Content className="p-6">
                 <div className="flex items-center">
                   <div className="p-2 bg-yellow-100 rounded-lg">
                     <Users className="w-6 h-6 text-yellow-600" />
@@ -427,156 +397,182 @@ export default function BibliotecaPage() {
                     </p>
                   </div>
                 </div>
-              </CardContent>
+              </Card.Content>
             </Card>
           </div>
 
-          <Tabs defaultValue="catalogo" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="catalogo">Catálogo</TabsTrigger>
-              <TabsTrigger value="emprestimos">Empréstimos Ativos</TabsTrigger>
-              <TabsTrigger value="historico">Histórico</TabsTrigger>
-            </TabsList>
+          <Tabs defaultSelectedKey="catalogo" className="space-y-6">
+            <Tabs.ListContainer>
+              <Tabs.List className="grid w-full grid-cols-3">
+                <Tabs.Tab id="catalogo">
+                  Catálogo
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+                <Tabs.Tab id="emprestimos">
+                  Empréstimos Ativos
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+                <Tabs.Tab id="historico">
+                  Histórico
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              </Tabs.List>
+            </Tabs.ListContainer>
 
-            <TabsContent value="catalogo">
+            <Tabs.Panel id="catalogo">
               <Card>
-                <CardHeader>
+                <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                      <CardTitle>Catálogo de Livros</CardTitle>
-                      <CardDescription>
+                      <Card.Title>Catálogo de Livros</Card.Title>
+                      <Card.Description>
                         Todos os livros disponíveis na biblioteca
-                      </CardDescription>
+                      </Card.Description>
                     </div>
                     {user?.tipo === "admin" && (
-                      <Dialog
-                        open={isAddLivroOpen}
+                      <Modal
+                        isOpen={isAddLivroOpen}
                         onOpenChange={setIsAddLivroOpen}
                       >
-                        <DialogTrigger asChild>
-                          <Button>
-                            <Plus className="w-4 h-4" />
-                            Novo Livro
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Adicionar Novo Livro</DialogTitle>
-                            <DialogDescription>
-                              Adicione um novo livro ao catálogo da biblioteca
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor="titulo">Título</Label>
-                              <Input
-                                id="titulo"
-                                value={newLivro.titulo}
-                                onChange={(e) =>
-                                  setNewLivro({
-                                    ...newLivro,
-                                    titulo: e.target.value,
-                                  })
-                                }
-                                placeholder="Título do livro"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="autor">Autor</Label>
-                              <Input
-                                id="autor"
-                                value={newLivro.autor}
-                                onChange={(e) =>
-                                  setNewLivro({
-                                    ...newLivro,
-                                    autor: e.target.value,
-                                  })
-                                }
-                                placeholder="Nome do autor"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="genero">Gênero</Label>
-                              <Input
-                                id="genero"
-                                value={newLivro.genero}
-                                onChange={(e) =>
-                                  setNewLivro({
-                                    ...newLivro,
-                                    genero: e.target.value,
-                                  })
-                                }
-                                placeholder="Gênero do livro"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="isbn">ISBN (opcional)</Label>
-                              <Input
-                                id="isbn"
-                                value={newLivro.isbn}
-                                onChange={(e) =>
-                                  setNewLivro({
-                                    ...newLivro,
-                                    isbn: e.target.value,
-                                  })
-                                }
-                                placeholder="ISBN do livro"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label>Capa do Livro</Label>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={buscarCapa}
-                                  disabled={!newLivro.titulo || capaLoading}
-                                  className="flex-1"
-                                >
-                                  {capaLoading
-                                    ? "Buscando..."
-                                    : "Buscar Capa Automaticamente"}
-                                </Button>
-                              </div>
-                              {newLivro.capa && (
-                                <div className="flex gap-4 mt-2">
-                                  <Image
-                                    src={newLivro.capa}
-                                    alt="Prévia da capa"
-                                    width={80}
-                                    height={120}
-                                    className="rounded-lg object-cover border"
-                                  />
-                                  <div className="flex-1">
-                                    <p className="text-sm text-gray-600 mb-2">
-                                      Prévia da capa encontrada
-                                    </p>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        setNewLivro({ ...newLivro, capa: "" })
+                        <Button>
+                          <Plus className="w-4 h-4" />
+                          Novo Livro
+                        </Button>
+                        <Modal.Backdrop>
+                          <Modal.Container>
+                            <Modal.Dialog>
+                              <Modal.CloseTrigger />
+                              <Modal.Header>
+                                <Modal.Heading>
+                                  Adicionar Novo Livro
+                                </Modal.Heading>
+                              </Modal.Header>
+                              <Modal.Body>
+                                <p className="text-sm text-gray-600">
+                                  Adicione um novo livro ao catálogo da
+                                  biblioteca
+                                </p>
+                                <div className="grid gap-4 py-4">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="titulo">Título</Label>
+                                    <Input
+                                      id="titulo"
+                                      value={newLivro.titulo}
+                                      onChange={(e) =>
+                                        setNewLivro({
+                                          ...newLivro,
+                                          titulo: e.target.value,
+                                        })
                                       }
-                                    >
-                                      Remover Capa
-                                    </Button>
+                                      placeholder="Título do livro"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="autor">Autor</Label>
+                                    <Input
+                                      id="autor"
+                                      value={newLivro.autor}
+                                      onChange={(e) =>
+                                        setNewLivro({
+                                          ...newLivro,
+                                          autor: e.target.value,
+                                        })
+                                      }
+                                      placeholder="Nome do autor"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="genero">Gênero</Label>
+                                    <Input
+                                      id="genero"
+                                      value={newLivro.genero}
+                                      onChange={(e) =>
+                                        setNewLivro({
+                                          ...newLivro,
+                                          genero: e.target.value,
+                                        })
+                                      }
+                                      placeholder="Gênero do livro"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="isbn">
+                                      ISBN (opcional)
+                                    </Label>
+                                    <Input
+                                      id="isbn"
+                                      value={newLivro.isbn}
+                                      onChange={(e) =>
+                                        setNewLivro({
+                                          ...newLivro,
+                                          isbn: e.target.value,
+                                        })
+                                      }
+                                      placeholder="ISBN do livro"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label>Capa do Livro</Label>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        onPress={buscarCapa}
+                                        isDisabled={
+                                          !newLivro.titulo || capaLoading
+                                        }
+                                        className="flex-1"
+                                      >
+                                        {capaLoading
+                                          ? "Buscando..."
+                                          : "Buscar Capa Automaticamente"}
+                                      </Button>
+                                    </div>
+                                    {newLivro.capa && (
+                                      <div className="flex gap-4 mt-2">
+                                        <Image
+                                          src={newLivro.capa}
+                                          alt="Prévia da capa"
+                                          width={80}
+                                          height={120}
+                                          className="rounded-lg object-cover border"
+                                        />
+                                        <div className="flex-1">
+                                          <p className="text-sm text-gray-600 mb-2">
+                                            Prévia da capa encontrada
+                                          </p>
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onPress={() =>
+                                              setNewLivro({
+                                                ...newLivro,
+                                                capa: "",
+                                              })
+                                            }
+                                          >
+                                            Remover Capa
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button onClick={adicionarLivro}>
-                              Adicionar Livro
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                              </Modal.Body>
+                              <Modal.Footer>
+                                <Button onPress={adicionarLivro}>
+                                  Adicionar Livro
+                                </Button>
+                              </Modal.Footer>
+                            </Modal.Dialog>
+                          </Modal.Container>
+                        </Modal.Backdrop>
+                      </Modal>
                     )}
                   </div>
-                </CardHeader>
-                <CardContent>
+                </Card.Header>
+                <Card.Content>
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -589,19 +585,29 @@ export default function BibliotecaPage() {
                     </div>
                     <Select
                       value={filterGenero}
-                      onValueChange={setFilterGenero}
+                      onChange={(value) => setFilterGenero(value as string)}
+                      placeholder="Filtrar por gênero"
                     >
-                      <SelectTrigger className="w-full sm:w-48">
-                        <SelectValue placeholder="Filtrar por gênero" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos os gêneros</SelectItem>
-                        {generosUnicos.map((genero) => (
-                          <SelectItem key={genero} value={genero}>
-                            {genero}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      <Select.Trigger className="w-full sm:w-48">
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="todos" textValue="Todos os gêneros">
+                            Todos os gêneros
+                          </ListBox.Item>
+                          {generosUnicos.map((genero) => (
+                            <ListBox.Item
+                              key={genero}
+                              id={genero}
+                              textValue={genero}
+                            >
+                              {genero}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   </div>
 
@@ -611,7 +617,7 @@ export default function BibliotecaPage() {
                         key={livro.id}
                         className={`${!livro.disponivel ? "opacity-75" : ""}`}
                       >
-                        <CardContent className="p-6">
+                        <Card.Content className="p-6">
                           <div className="flex gap-4">
                             <Image
                               src={livro.capa || "/placeholder.svg"}
@@ -632,8 +638,8 @@ export default function BibliotecaPage() {
                               </Badge>
                               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <Badge
-                                  variant={
-                                    livro.disponivel ? "default" : "destructive"
+                                  color={
+                                    livro.disponivel ? "default" : "danger"
                                   }
                                 >
                                   {livro.disponivel
@@ -644,7 +650,7 @@ export default function BibliotecaPage() {
                                   <Button
                                     className=""
                                     size="sm"
-                                    onClick={() => abrirModalEmprestimo(livro)}
+                                    onPress={() => abrirModalEmprestimo(livro)}
                                   >
                                     Emprestar
                                   </Button>
@@ -652,29 +658,29 @@ export default function BibliotecaPage() {
                               </div>
                             </div>
                           </div>
-                        </CardContent>
+                        </Card.Content>
                       </Card>
                     ))}
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="emprestimos">
+            <Tabs.Panel id="emprestimos">
               <Card>
-                <CardHeader>
-                  <CardTitle>
+                <Card.Header>
+                  <Card.Title>
                     {user?.tipo === "admin"
                       ? "Empréstimos Ativos"
                       : "Seus Empréstimos Ativos"}
-                  </CardTitle>
-                  <CardDescription>
+                  </Card.Title>
+                  <Card.Description>
                     {user?.tipo === "admin"
                       ? "Livros atualmente emprestados"
                       : "Livros que você emprestou"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content>
                   <div className="space-y-4">
                     {userEmprestimosAtivos.length === 0 ? (
                       <div className="text-center py-8">
@@ -690,7 +696,7 @@ export default function BibliotecaPage() {
                           key={emprestimo.id}
                           className="border-l-4 border-l-yellow-500"
                         >
-                          <CardContent className="p-6">
+                          <Card.Content className="p-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                               <div className="flex-1">
                                 <h3 className="text-lg font-semibold mb-1">
@@ -720,7 +726,7 @@ export default function BibliotecaPage() {
                               {(user?.tipo === "admin" ||
                                 emprestimo.colaborador_id === user?.id) && (
                                 <Button
-                                  onClick={() =>
+                                  onPress={() =>
                                     devolverLivro(
                                       emprestimo.id,
                                       emprestimo.livro_id,
@@ -732,24 +738,24 @@ export default function BibliotecaPage() {
                                 </Button>
                               )}
                             </div>
-                          </CardContent>
+                          </Card.Content>
                         </Card>
                       ))
                     )}
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="historico">
+            <Tabs.Panel id="historico">
               <Card>
-                <CardHeader>
-                  <CardTitle>Histórico de Empréstimos</CardTitle>
-                  <CardDescription>
+                <Card.Header>
+                  <Card.Title>Histórico de Empréstimos</Card.Title>
+                  <Card.Description>
                     Todos os empréstimos realizados
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content>
                   <div className="space-y-4">
                     {emprestimos.length === 0 ? (
                       <div className="text-center py-8">
@@ -767,7 +773,7 @@ export default function BibliotecaPage() {
                               : "border-l-green-500"
                           }`}
                         >
-                          <CardContent className="p-6">
+                          <Card.Content className="p-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                               <div className="flex-1">
                                 <h3 className="text-lg font-semibold mb-1">
@@ -796,9 +802,9 @@ export default function BibliotecaPage() {
                                 </div>
                               </div>
                               <Badge
-                                variant={
+                                color={
                                   emprestimo.status === "emprestado"
-                                    ? "destructive"
+                                    ? "danger"
                                     : "default"
                                 }
                               >
@@ -807,87 +813,118 @@ export default function BibliotecaPage() {
                                   : "Devolvido"}
                               </Badge>
                             </div>
-                          </CardContent>
+                          </Card.Content>
                         </Card>
                       ))
                     )}
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
-            </TabsContent>
+            </Tabs.Panel>
           </Tabs>
 
           {/* Dialog de Empréstimo */}
-          <Dialog open={isEmprestimoOpen} onOpenChange={fecharModalEmprestimo}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Emprestar Livro</DialogTitle>
-                <DialogDescription>
-                  {selectedLivro &&
-                    `Emprestar "${selectedLivro.titulo}" para um colaborador`}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="colaborador-emprestimo">Colaborador</Label>
-                  <Select
-                    value={newEmprestimo.colaboradorId}
-                    onValueChange={(value) =>
-                      setNewEmprestimo({
-                        ...newEmprestimo,
-                        colaboradorId: value,
-                      })
-                    }
-                    disabled={user?.tipo !== "admin"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um colaborador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(user?.tipo === "admin"
-                        ? colaboradores
-                        : colaboradores.filter((c) => c.id === user?.id)
-                      ).map((colaborador) => (
-                        <SelectItem
-                          key={colaborador.id}
-                          value={colaborador.id.toString()}
-                        >
-                          {colaborador.nome} - {colaborador.departamento}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {user?.tipo !== "admin" && (
-                    <p className="text-sm text-gray-500">
-                      Você pode emprestar livros apenas para si mesmo
+          <Modal isOpen={isEmprestimoOpen} onOpenChange={fecharModalEmprestimo}>
+            <Modal.Backdrop>
+              <Modal.Container>
+                <Modal.Dialog>
+                  <Modal.CloseTrigger />
+                  <Modal.Header>
+                    <Modal.Heading>Emprestar Livro</Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body>
+                    <p className="text-sm text-gray-600">
+                      {selectedLivro &&
+                        `Emprestar "${selectedLivro.titulo}" para um colaborador`}
                     </p>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="dias">Período (dias)</Label>
-                  <Select
-                    value={newEmprestimo.dias}
-                    onValueChange={(value) =>
-                      setNewEmprestimo({ ...newEmprestimo, dias: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7">7 dias</SelectItem>
-                      <SelectItem value="14">14 dias</SelectItem>
-                      <SelectItem value="21">21 dias</SelectItem>
-                      <SelectItem value="30">30 dias</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={emprestarLivro}>Confirmar Empréstimo</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="colaborador-emprestimo">
+                          Colaborador
+                        </Label>
+                        <Select
+                          value={newEmprestimo.colaboradorId}
+                          onChange={(value) =>
+                            setNewEmprestimo({
+                              ...newEmprestimo,
+                              colaboradorId: value as string,
+                            })
+                          }
+                          placeholder="Selecione um colaborador"
+                          isDisabled={user?.tipo !== "admin"}
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {(user?.tipo === "admin"
+                                ? colaboradores
+                                : colaboradores.filter((c) => c.id === user?.id)
+                              ).map((colaborador) => (
+                                <ListBox.Item
+                                  key={colaborador.id}
+                                  id={colaborador.id.toString()}
+                                  textValue={`${colaborador.nome} - ${colaborador.departamento}`}
+                                >
+                                  {colaborador.nome} -{" "}
+                                  {colaborador.departamento}
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        {user?.tipo !== "admin" && (
+                          <p className="text-sm text-gray-500">
+                            Você pode emprestar livros apenas para si mesmo
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="dias">Período (dias)</Label>
+                        <Select
+                          value={newEmprestimo.dias}
+                          onChange={(value) =>
+                            setNewEmprestimo({
+                              ...newEmprestimo,
+                              dias: value as string,
+                            })
+                          }
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="7" textValue="7 dias">
+                                7 dias
+                              </ListBox.Item>
+                              <ListBox.Item id="14" textValue="14 dias">
+                                14 dias
+                              </ListBox.Item>
+                              <ListBox.Item id="21" textValue="21 dias">
+                                21 dias
+                              </ListBox.Item>
+                              <ListBox.Item id="30" textValue="30 dias">
+                                30 dias
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+                    </div>
+                  </Modal.Body>
+                  <Modal.Footer>
+                    <Button onPress={emprestarLivro}>
+                      Confirmar Empréstimo
+                    </Button>
+                  </Modal.Footer>
+                </Modal.Dialog>
+              </Modal.Container>
+            </Modal.Backdrop>
+          </Modal>
         </div>
       </div>
     </ProtectedRoute>

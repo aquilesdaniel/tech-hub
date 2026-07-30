@@ -2,20 +2,8 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/auth-context";
-import { useToast } from "@/hooks/use-toast";
+import { Badge, Button, Card, Input, Separator, toast } from "@heroui/react";
 import confetti from "canvas-confetti";
 import {
   ArrowLeft,
@@ -28,7 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 interface Divida {
   id: number;
@@ -79,10 +67,14 @@ interface Pagamento {
   updated_at: Date;
 }
 
-export default function PaymentPage({ params }: { params: { id: string } }) {
+export default function PaymentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const { user } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
 
   const [divida, setDivida] = useState<Divida | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,9 +114,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
     const checarStatus = async () => {
       try {
-        const res = await fetch(
-          `/api/salgados/pagamentos?divida_id=${params.id}`,
-        );
+        const res = await fetch(`/api/salgados/pagamentos?divida_id=${id}`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.status) {
@@ -132,8 +122,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
               setPagamentoGerado(data);
               // Se o status mudou pra não ser "pending", ele sumirá. Se foi pago, lança os confetes.
               if (data.status === "paid") {
-                toast({
-                  title: "Atualização de Pagamento!",
+                toast("Atualização de Pagamento!", {
                   description: "O pagamento foi efetuado com sucesso!",
                 });
                 confetti({
@@ -163,7 +152,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
     const interval = setInterval(checarStatus, 10000); // 10s
     return () => clearInterval(interval);
-  }, [pagamentoGerado, params.id, toast, router, divida?.pago]);
+  }, [pagamentoGerado, id, router, divida?.pago]);
 
   useEffect(() => {
     if (!pagamentoGerado) return;
@@ -209,9 +198,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
     const carregarDados = async () => {
       try {
         // 1. Busca a dívida
-        const responseDivida = await fetch(
-          `/api/salgados/dividas/${params.id}`,
-        );
+        const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
         }
@@ -220,7 +207,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
         // 2. Busca pagamento existente (se houver)
         const responsePagamento = await fetch(
-          `/api/salgados/pagamentos?divida_id=${params.id}`,
+          `/api/salgados/pagamentos?divida_id=${id}`,
         );
         if (responsePagamento.ok) {
           const pagExistente = await responsePagamento.json();
@@ -260,10 +247,8 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
-        toast({
-          title: "Erro",
+        toast.danger("Erro", {
           description: "Não foi possível carregar os dados desta cobrança.",
-          variant: "destructive",
         });
         router.push("/salgados");
       } finally {
@@ -272,7 +257,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
     };
 
     carregarDados();
-  }, [params.id, router, toast, user?.id]);
+  }, [id, router, user?.id]);
 
   // const handleConfirmarPagamento = async () => {
   //   if (!divida) return;
@@ -321,46 +306,36 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
       const numeroLimpo = soDigitos(numeroInput);
 
       if (!cpfLimpo || !ddiLimpo || !dddLimpo || !numeroLimpo) {
-        toast({
-          title: "Atenção",
+        toast.danger("Atenção", {
           description: "Preencha os campos obrigatórios primeiro!",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return;
       }
       if (cpfLimpo.length !== 11) {
-        toast({
-          title: "CPF Inválido",
+        toast.danger("CPF Inválido", {
           description: "O CPF deve conter 11 dígitos.",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return;
       }
       if (ddiLimpo.length < 1 || ddiLimpo.length > 3) {
-        toast({
-          title: "DDI Inválido",
+        toast.danger("DDI Inválido", {
           description: "Verifique o código do país.",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return;
       }
       if (dddLimpo.length !== 2) {
-        toast({
-          title: "DDD Inválido",
+        toast.danger("DDD Inválido", {
           description: "DDD deve conter 2 dígitos.",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return;
       }
       if (numeroLimpo.length < 8 || numeroLimpo.length > 9) {
-        toast({
-          title: "Número Inválido",
+        toast.danger("Número Inválido", {
           description: "Deve ter entre 8 a 9 dígitos.",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return;
@@ -387,11 +362,9 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
         // Note: NÃO damos toast de sucesso aqui pra não entupir a tela de alertas chatos pro usuário,
         // ele vai direto gerar a linha de baixo com sucesso sem nem perceber que fez duas ações.
       } catch (error) {
-        toast({
-          title: "Erro de Cadastro",
+        toast.danger("Erro de Cadastro", {
           description:
             "Não conseguimos salvar seus dados complementares. Tente novamente.",
-          variant: "destructive",
         });
         setIsProcessing(false);
         return; // Aborta geração do QR Code se salvamento parou na API!
@@ -420,10 +393,8 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
       }
     } catch (error) {
       console.error("Erro ao gerar pagamento:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível gerar a chave de pagamento no momento.",
-        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
@@ -433,8 +404,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
   const handleCopiarCopiar = () => {
     if (pagamentoGerado) {
       navigator.clipboard.writeText(pagamentoGerado.qr_code);
-      toast({
-        title: "Copiado!",
+      toast("Copiado!", {
         description: "Chave pix foi copiada para a área de transferência.",
       });
     }
@@ -451,46 +421,36 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
     // 1. Validação de preenchimento
     if (!cpfLimpo || !ddiLimpo || !dddLimpo || !numeroLimpo) {
-      toast({
-        title: "Atenção",
+      toast.danger("Atenção", {
         description: "Preencha todos os campos obrigatórios.",
-        variant: "destructive",
       });
       return;
     }
 
     // 2. Validação Especifica de CPF
     if (cpfLimpo.length !== 11) {
-      toast({
-        title: "CPF Inválido",
+      toast.danger("CPF Inválido", {
         description: "O CPF deve conter exatamente 11 dígitos.",
-        variant: "destructive",
       });
       return;
     }
 
     // 3. Validação de DDI, DDD e Telefone
     if (ddiLimpo.length < 1 || ddiLimpo.length > 3) {
-      toast({
-        title: "DDI Inválido",
+      toast.danger("DDI Inválido", {
         description: "Verifique o código do país (ex: 55).",
-        variant: "destructive",
       });
       return;
     }
     if (dddLimpo.length !== 2) {
-      toast({
-        title: "DDD Inválido",
+      toast.danger("DDD Inválido", {
         description: "O DDD deve conter exatamente 2 dígitos (ex: 11).",
-        variant: "destructive",
       });
       return;
     }
     if (numeroLimpo.length < 8 || numeroLimpo.length > 9) {
-      toast({
-        title: "Número Inválido",
+      toast.danger("Número Inválido", {
         description: "O número deve conter de 8 a 9 dígitos.",
-        variant: "destructive",
       });
       return;
     }
@@ -511,18 +471,15 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
       if (response.ok) {
         const colaboradorAtualizado = await response.json();
         setColaboradorCompleto(colaboradorAtualizado);
-        toast({
-          title: "Parabéns!",
+        toast("Parabéns!", {
           description: "Seus dados foram validados e salvos com sucesso.",
         });
       } else {
         throw new Error("Erro na atualização");
       }
     } catch (error) {
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível salvar os dados. Tente novamente.",
-        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
@@ -532,8 +489,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
   const handleCancelarPagamento = async () => {
     // TODO: Implementar lógica de cancelamento do pagamento
     console.log("Cancelar pagamento de id: ", pagamentoGerado?.id);
-    toast({
-      title: "Info",
+    toast("Info", {
       description: "Lógica de cancelamento pendente de implementação.",
     });
   };
@@ -552,7 +508,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -577,28 +533,31 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
               className={`flex flex-col gap-4 transition-all duration-300 w-full ${pagamentoGerado ? "lg:w-2/3" : ""}`}
             >
               <Card>
-                <CardHeader>
+                <Card.Header>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center justify-center w-10 h-10 bg-orange-100 rounded-full">
                         <Receipt className="w-5 h-5 text-orange-600" />
                       </div>
-                      <CardTitle>Detalhes da Dívida</CardTitle>
+                      <Card.Title>Detalhes da Dívida</Card.Title>
                     </div>
 
                     {divida.pago ||
                     (pagamentoGerado &&
                       pagamentoGerado.status !== "pending") ? (
-                      <Badge className="bg-green-600 hover:bg-green-700 text-white">
+                      <Badge
+                        variant="primary"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
                         Pago
                       </Badge>
                     ) : (
                       <Badge variant="secondary">Pendente</Badge>
                     )}
                   </div>
-                </CardHeader>
+                </Card.Header>
 
-                <CardContent>
+                <Card.Content>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">
@@ -638,11 +597,11 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                       R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
                     </span>
                   </div>
-                </CardContent>
+                </Card.Content>
               </Card>
 
               <Card>
-                <CardHeader>
+                <Card.Header>
                   <div className="flex items-center gap-4">
                     <div
                       className={`flex items-center justify-center w-10 h-10 rounded-full ${pagamentoGerado ? "bg-purple-100" : "bg-blue-100"}`}
@@ -651,20 +610,20 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         className={`w-5 h-5 ${pagamentoGerado ? "text-purple-600" : "text-blue-600"}`}
                       />
                     </div>
-                    <CardTitle>
+                    <Card.Title>
                       {pagamentoGerado
                         ? "Emissor do Pagamento"
                         : "Responsável pela Baixa"}
-                    </CardTitle>
+                    </Card.Title>
                   </div>
-                  <CardDescription>
+                  <Card.Description>
                     {pagamentoGerado
                       ? "Este foi o usuário que gerou a cobrança PIX atual"
                       : "A operação será registrada no sistema sob o usuário abaixo"}
-                  </CardDescription>
-                </CardHeader>
+                  </Card.Description>
+                </Card.Header>
 
-                <CardContent>
+                <Card.Content>
                   {pagamentoGerado && colaboradorGerador ? (
                     // MOSTRAMOS O GERADOR DO PAGAMENTO AQUI
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -672,7 +631,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Nome
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {colaboradorGerador.nome}
                         </p>
                       </div>
@@ -680,7 +639,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Departamento
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {colaboradorGerador.departamento || "Não informado"}
                         </p>
                       </div>
@@ -688,7 +647,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Cargo
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {colaboradorGerador.cargo || "Não informado"}
                         </p>
                       </div>
@@ -696,7 +655,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Email
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {colaboradorGerador.email}
                         </p>
                       </div>
@@ -732,13 +691,15 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Nome
                         </p>
-                        <p className="font-medium break-words">{user.nome}</p>
+                        <p className="font-medium wrap-break-word">
+                          {user.nome}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-500">
                           Departamento
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {user.departamento || "Não informado"}
                         </p>
                       </div>
@@ -746,7 +707,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Cargo
                         </p>
-                        <p className="font-medium break-words">
+                        <p className="font-medium wrap-break-word">
                           {user.cargo || "Não informado"}
                         </p>
                       </div>
@@ -754,7 +715,9 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         <p className="text-sm font-medium text-gray-500">
                           Email
                         </p>
-                        <p className="font-medium break-words">{user.email}</p>
+                        <p className="font-medium wrap-break-word">
+                          {user.email}
+                        </p>
                       </div>
 
                       {/* --- Divisor para os dados extras --- */}
@@ -851,7 +814,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                       Carregando informações do usuário logado...
                     </p>
                   )}
-                </CardContent>
+                </Card.Content>
 
                 {!(
                   divida.pago ||
@@ -860,13 +823,13 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                   ((colaboradorCompleto !== null && !possuiDadosCompletos) ||
                     (possuiDadosCompletos &&
                       (!pagamentoGerado || tempoRestante === "Expirado"))) && (
-                    <CardFooter className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
+                    <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
                       <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
                         {colaboradorCompleto !== null &&
                           !possuiDadosCompletos && (
                             <Button
-                              onClick={handleSalvarDados}
-                              disabled={isProcessing}
+                              onPress={handleSalvarDados}
+                              isDisabled={isProcessing}
                               className="bg-blue-600 hover:bg-blue-700 text-white"
                             >
                               Atualizar Dados
@@ -877,8 +840,8 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                           (!pagamentoGerado ||
                             tempoRestante === "Expirado") && (
                             <Button
-                              onClick={handleGerarPagamento}
-                              disabled={isProcessing}
+                              onPress={handleGerarPagamento}
+                              isDisabled={isProcessing}
                               className="bg-green-600 hover:bg-green-700 text-white"
                             >
                               <Check className="w-4 h-4 mr-2" />
@@ -888,7 +851,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                             </Button>
                           )}
                       </div>
-                    </CardFooter>
+                    </Card.Footer>
                   )}
               </Card>
             </div>
@@ -897,19 +860,19 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
             {(divida.pago ||
               (pagamentoGerado && pagamentoGerado.status !== "pending")) && (
               <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 bg-green-50 border-green-200">
-                <CardHeader className="flex flex-col items-center justify-center space-y-4 p-6">
+                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
                   <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
                     <Check className="w-8 h-8 text-white" />
                   </div>
 
-                  <CardTitle className="text-black text-2xl text-center">
+                  <Card.Title className="text-black text-2xl text-center">
                     Pago com Sucesso!
-                  </CardTitle>
+                  </Card.Title>
 
                   <p className="text-gray-600 text-center font-medium">
                     Seu pagamento foi confirmado pelo sistema.
                   </p>
-                </CardHeader>
+                </Card.Header>
               </Card>
             )}
 
@@ -918,18 +881,18 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
               pagamentoGerado.status === "pending" &&
               !divida.pago && (
                 <Card className="w-full lg:w-1/3 flex flex-col">
-                  <CardHeader>
+                  <Card.Header>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
                         <QrCode className="w-5 h-5 text-green-600" />
                       </div>
-                      <CardTitle className="text-black break-all">
+                      <Card.Title className="text-black break-all">
                         Pague via PIX
-                      </CardTitle>
+                      </Card.Title>
                     </div>
-                  </CardHeader>
+                  </Card.Header>
 
-                  <CardContent className="flex flex-col flex-1">
+                  <Card.Content className="flex flex-col flex-1">
                     {/* Logica de expiração */}
                     {tempoRestante === "Expirado" ? (
                       <div className="flex flex-col items-center justify-center space-y-4 flex-1">
@@ -938,8 +901,8 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                         </p>
 
                         <Button
-                          onClick={handleGerarPagamento}
-                          disabled={
+                          onPress={handleGerarPagamento}
+                          isDisabled={
                             isProcessing ||
                             (colaboradorCompleto !== null &&
                               !possuiDadosCompletos)
@@ -996,7 +959,7 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                             <Button
                               className="bg-slate-800 hover:bg-slate-700 text-white"
                               size={"sm"}
-                              onClick={handleCopiarCopiar}
+                              onPress={handleCopiarCopiar}
                             >
                               <Copy className="w-4 h-4" />
                               Copiar
@@ -1006,15 +969,15 @@ export default function PaymentPage({ params }: { params: { id: string } }) {
                           <Button
                             className="mt-6 font-semibold"
                             size={"lg"}
-                            variant={"destructive"}
-                            onClick={handleCancelarPagamento}
+                            variant={"danger"}
+                            onPress={handleCancelarPagamento}
                           >
                             Cancelar pagamento
                           </Button>
                         </div>
                       </>
                     )}
-                  </CardContent>
+                  </Card.Content>
                 </Card>
               )}
           </div>

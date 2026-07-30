@@ -5,10 +5,11 @@ import { type NextRequest, NextResponse } from "next/server";
 // GET - Buscar empréstimo por ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const emprestimo = await prisma.emprestimos.findUnique({
       where: { id },
       include: {
@@ -43,10 +44,11 @@ export async function GET(
 // PATCH - Atualizar empréstimo (devolver livro)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = Number(params.id);
+    const { id: idParam } = await params;
+    const id = Number(idParam);
     const body = await req.json();
     const { data_real_devolucao, status } = body;
 
