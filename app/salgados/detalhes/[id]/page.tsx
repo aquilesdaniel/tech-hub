@@ -2,7 +2,7 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge, Button, Card, Separator, toast } from "@heroui/react";
+import { Button, Card, Chip, Separator, Spinner, toast } from "@heroui/react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -111,7 +111,7 @@ export default function DetalhesPage({
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -132,12 +132,8 @@ export default function DetalhesPage({
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Detalhes da Dívida
-              </h1>
-              <p className="text-gray-600">
-                Visualize todas as informações desta pendência e pagamento.
-              </p>
+              <h1 className="text-3xl font-bold">Detalhes da Dívida</h1>
+              <p>Visualize todas as informações desta pendência e pagamento.</p>
             </div>
           </div>
 
@@ -152,11 +148,9 @@ export default function DetalhesPage({
                     <Card.Title>Devedor</Card.Title>
                   </div>
                   {divida.pago ? (
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                      Pago
-                    </Badge>
+                    <Chip color="success">Pago</Chip>
                   ) : (
-                    <Badge color="danger">Pendente</Badge>
+                    <Chip color="danger">Pendente</Chip>
                   )}
                 </div>
               </Card.Header>
@@ -164,34 +158,32 @@ export default function DetalhesPage({
               <Card.Content className="flex flex-col grow">
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Nome</p>
-                    <p className="text-lg font-semibold text-gray-900">
+                    <p className="text-sm font-medium">Nome</p>
+                    <p className="text-lg font-semibold">
                       {divida.colaborador_nome}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Item</p>
-                    <p className="text-gray-900">{divida.item}</p>
+                    <p className="text-sm font-medium">Item</p>
+                    <p>{divida.item}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Motivo</p>
-                    <p className="text-gray-900">{divida.motivo}</p>
+                    <p className="text-sm font-medium">Motivo</p>
+                    <p>{divida.motivo}</p>
                   </div>
                 </div>
 
                 <div className="mt-auto pt-6 flex justify-between items-end">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      Data de Registro
-                    </p>
-                    <p className="text-gray-900 flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4 text-gray-400" />
+                    <p className="text-sm font-medium">Data de Registro</p>
+                    <p className="flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4" />
                       {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-gray-500">Valor</p>
-                    <p className="text-xl font-bold text-gray-900">
+                    <p className="text-sm font-medium">Valor</p>
+                    <p className="text-xl font-bold">
                       {Number(divida.valor).toLocaleString("pt-BR", {
                         style: "currency",
                         currency: "BRL",
@@ -218,10 +210,10 @@ export default function DetalhesPage({
                 {colaboradorPagador ? (
                   <div className="space-y-4">
                     <div>
-                      <p className="text-lg font-semibold text-gray-900">
+                      <p className="text-lg font-semibold">
                         {colaboradorPagador.nome}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm">
                         {colaboradorPagador.cargo} •{" "}
                         {colaboradorPagador.departamento}
                       </p>
@@ -231,18 +223,16 @@ export default function DetalhesPage({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Email
-                        </p>
-                        <p className="text-sm text-gray-900 break-all">
+                        <p className="text-sm font-medium">Email</p>
+                        <p className="text-sm break-all">
                           {colaboradorPagador.email}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-500">
+                        <p className="text-sm font-medium">
                           Documento Principal
                         </p>
-                        <p className="text-sm text-gray-900">
+                        <p className="text-sm">
                           {colaboradorPagador.document.replace(
                             /^(\d{3})(\d{3})(\d{3})(\d{2})$/,
                             "***.$2.$3-**",
@@ -255,13 +245,11 @@ export default function DetalhesPage({
                       <>
                         <Separator />
                         <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                          <p className="text-sm font-medium text-gray-700 mb-2">
+                          <p className="text-sm font-medium mb-2">
                             Detalhes Transacionais
                           </p>
                           <div className="flex justify-between text-sm items-center">
-                            <span className="text-gray-500">
-                              Status Gateway:
-                            </span>
+                            <span>Status Gateway:</span>
                             <span
                               className={`font-semibold flex items-center gap-1 ${
                                 pagamento.status === "paid"
@@ -290,23 +278,23 @@ export default function DetalhesPage({
                           </div>
                           {pagamento.charge_id && (
                             <div className="flex justify-between text-sm items-center">
-                              <span className="text-gray-500">Charge ID:</span>
-                              <span className="text-gray-900 font-mono text-xs">
+                              <span>Charge ID:</span>
+                              <span className="font-mono text-xs">
                                 {pagamento.charge_id}
                               </span>
                             </div>
                           )}
                           {pagamento.gateway_id && (
                             <div className="flex justify-between text-sm items-center mt-2">
-                              <span className="text-gray-500">Gateway ID:</span>
-                              <span className="text-gray-900 font-mono text-xs">
+                              <span>Gateway ID:</span>
+                              <span className="font-mono text-xs">
                                 {pagamento.gateway_id}
                               </span>
                             </div>
                           )}
                           <div className="flex justify-between text-sm mt-2">
-                            <span className="text-gray-500">Gerado em:</span>
-                            <span className="text-gray-900">
+                            <span>Gerado em:</span>
+                            <span>
                               {new Date(pagamento.created_at).toLocaleString(
                                 "pt-BR",
                               )}
@@ -315,10 +303,8 @@ export default function DetalhesPage({
                           {pagamento.expires_at &&
                             pagamento.status === "pending" && (
                               <div className="flex justify-between text-sm mt-2">
-                                <span className="text-gray-500">
-                                  Expira em:
-                                </span>
-                                <span className="text-gray-900">
+                                <span>Expira em:</span>
+                                <span>
                                   {new Date(
                                     pagamento.expires_at,
                                   ).toLocaleString("pt-BR")}
@@ -331,17 +317,17 @@ export default function DetalhesPage({
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-gray-500 mb-2">
+                    <p className="mb-2">
                       Pagamento não registrado ou colaborador não encontrado no
                       sistema
                     </p>
                     {divida.pago ? (
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm">
                         Esta dívida foi baixa manualmente pelo sistema (sem
                         Pagar.me)
                       </p>
                     ) : (
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm">
                         Aguardando geração do pagamento.
                       </p>
                     )}

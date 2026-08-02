@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Public_Sans } from "next/font/google";
 import type React from "react";
-import { Providers } from "./providers";
 import "./globals.css";
+import { Providers } from "./providers";
 
 const publicSans = Public_Sans({
   subsets: ["latin"],

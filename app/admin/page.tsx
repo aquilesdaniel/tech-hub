@@ -4,14 +4,15 @@ import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  Badge,
   Button,
   Card,
+  Chip,
   Input,
   Label,
   ListBox,
   Modal,
   Select,
+  Spinner,
   Table,
   Tabs,
   toast,
@@ -425,7 +426,7 @@ export default function AdminPage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -444,12 +445,8 @@ export default function AdminPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Painel Administrativo
-              </h1>
-              <p className="text-gray-600">
-                Gerencie colaboradores e setores da empresa
-              </p>
+              <h1 className="text-3xl font-bold">Painel Administrativo</h1>
+              <p>Gerencie colaboradores e setores da empresa</p>
             </div>
           </div>
 
@@ -809,25 +806,17 @@ export default function AdminPage() {
                                     {colaborador.email}
                                   </Table.Cell>
                                   <Table.Cell>
-                                    <Badge variant="secondary">
-                                      {colaborador.departamento}
-                                    </Badge>
+                                    <Chip>{colaborador.departamento}</Chip>
                                   </Table.Cell>
                                   <Table.Cell className="hidden md:table-cell text-gray-600">
                                     {colaborador.setor_nome || "Não definido"}
                                   </Table.Cell>
                                   <Table.Cell>
-                                    <Badge
-                                      variant={
-                                        colaborador.status === "ativo"
-                                          ? "primary"
-                                          : "secondary"
-                                      }
-                                    >
+                                    <Chip>
                                       {colaborador.status === "ativo"
                                         ? "Ativo"
                                         : "Inativo"}
-                                    </Badge>
+                                    </Chip>
                                   </Table.Cell>
                                   <Table.Cell className="text-right">
                                     <div className="flex justify-end gap-2">
@@ -974,9 +963,7 @@ export default function AdminPage() {
                               <Card.Title className="text-lg">
                                 {setor.nome}
                               </Card.Title>
-                              <Badge variant="secondary">
-                                {setor.total_colaboradores} pessoas
-                              </Badge>
+                              <Chip>{setor.total_colaboradores} pessoas</Chip>
                             </div>
                             <Card.Description>
                               {setor.descricao}
@@ -1161,15 +1148,15 @@ export default function AdminPage() {
                                   </Table.Cell>
                                   <Table.Cell>
                                     {colaborador.admin_permanente ? (
-                                      <Badge className="bg-blue-100 text-blue-800">
+                                      <Chip color="accent">
                                         Admin Permanente
-                                      </Badge>
+                                      </Chip>
                                     ) : colaborador.tipo === "admin" ? (
-                                      <Badge className="bg-yellow-100 text-yellow-800">
+                                      <Chip color="warning">
                                         Admin Temporário
-                                      </Badge>
+                                      </Chip>
                                     ) : (
-                                      <Badge variant="secondary">Usuário</Badge>
+                                      <Chip>Usuário</Chip>
                                     )}
                                   </Table.Cell>
                                   <Table.Cell>
@@ -1214,10 +1201,10 @@ export default function AdminPage() {
                 <Card>
                   <Card.Content className="flex flex-col items-center justify-center py-12">
                     <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3 className="text-lg font-semibold mb-2">
                       Acesso Restrito
                     </h3>
-                    <p className="text-gray-600 text-center">
+                    <p className="text-center">
                       Apenas administradores permanentes podem gerenciar
                       usuários admin.
                     </p>

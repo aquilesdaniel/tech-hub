@@ -90,3 +90,138 @@ export async function criarPedidoPix(params: CriarPedidoPixParams) {
     }),
   });
 }
+
+export interface DadosBancariosRecebedor {
+  holderName: string;
+  holderDocument: string;
+  bank: string;
+  branchNumber: string;
+  branchCheckDigit?: string;
+  accountNumber: string;
+  accountCheckDigit: string;
+  tipoConta: "checking" | "savings";
+}
+
+function serializarContaBancaria(conta: DadosBancariosRecebedor) {
+  return {
+    holder_name: conta.holderName,
+    holder_type: "individual",
+    holder_document: conta.holderDocument,
+    bank: conta.bank,
+    branch_number: conta.branchNumber,
+    branch_check_digit: conta.branchCheckDigit || undefined,
+    account_number: conta.accountNumber,
+    account_check_digit: conta.accountCheckDigit,
+    type: conta.tipoConta,
+  };
+}
+
+export interface CriarRecebedorParams {
+  code: string;
+  registerInformation: {
+    email: string;
+    document: string;
+    name: string;
+    birthdate: string;
+    monthlyIncome: number;
+    professionalOccupation: string;
+  };
+  bankAccount: DadosBancariosRecebedor;
+  observacao?: string;
+}
+
+// Cria um recebedor (conta que recebe e saca valores). Retorna o objeto
+// "recipient" da Pagar.me, com o id que deve ser salvo em colaboradores.recipient_id.
+export async function criarRecebedor(params: CriarRecebedorParams) {
+  return pagarmeFetch("/recipients", {
+    method: "POST",
+    body: JSON.stringify({
+      register_information: {
+        email: params.registerInformation.email,
+        document: params.registerInformation.document,
+        type: "individual",
+        name: params.registerInformation.name,
+        birthdate: params.registerInformation.birthdate,
+        monthly_income: params.registerInformation.monthlyIncome,
+        professional_occupation: params.registerInformation.professionalOccupation,
+      },
+      default_bank_account: serializarContaBancaria(params.bankAccount),
+      code: params.code,
+      metadata: params.observacao
+        ? { observation: params.observacao }
+        : undefined,
+    }),
+  });
+}
+
+// Busca os dados cadastrais atuais de um recebedor já existente.
+export async function obterRecebedor(recipientId: string) {
+  return pagarmeFetch(`/recipients/${recipientId}`, { method: "GET" });
+}
+
+export interface AtualizarRecebedorParams {
+  registerInformation: CriarRecebedorParams["registerInformation"];
+  observacao?: string;
+}
+
+// Atualiza os dados cadastrais de um recebedor já existente.
+export async function atualizarRecebedor(
+  recipientId: string,
+  params: AtualizarRecebedorParams,
+) {
+  return pagarmeFetch(`/recipients/${recipientId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      register_information: {
+        email: params.registerInformation.email,
+        document: params.registerInformation.document,
+        type: "individual",
+        name: params.registerInformation.name,
+        birthdate: params.registerInformation.birthdate,
+        monthly_income: params.registerInformation.monthlyIncome,
+        professional_occupation: params.registerInformation.professionalOccupation,
+      },
+      metadata: params.observacao
+        ? { observation: params.observacao }
+        : undefined,
+    }),
+  });
+}
+
+// Atualiza apenas a conta bancária padrão de um recebedor já existente.
+export async function atualizarContaBancariaRecebedor(
+  recipientId: string,
+  bankAccount: DadosBancariosRecebedor,
+) {
+  return pagarmeFetch(`/recipients/${recipientId}/default-bank-account`, {
+    method: "PATCH",
+    body: JSON.stringify({ bank_account: serializarContaBancaria(bankAccount) }),
+  });
+}
+
+export interface CriarTransferenciaParams {
+  recipientId: string;
+  valorEmCentavos: number;
+  observacao?: string;
+}
+
+// Solicita o saque (transferência) do saldo disponível de um recebedor para a conta bancária cadastrada.
+export async function criarTransferencia(params: CriarTransferenciaParams) {
+  return pagarmeFetch("/transfers", {
+    method: "POST",
+    body: JSON.stringify({
+      amount: params.valorEmCentavos,
+      recipient_id: params.recipientId,
+      metadata: params.observacao
+        ? { observation: params.observacao }
+        : undefined,
+    }),
+  });
+}
+
+// Consulta o saldo (disponível, aguardando fundos e já transferido) de um recebedor.
+export async function consultarSaldoRecebedor(recipientId: string) {
+  return pagarmeFetch(`/recipients/${recipientId}/balance`, {
+    method: "GET",
+  });
+}

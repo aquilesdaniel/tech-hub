@@ -3,8 +3,8 @@
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  Badge,
   Button,
+  Chip,
   Dropdown,
   Header,
   Label,
@@ -25,9 +25,7 @@ export function Navbar() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-foreground">TechHub</h1>
 
-          <Badge variant={user.tipo === "admin" ? "primary" : "secondary"}>
-            {user.tipo === "admin" ? "Administrador" : "Usuário"}
-          </Badge>
+          <Chip>{user.tipo === "admin" ? "Administrador" : "Usuário"}</Chip>
         </div>
 
         <div className="flex items-center gap-2">
@@ -36,7 +34,7 @@ export function Navbar() {
           <Dropdown>
             <Button variant="ghost" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-accent-foreground" />
+                <User className="w-4 h-4 text-default" />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium">{user.nome}</p>
@@ -63,7 +61,7 @@ export function Navbar() {
                 {user.tipo === "admin" && (
                   <Dropdown.Section>
                     <Dropdown.Item id="admin" textValue="Painel Admin">
-                      <Shield className="w-4 h-4 mr-2" />
+                      <Shield className="w-4 h-4" />
                       <Label>Painel Admin</Label>
                     </Dropdown.Item>
                   </Dropdown.Section>
@@ -73,7 +71,7 @@ export function Navbar() {
 
                 <Dropdown.Section>
                   <Dropdown.Item id="logout" textValue="Sair" variant="danger">
-                    <LogOut className="w-4 h-4 mr-2" />
+                    <LogOut className="w-4 h-4" />
                     <Label>Sair</Label>
                   </Dropdown.Item>
                 </Dropdown.Section>

@@ -3,7 +3,15 @@
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
-import { Badge, Button, Card, Input, Separator, toast } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  Separator,
+  Spinner,
+  toast,
+} from "@heroui/react";
 import confetti from "canvas-confetti";
 import {
   ArrowLeft,
@@ -498,7 +506,7 @@ export default function PaymentPage({
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -519,12 +527,8 @@ export default function PaymentPage({
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Confirmar Pagamento
-              </h1>
-              <p className="text-gray-600">
-                Verifique os detalhes da dívida antes de prosseguir
-              </p>
+              <h1 className="text-3xl font-bold">Confirmar Pagamento</h1>
+              <p>Verifique os detalhes da dívida antes de prosseguir</p>
             </div>
           </div>
 
@@ -545,14 +549,13 @@ export default function PaymentPage({
                     {divida.pago ||
                     (pagamentoGerado &&
                       pagamentoGerado.status !== "pending") ? (
-                      <Badge
-                        variant="primary"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
+                      <Chip variant="primary" color="success">
                         Pago
-                      </Badge>
+                      </Chip>
                     ) : (
-                      <Badge variant="secondary">Pendente</Badge>
+                      <Chip variant="primary" color="warning">
+                        Pendente
+                      </Chip>
                     )}
                   </div>
                 </Card.Header>
@@ -588,11 +591,9 @@ export default function PaymentPage({
                       </p>
                     </div>
                   </div>
-                  <Separator className="my-6" />
+                  <Separator className="my-3" />
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-gray-700">
-                      Valor Total:
-                    </span>
+                    <span className="text-lg font-semibold">Valor Total:</span>
                     <span className="text-lg font-bold">
                       R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
                     </span>
@@ -616,11 +617,6 @@ export default function PaymentPage({
                         : "Responsável pela Baixa"}
                     </Card.Title>
                   </div>
-                  <Card.Description>
-                    {pagamentoGerado
-                      ? "Este foi o usuário que gerou a cobrança PIX atual"
-                      : "A operação será registrada no sistema sob o usuário abaixo"}
-                  </Card.Description>
                 </Card.Header>
 
                 <Card.Content>
@@ -886,9 +882,7 @@ export default function PaymentPage({
                       <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
                         <QrCode className="w-5 h-5 text-green-600" />
                       </div>
-                      <Card.Title className="text-black break-all">
-                        Pague via PIX
-                      </Card.Title>
+                      <Card.Title>Pague via PIX</Card.Title>
                     </div>
                   </Card.Header>
 

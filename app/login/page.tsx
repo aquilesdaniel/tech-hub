@@ -1,7 +1,15 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { Alert, Button, Card, Input, Label, toast } from "@heroui/react";
+import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  Label,
+  Spinner,
+  toast,
+} from "@heroui/react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -38,7 +46,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-4">
           <div className="mx-auto flex justify-center mb-6">
@@ -53,18 +61,17 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <Card className="shadow-xl border-0">
-          <Card.Header className="space-y-1 pb-6">
-            <Card.Title className="text-2xl text-center">
-              Fazer Login
-            </Card.Title>
-            <Card.Description className="text-center">
+        <Card>
+          <Card.Header>
+            <Card.Title>Fazer Login</Card.Title>
+            <Card.Description>
               Entre com suas credenciais da Senior para acessar o sistema
             </Card.Description>
           </Card.Header>
+
           <Card.Content>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
+              <div className="flex flex-col space-y-2">
                 <Label htmlFor="username">Usuário Senior</Label>
                 <Input
                   id="username"
@@ -72,11 +79,10 @@ export default function LoginPage() {
                   placeholder="user@prismaproducao.com.br"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="h-11"
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="flex flex-col space-y-2">
                 <Label htmlFor="password">Senha</Label>
                 <div className="relative">
                   <Input
@@ -85,13 +91,13 @@ export default function LoginPage() {
                     placeholder="Digite sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 pr-10"
+                    className="w-full"
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    className="absolute right-0 top-0 h-full px-3 py-2"
                     onPress={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
@@ -116,7 +122,7 @@ export default function LoginPage() {
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <Spinner className="text-black" />
                     Entrando...
                   </div>
                 ) : (
@@ -128,22 +134,19 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="text-sm text-gray-600 space-y-2">
-                <p className="font-medium">Sistema de Autenticação Senior:</p>
-                <div className="bg-blue-50 p-3 rounded-lg space-y-1">
-                  <p className="font-medium text-blue-600">
-                    Credenciais Senior Platform
-                  </p>
-                  <p>Use suas credenciais da PlatformX Senior</p>
-                  <p>
-                    <strong>Exemplo:</strong> user@prismaproducao.com.br
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Novos usuários serão automaticamente criados no sistema
-                  </p>
-                </div>
-              </div>
+            <div className="text-sm space-y-2 mt-6">
+              <p>Sistema de Autenticação Sênior:</p>
+
+              <Card variant="secondary">
+                <p className="text-white">Credenciais Senior Platform</p>
+                <p>Use suas credenciais da PlatformX Senior</p>
+                <p>
+                  <strong>Exemplo:</strong> user@prismaproducao.com.br
+                </p>
+                <p className="text-xs">
+                  Novos usuários serão automaticamente criados no sistema
+                </p>
+              </Card>
             </div>
           </Card.Content>
         </Card>

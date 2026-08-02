@@ -4,17 +4,20 @@ import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  Badge,
   Button,
   Card,
+  Chip,
   Input,
+  InputGroup,
   Label,
   ListBox,
   Modal,
   Pagination,
   Select,
+  Spinner,
   Tabs,
   TextArea,
+  TextField,
   toast,
 } from "@heroui/react";
 import {
@@ -24,6 +27,7 @@ import {
   DollarSign,
   HandCoins,
   IdCardIcon,
+  LucideSearch,
   Plus,
   Search,
   Wallet,
@@ -93,6 +97,14 @@ export default function SalgadosPage() {
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isConfirmPaymentOpen, setIsConfirmPaymentOpen] = useState(false);
   const [dividaParaPagar, setDividaParaPagar] = useState<Divida | null>(null);
+  const [isSubmittingConta, setIsSubmittingConta] = useState(false);
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+  const [jaTemContaCadastrada, setJaTemContaCadastrada] = useState(false);
+  const [saldoInfo, setSaldoInfo] = useState({
+    available_amount: 0,
+    waiting_funds_amount: 0,
+    transferred_amount: 0,
+  });
   const [contaBancariaData, setContaBancariaData] = useState({
     nomeColaborador: "",
     emailColaborador: "",
@@ -196,6 +208,72 @@ export default function SalgadosPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchSaldo();
+      fetchRecebedor();
+    }
+  }, [user]);
+
+  const fetchSaldo = async () => {
+    if (!user) return;
+    try {
+      const response = await fetch(
+        `/api/salgados/saldo?colaborador_id=${user.id}`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSaldoInfo({
+          available_amount: Number(data.available_amount) || 0,
+          waiting_funds_amount: Number(data.waiting_funds_amount) || 0,
+          transferred_amount: Number(data.transferred_amount) || 0,
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao consultar saldo:", error);
+    }
+  };
+
+  const fetchRecebedor = async () => {
+    if (!user) return;
+    try {
+      const response = await fetch(
+        `/api/salgados/recebedores?colaborador_id=${user.id}`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.recipient) {
+          setJaTemContaCadastrada(true);
+          const info = data.recipient.register_information || {};
+          const conta = data.recipient.default_bank_account || {};
+          setContaBancariaData({
+            nomeColaborador: info.name || "",
+            emailColaborador: info.email || "",
+            documentoColaborador: info.document || "",
+            aniversario: info.birthdate ? info.birthdate.slice(0, 10) : "",
+            rendaMensal: info.monthly_income
+              ? String(info.monthly_income)
+              : "",
+            ocupacao: info.professional_occupation || "",
+            nomeTitular: conta.holder_name || "",
+            documentoTitular: conta.holder_document || "",
+            banco: conta.bank || "",
+            agencia: conta.branch_number || "",
+            agenciaDv: conta.branch_check_digit || "",
+            conta: conta.account_number || "",
+            contaDv: conta.account_check_digit || "",
+            tipoConta: conta.type || "checking",
+            observacao: "",
+          });
+        } else {
+          setJaTemContaCadastrada(false);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao consultar recebedor:", error);
     }
   };
 
@@ -412,107 +490,103 @@ export default function SalgadosPage() {
   // };
 
   const handleCadastrarConta = async () => {
-    try {
-      if (!user) return;
-      const uuidDoColaborador = user.id.toString(); // ou outro identificador único
+    if (!user) return;
 
-      // Endpoint pendente
-      /* 
-      const response = await fetch("https://api.pagar.me/core/v5/recipients", {
+    if (
+      !contaBancariaData.nomeColaborador ||
+      !contaBancariaData.emailColaborador ||
+      !contaBancariaData.documentoColaborador ||
+      !contaBancariaData.aniversario ||
+      !contaBancariaData.ocupacao ||
+      !contaBancariaData.nomeTitular ||
+      !contaBancariaData.documentoTitular ||
+      !contaBancariaData.banco ||
+      !contaBancariaData.agencia ||
+      !contaBancariaData.conta ||
+      !contaBancariaData.contaDv
+    ) {
+      toast.danger("Erro", {
+        description: "Preencha todos os campos obrigatórios.",
+      });
+      return;
+    }
+
+    setIsSubmittingConta(true);
+    try {
+      const response = await fetch("/api/salgados/recebedores", {
         method: "POST",
-        headers: { 
-          "accept": "application/json",
-          "content-type": "application/json" 
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          register_information: {
-            email: contaBancariaData.emailColaborador,
-            document: contaBancariaData.documentoColaborador,
-            type: "individual", // sempre individual
-            name: contaBancariaData.nomeColaborador,
-            birthdate: contaBancariaData.aniversario, // YYYY-MM-DD
-            monthly_income: parseInt(contaBancariaData.rendaMensal) || 0, // apenas int
-            professional_occupation: contaBancariaData.ocupacao
-          },
-          default_bank_account: {
-            holder_name: contaBancariaData.nomeTitular,
-            holder_type: "individual", // sempre individual
-            holder_document: contaBancariaData.documentoTitular, // igual ao documento do colaborador
-            bank: contaBancariaData.banco,
-            branch_number: contaBancariaData.agencia,
-            branch_check_digit: contaBancariaData.agenciaDv,
-            account_number: contaBancariaData.conta,
-            account_check_digit: contaBancariaData.contaDv,
-            type: contaBancariaData.tipoConta // "checking" ou "savings"
-          },
-          code: uuidDoColaborador,
-          metadata: {
-            observation: contaBancariaData.observacao
-          }
+          colaborador_id: user.id,
+          ...contaBancariaData,
         }),
       });
-      if (response.ok) {
-         ...
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.danger("Erro", {
+          description:
+            data.error || "Não foi possível cadastrar a conta bancária.",
+        });
+        return;
       }
-      */
 
       toast("Sucesso", {
-        description: "Os dados foram preparados para envio.",
+        description: jaTemContaCadastrada
+          ? "Conta bancária atualizada com sucesso."
+          : "Conta bancária cadastrada com sucesso.",
       });
       setIsCadastrarContaOpen(false);
-      setContaBancariaData({
-        nomeColaborador: "",
-        emailColaborador: "",
-        documentoColaborador: "",
-        aniversario: "",
-        rendaMensal: "",
-        ocupacao: "",
-        nomeTitular: "",
-        documentoTitular: "",
-        banco: "",
-        agencia: "",
-        agenciaDv: "",
-        conta: "",
-        contaDv: "",
-        tipoConta: "checking",
-        observacao: "",
-      });
+      fetchRecebedor();
+      fetchSaldo();
     } catch (error) {
       console.error("Erro ao solicitar cadastro de conta:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível cadastrar a conta bancária.",
+      });
+    } finally {
+      setIsSubmittingConta(false);
     }
   };
 
   const handleTransferirDinheiro = async () => {
+    if (!user) return;
+
+    const valor = parseFloat(String(transferData.amount).replace(",", "."));
+
+    if (!transferData.amount || isNaN(valor) || valor <= 0) {
+      toast.danger("Erro", { description: "Informe um valor de saque válido." });
+      return;
+    }
+
+    if (valor > saldoInfo.available_amount) {
+      toast.danger("Erro", {
+        description: "O valor solicitado excede o saldo disponível para saque.",
+      });
+      return;
+    }
+
+    setIsSubmittingTransfer(true);
     try {
-      if (!user) return;
-
-      // Espaço reservado para a requisição de saque real (transferência Pagar.me)
-      // O valor recebido no input é em rears (ex: 80 para 80 reais),
-      // transformamos em centavos (* 100) para enviar ao gateway
-      /* 
-      const valorEmCentavos = Math.round(parseFloat(transferData.amount || "0") * 100);
-      // user.recipient_id vem do banco com o identificador retornado do Pagar.me na criacao do recebedor
-      const recipientId = user.recipient_id || "ID_NÃO_ENCONTRADO_NO_USER"; 
-
-      const response = await fetch("https://api.pagar.me/core/v5/transfers", {
+      const response = await fetch("/api/salgados/transferencias", {
         method: "POST",
-        headers: { 
-          "accept": "application/json",
-          "content-type": "application/json",
-          // Adicione a autorização aqui se necessário, ex: "Authorization": "Basic " + btoa("sk_...:")
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: valorEmCentavos, // 8000
-          recipient_id: recipientId, // "88784545"
-          metadata: {
-            observation: transferData.description
-          }
+          colaborador_id: user.id,
+          amount: valor,
+          description: transferData.description,
         }),
       });
-      if (response.ok) {
-         ...
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.danger("Erro", {
+          description: data.error || "Não foi possível realizar a transferência.",
+        });
+        return;
       }
-      */
 
       toast("Sucesso", {
         description: "A transferência foi solicitada com sucesso.",
@@ -522,11 +596,14 @@ export default function SalgadosPage() {
         amount: "",
         description: "",
       });
+      fetchSaldo();
     } catch (error) {
       console.error("Erro ao solicitar transferência:", error);
       toast.danger("Erro", {
         description: "Não foi possível realizar a transferência.",
       });
+    } finally {
+      setIsSubmittingTransfer(false);
     }
   };
 
@@ -534,7 +611,7 @@ export default function SalgadosPage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -547,18 +624,14 @@ export default function SalgadosPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
             <Link href="/" className="w-fit">
-              <Button variant="outline" size="sm" className="w-fit">
+              <Button variant="outline" size="sm">
                 <ArrowLeft className="w-4 h-4" />
                 Voltar
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Controle de Salgados
-              </h1>
-              <p className="text-gray-600">
-                Gerencie dívidas de salgados dos colaboradores
-              </p>
+              <h1 className="text-3xl font-bold">Controle de Salgados</h1>
+              <p>Gerencie dívidas de salgados dos colaboradores</p>
             </div>
           </div>
 
@@ -631,7 +704,10 @@ export default function SalgadosPage() {
                       Valor Total Saque
                     </p>
                     <p className="text-2xl font-bold text-blue-600">
-                      R$ 200,00
+                      {saldoInfo.available_amount.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
                     </p>
                   </div>
                 </div>
@@ -639,7 +715,7 @@ export default function SalgadosPage() {
             </Card>
           </div>
 
-          <Tabs defaultSelectedKey="pendentes" className="space-y-6">
+          <Tabs defaultSelectedKey="pendentes">
             <Tabs.ListContainer>
               <Tabs.List className="grid w-full grid-cols-2">
                 <Tabs.Tab id="pendentes">
@@ -659,7 +735,7 @@ export default function SalgadosPage() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <Card.Title>Dívidas Pendentes</Card.Title>
-                      <Card.Description className="mt-1.5">
+                      <Card.Description>
                         Colaboradores com dívidas pendentes de salgados
                       </Card.Description>
                     </div>
@@ -671,20 +747,27 @@ export default function SalgadosPage() {
                         >
                           <Button variant="secondary">
                             <IdCardIcon className="w-4 h-4" />
-                            Cadastrar conta bancária
+                            {jaTemContaCadastrada
+                              ? "Editar conta bancária"
+                              : "Cadastrar conta bancária"}
                           </Button>
                           <Modal.Backdrop>
                             <Modal.Container>
-                              <Modal.Dialog className="max-w-[50vw] max-h-[75vh] overflow-y-auto rounded-r-none">
+                              <Modal.Dialog className="max-w-[50vw] max-h-[75vh] overflow-y-auto">
                                 <Modal.CloseTrigger />
                                 <Modal.Header>
                                   <Modal.Heading>
-                                    Cadastrar conta bancária
+                                    {jaTemContaCadastrada
+                                      ? "Editar conta bancária"
+                                      : "Cadastrar conta bancária"}
                                   </Modal.Heading>
                                 </Modal.Header>
                                 <Modal.Body>
                                   <p className="text-sm text-muted-foreground">
-                                    Preencha os dados abaixo para cadastrar sua
+                                    Preencha os dados abaixo para{" "}
+                                    {jaTemContaCadastrada
+                                      ? "editar sua"
+                                      : "cadastrar sua"}{" "}
                                     conta bancária.
                                   </p>
                                   <div className="grid grid-cols-2 gap-4 py-4">
@@ -955,8 +1038,15 @@ export default function SalgadosPage() {
                                   </div>
                                 </Modal.Body>
                                 <Modal.Footer>
-                                  <Button onPress={handleCadastrarConta}>
-                                    Cadastrar Conta
+                                  <Button
+                                    onPress={handleCadastrarConta}
+                                    isDisabled={isSubmittingConta}
+                                  >
+                                    {isSubmittingConta
+                                      ? "Enviando..."
+                                      : jaTemContaCadastrada
+                                        ? "Salvar Alterações"
+                                        : "Cadastrar Conta"}
                                   </Button>
                                 </Modal.Footer>
                               </Modal.Dialog>
@@ -985,6 +1075,15 @@ export default function SalgadosPage() {
                                   Solicite uma transferência de valores via
                                   Pagar.me.
                                 </p>
+                                <p className="text-sm">
+                                  Saldo disponível para saque:{" "}
+                                  <strong>
+                                    {saldoInfo.available_amount.toLocaleString(
+                                      "pt-BR",
+                                      { style: "currency", currency: "BRL" },
+                                    )}
+                                  </strong>
+                                </p>
                                 <div className="grid gap-4 py-4">
                                   <div className="grid gap-2">
                                     <Label htmlFor="transfer_amount">
@@ -993,6 +1092,7 @@ export default function SalgadosPage() {
                                     <Input
                                       id="transfer_amount"
                                       type="number"
+                                      max={saldoInfo.available_amount}
                                       placeholder="Ex: 80.50 para R$ 80,50"
                                       value={transferData.amount}
                                       onChange={(e) =>
@@ -1022,8 +1122,16 @@ export default function SalgadosPage() {
                                 </div>
                               </Modal.Body>
                               <Modal.Footer>
-                                <Button onPress={handleTransferirDinheiro}>
-                                  Confirmar Transferência
+                                <Button
+                                  onPress={handleTransferirDinheiro}
+                                  isDisabled={
+                                    isSubmittingTransfer ||
+                                    saldoInfo.available_amount <= 0
+                                  }
+                                >
+                                  {isSubmittingTransfer
+                                    ? "Enviando..."
+                                    : "Confirmar Transferência"}
                                 </Button>
                               </Modal.Footer>
                             </Modal.Dialog>
@@ -1097,7 +1205,7 @@ export default function SalgadosPage() {
                                         setNewDivida({
                                           ...newDivida,
                                           item: value as string,
-                                          valor: "", // Reset valor quando muda o tipo
+                                          valor: "",
                                         })
                                       }
                                       placeholder="Selecione o tipo"
@@ -1263,7 +1371,20 @@ export default function SalgadosPage() {
                 </Card.Header>
                 <Card.Content>
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <div className="relative flex-1">
+                    <TextField className="w-full max-w-full" name="email">
+                      <InputGroup>
+                        <InputGroup.Prefix>
+                          <LucideSearch className="size-4 text-muted" />
+                        </InputGroup.Prefix>
+                        <InputGroup.Input
+                          className="w-full max-w-full"
+                          placeholder="Pesquisar por nome ou item..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </InputGroup>
+                    </TextField>
+                    {/* <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
                         placeholder="Pesquisar por nome ou item..."
@@ -1271,7 +1392,7 @@ export default function SalgadosPage() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10"
                       />
-                    </div>
+                    </div> */}
                     <Select
                       value={filterMotivo}
                       onChange={(value) => setFilterMotivo(value as string)}
@@ -1349,9 +1470,7 @@ export default function SalgadosPage() {
                                     <h3 className="text-lg font-semibold">
                                       {divida.colaborador_nome}
                                     </h3>
-                                    <Badge variant="secondary">
-                                      {divida.item}
-                                    </Badge>
+                                    <Chip>{divida.item}</Chip>
                                   </div>
                                   <p className="text-gray-600 mb-2">
                                     {divida.motivo}
@@ -1531,9 +1650,7 @@ export default function SalgadosPage() {
                                     <h3 className="text-lg font-semibold">
                                       {divida.colaborador_nome}
                                     </h3>
-                                    <Badge variant="secondary">
-                                      {divida.item}
-                                    </Badge>
+                                    <Chip>{divida.item}</Chip>
                                   </div>
                                   <p className="text-gray-600 mb-2">
                                     {divida.motivo}

@@ -3,6 +3,7 @@
 import type React from "react";
 
 import { useAuth } from "@/contexts/auth-context";
+import { Spinner } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -36,7 +37,7 @@ export function ProtectedRoute({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <Spinner />
       </div>
     );
   }

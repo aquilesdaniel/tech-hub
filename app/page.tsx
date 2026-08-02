@@ -3,7 +3,7 @@
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
-import { Button, Card } from "@heroui/react";
+import { Button, Card, Spinner } from "@heroui/react";
 import {
   AlertCircle,
   Award,
@@ -34,6 +34,8 @@ export default function HomePage() {
     totalCertificacoes: 0,
     certificacoesUsuario: 0,
     certificacoesSenior: 0,
+    totalColaboradores: 0,
+    totalSetores: 0,
   });
 
   useEffect(() => {
@@ -48,12 +50,14 @@ export default function HomePage() {
         emprestimosRes,
         certificacoesRes,
         colaboradoresRes,
+        setoresRes,
       ] = await Promise.all([
         fetch("/api/salgados/dividas"),
         fetch("/api/biblioteca/livros"),
         fetch("/api/biblioteca/emprestimos"),
         fetch("/api/certificacoes"),
         fetch("/api/colaboradores"),
+        fetch("/api/admin/setores"),
       ]);
 
       const dividasData = await dividasRes.json();
@@ -61,6 +65,7 @@ export default function HomePage() {
       const emprestimosData = await emprestimosRes.json();
       const certificacoesData = await certificacoesRes.json();
       const colaboradoresData = await colaboradoresRes.json();
+      const setoresData = setoresRes.ok ? await setoresRes.json() : [];
 
       const totalDividas = dividasData.filter((d: any) => !d.pago).length;
       const salgadosPagos = dividasData.filter((d: any) => d.pago).length;
@@ -121,6 +126,8 @@ export default function HomePage() {
         totalCertificacoes: certificacoesData.length,
         certificacoesUsuario,
         certificacoesSenior,
+        totalColaboradores: colaboradoresData.length,
+        totalSetores: setoresData.length,
       });
     } catch (error) {
       console.error("Erro ao carregar estatísticas:", error);
@@ -133,7 +140,7 @@ export default function HomePage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -146,10 +153,10 @@ export default function HomePage() {
 
         <div className="container mx-auto px-4 py-6 sm:py-8">
           <div className="text-center mb-8 sm:mb-12">
-            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
+            <h1 className="text-2xl sm:text-4xl font-bold mb-2 sm:mb-4">
               Bem-vindo, {user?.nome}!
             </h1>
-            <p className="text-base sm:text-xl text-gray-600 max-w-2xl mx-auto px-4">
+            <p className="text-base sm:text-xl max-w-2xl mx-auto px-4">
               {user?.tipo === "admin"
                 ? "Gerencie todo o sistema de salgados e biblioteca"
                 : "Acesse seus empréstimos e gerencie suas dívidas de salgados"}
@@ -157,8 +164,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8 max-w-7xl mx-auto">
-            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md">
-              <Card.Header className="text-center pb-4">
+            <Card>
+              <Card.Header className="flex flex-col gap-2 text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-orange-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <Cookie className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
                 </div>
@@ -174,36 +181,36 @@ export default function HomePage() {
               <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <div className="font-semibold text-red-700">
+                    <div className="bg-danger/75 p-3 rounded-lg">
+                      <div className="font-semibold text-white">
                         {user?.tipo === "admin"
                           ? "Total Pendente"
                           : user?.seniorUsername
                             ? "Total Pendente"
                             : "Suas Dívidas"}
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-red-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {user?.tipo === "admin" || user?.seniorUsername
                           ? stats.totalDividas
                           : stats.dividasUsuario}
                       </div>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="font-semibold text-green-700">
+                    <div className="bg-success/75 p-3 rounded-lg">
+                      <div className="font-semibold text-white">
                         {user?.tipo === "admin" ? "Total Pagos" : "Seus Pagos"}
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-green-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {user?.tipo === "admin"
                           ? stats.salgadosPagos
                           : stats.salgadosPagosUsuario}
                       </div>
                     </div>
                     {user?.tipo !== "admin" && (
-                      <div className="bg-blue-50 p-3 rounded-lg col-span-2">
-                        <div className="font-semibold text-blue-700">
+                      <div className="bg-accent/75 p-3 rounded-lg col-span-2">
+                        <div className="font-semibold text-white">
                           Total Gasto em Salgados
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-blue-600">
+                        <div className="text-xl sm:text-2xl font-bold text-white">
                           {(
                             Number(stats.totalGastoSalgados) || 0
                           ).toLocaleString("pt-BR", {
@@ -214,11 +221,11 @@ export default function HomePage() {
                       </div>
                     )}
                     {user?.tipo === "admin" && (
-                      <div className="bg-purple-50 p-3 rounded-lg col-span-2">
-                        <div className="font-semibold text-purple-700">
+                      <div className="bg-accent/75 p-3 rounded-lg col-span-2">
+                        <div className="font-semibold text-white">
                           Total Geral Gasto por Todos
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                        <div className="text-xl sm:text-2xl font-bold text-white">
                           {(
                             Number(stats.totalGeralGastoSalgados) || 0
                           ).toLocaleString("pt-BR", {
@@ -243,8 +250,8 @@ export default function HomePage() {
               </Card.Content>
             </Card>
 
-            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
-              <Card.Header className="text-center pb-4">
+            <Card className="flex flex-col h-full">
+              <Card.Header className="flex flex-col gap-2 text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                 </div>
@@ -260,25 +267,25 @@ export default function HomePage() {
               <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="font-semibold text-blue-700">
+                    <div className="bg-accent/75 p-3 rounded-lg">
+                      <div className="font-semibold text-white">
                         {user?.tipo === "admin"
                           ? "Total Livros"
                           : "Disponíveis"}
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-blue-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {user?.tipo === "admin"
                           ? stats.totalLivros
                           : stats.livrosDisponiveis}
                       </div>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg">
-                      <div className="font-semibold text-yellow-700">
+                    <div className="bg-warning/75 p-3 rounded-lg">
+                      <div className="font-semibold text-white">
                         {user?.tipo === "admin"
                           ? "Emprestados"
                           : "Seus Empréstimos"}
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {user?.tipo === "admin"
                           ? stats.emprestimosAtivos
                           : stats.emprestimosUsuario}
@@ -288,20 +295,18 @@ export default function HomePage() {
                 </div>
               </Card.Content>
 
-              <div className="mt-auto px-6 pb-6">
-                <Link href="/biblioteca">
-                  <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                    size="lg"
-                  >
-                    Acessar Biblioteca
-                  </Button>
-                </Link>
-              </div>
+              <Link href="/biblioteca">
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  size="lg"
+                >
+                  Acessar Biblioteca
+                </Button>
+              </Link>
             </Card>
 
-            <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md flex flex-col h-full">
-              <Card.Header className="text-center pb-4">
+            <Card className="flex flex-col h-full">
+              <Card.Header className="flex flex-col gap-2 text-center pb-4">
                 <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                   <Award className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
                 </div>
@@ -317,23 +322,23 @@ export default function HomePage() {
               <Card.Content className="text-center">
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="font-semibold text-green-700">
+                    <div className="bg-success/75 p-3 rounded-xl">
+                      <div className="font-semibold text-white">
                         {user?.tipo === "admin"
                           ? "Total Certificações"
                           : "Suas Certificações"}
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-green-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {user?.tipo === "admin"
                           ? stats.totalCertificacoes
                           : stats.certificacoesUsuario}
                       </div>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg">
-                      <div className="font-semibold text-yellow-700">
+                    <div className="bg-warning/75 p-3 rounded-lg">
+                      <div className="font-semibold text-white">
                         Certificações Sênior
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">
+                      <div className="text-xl sm:text-2xl font-bold text-white">
                         {stats.certificacoesSenior}
                       </div>
                     </div>
@@ -341,21 +346,19 @@ export default function HomePage() {
                 </div>
               </Card.Content>
 
-              <div className="mt-auto px-6 pb-6">
-                <Link href="/certificacoes">
-                  <Button
-                    className="w-full bg-green-600 hover:bg-green-700"
-                    size="lg"
-                  >
-                    Acessar Certificações
-                  </Button>
-                </Link>
-              </div>
+              <Link href="/certificacoes">
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  size="lg"
+                >
+                  Acessar Certificações
+                </Button>
+              </Link>
             </Card>
 
             {user?.tipo === "admin" && (
-              <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md lg:col-span-2 xl:col-span-1">
-                <Card.Header className="text-center pb-4">
+              <Card className="lg:col-span-2 xl:col-span-1">
+                <Card.Header className="flex flex-col gap-2 text-center pb-4">
                   <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                     <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
                   </div>
@@ -369,19 +372,17 @@ export default function HomePage() {
                 <Card.Content className="text-center">
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
-                      <div className="bg-yellow-50 p-3 rounded-lg">
-                        <div className="font-semibold text-yellow-700">
+                      <div className="bg-warning/75 p-3 rounded-lg">
+                        <div className="font-semibold text-white">
                           Total Certificados
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-yellow-600">
+                        <div className="text-xl sm:text-2xl font-bold text-white">
                           {stats.totalCertificacoes}
                         </div>
                       </div>
-                      <div className="bg-orange-50 p-3 rounded-lg">
-                        <div className="font-semibold text-orange-700">
-                          Senior
-                        </div>
-                        <div className="text-xl sm:text-2xl font-bold text-orange-600">
+                      <div className="bg-accent/75 p-3 rounded-lg">
+                        <div className="font-semibold text-white">Senior</div>
+                        <div className="text-xl sm:text-2xl font-bold text-white">
                           {stats.certificacoesSenior}
                         </div>
                       </div>
@@ -389,7 +390,7 @@ export default function HomePage() {
                     <Link href="/gamificacao">
                       <div className="mt-4">
                         <Button
-                          className="w-full bg-yellow-600 hover:bg-yellow-700"
+                          className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
                           size="lg"
                         >
                           Ver Rankings
@@ -402,13 +403,13 @@ export default function HomePage() {
             )}
 
             {user?.tipo === "admin" && (
-              <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md lg:col-span-2 xl:col-span-1">
-                <Card.Header className="text-center pb-4">
+              <Card className="lg:col-span-2 xl:col-span-1">
+                <Card.Header className="flex flex-col gap-2 text-center pb-4">
                   <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-purple-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
                     <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
                   </div>
                   <Card.Title className="text-xl sm:text-2xl">
-                    Painel Admin
+                    Painel Administrativo
                   </Card.Title>
                   <Card.Description className="text-sm sm:text-base">
                     Gerencie colaboradores e setores da empresa
@@ -417,27 +418,25 @@ export default function HomePage() {
                 <Card.Content className="text-center">
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <div className="font-semibold text-purple-700">
+                      <div className="bg-accent/75 p-3 rounded-lg">
+                        <div className="font-semibold text-white">
                           Colaboradores
                         </div>
-                        <div className="text-xl sm:text-2xl font-bold text-purple-600">
-                          3
+                        <div className="text-xl sm:text-2xl font-bold text-white">
+                          {stats.totalColaboradores}
                         </div>
                       </div>
-                      <div className="bg-indigo-50 p-3 rounded-lg">
-                        <div className="font-semibold text-indigo-700">
-                          Setores
-                        </div>
-                        <div className="text-xl sm:text-2xl font-bold text-indigo-600">
-                          3
+                      <div className="bg-accent/75 p-3 rounded-lg">
+                        <div className="font-semibold text-white">Setores</div>
+                        <div className="text-xl sm:text-2xl font-bold text-white">
+                          {stats.totalSetores}
                         </div>
                       </div>
                     </div>
                     <Link href="/admin">
                       <div className="mt-4">
                         <Button
-                          className="w-full bg-purple-600 hover:bg-purple-700"
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                           size="lg"
                         >
                           Acessar Painel

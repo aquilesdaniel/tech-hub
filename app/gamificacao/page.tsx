@@ -3,7 +3,15 @@
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
-import { Badge, Button, Card, ListBox, Select, toast } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  Select,
+  Spinner,
+  toast,
+} from "@heroui/react";
 import {
   ArrowLeft,
   Award,
@@ -206,7 +214,7 @@ export default function GamificacaoPage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -225,12 +233,10 @@ export default function GamificacaoPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold">
                 Gamificação - Certificações
               </h1>
-              <p className="text-gray-600">
-                Ranking e estatísticas de certificações dos colaboradores
-              </p>
+              <p>Ranking e estatísticas de certificações dos colaboradores</p>
             </div>
           </div>
 
@@ -465,9 +471,9 @@ export default function GamificacaoPage() {
                               {colaborador.departamento}
                             </p>
                           </div>
-                          <Badge className={getRankColor(index + 1)}>
+                          <Chip className={getRankColor(index + 1)}>
                             {getRankBadge(index + 1)}
-                          </Badge>
+                          </Chip>
                         </div>
 
                         <div className="flex flex-col text-center sm:text-right items-center sm:items-end">

@@ -4,14 +4,15 @@ import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  Badge,
   Button,
   Card,
+  Chip,
   Input,
   Label,
   ListBox,
   Modal,
   Select,
+  Spinner,
   TextArea,
   toast,
 } from "@heroui/react";
@@ -299,7 +300,7 @@ export default function CertificacoesPage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -318,12 +319,8 @@ export default function CertificacoesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Controle de Certificações
-              </h1>
-              <p className="text-gray-600">
-                Gerencie certificações dos colaboradores
-              </p>
+              <h1 className="text-3xl font-bold">Controle de Certificações</h1>
+              <p>Gerencie certificações dos colaboradores</p>
             </div>
           </div>
 
@@ -633,16 +630,9 @@ export default function CertificacoesPage() {
                               <h3 className="text-lg font-semibold break-all">
                                 {certificacao.nome}
                               </h3>
-                              <Badge
-                                className="whitespace-nowrap"
-                                variant={
-                                  certificacao.tipo === "Certificação Senior"
-                                    ? "primary"
-                                    : "secondary"
-                                }
-                              >
+                              <Chip className="whitespace-nowrap">
                                 {certificacao.tipo}
-                              </Badge>
+                              </Chip>
                             </div>
                             <p className="text-gray-600 mb-2">
                               <strong>Colaborador:</strong>{" "}

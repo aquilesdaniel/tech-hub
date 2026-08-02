@@ -4,14 +4,15 @@ import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  Badge,
   Button,
   Card,
+  Chip,
   Input,
   Label,
   ListBox,
   Modal,
   Select,
+  Spinner,
   Tabs,
   toast,
 } from "@heroui/react";
@@ -315,7 +316,7 @@ export default function BibliotecaPage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <Spinner />
         </div>
       </ProtectedRoute>
     );
@@ -334,10 +335,8 @@ export default function BibliotecaPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Biblioteca</h1>
-              <p className="text-gray-600">
-                Gerencie empréstimos e catálogo de livros
-              </p>
+              <h1 className="text-3xl font-bold">Biblioteca</h1>
+              <p>Gerencie empréstimos e catálogo de livros</p>
             </div>
           </div>
 
@@ -633,11 +632,9 @@ export default function BibliotecaPage() {
                               <p className="text-gray-600 mb-2">
                                 {livro.autor}
                               </p>
-                              <Badge variant="secondary" className="mb-3">
-                                {livro.genero}
-                              </Badge>
+                              <Chip className="mb-3">{livro.genero}</Chip>
                               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                <Badge
+                                <Chip
                                   color={
                                     livro.disponivel ? "default" : "danger"
                                   }
@@ -645,10 +642,9 @@ export default function BibliotecaPage() {
                                   {livro.disponivel
                                     ? "Disponível"
                                     : "Emprestado"}
-                                </Badge>
+                                </Chip>
                                 {livro.disponivel && (
                                   <Button
-                                    className=""
                                     size="sm"
                                     onPress={() => abrirModalEmprestimo(livro)}
                                   >
@@ -801,7 +797,7 @@ export default function BibliotecaPage() {
                                   )}
                                 </div>
                               </div>
-                              <Badge
+                              <Chip
                                 color={
                                   emprestimo.status === "emprestado"
                                     ? "danger"
@@ -811,7 +807,7 @@ export default function BibliotecaPage() {
                                 {emprestimo.status === "emprestado"
                                   ? "Emprestado"
                                   : "Devolvido"}
-                              </Badge>
+                              </Chip>
                             </div>
                           </Card.Content>
                         </Card>
