@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
       aniversario,
       rendaMensal,
       ocupacao,
+      telefoneDdd,
+      telefoneNumero,
+      cep,
+      rua,
+      numero,
+      complemento,
+      bairro,
+      cidade,
+      estado,
+      pontoReferencia,
       nomeTitular,
       documentoTitular,
       banco,
@@ -78,6 +88,14 @@ export async function POST(req: NextRequest) {
       !documentoColaborador ||
       !aniversario ||
       !ocupacao ||
+      !telefoneDdd ||
+      !telefoneNumero ||
+      !cep ||
+      !rua ||
+      !numero ||
+      !bairro ||
+      !cidade ||
+      !estado ||
       !nomeTitular ||
       !documentoTitular ||
       !banco ||
@@ -110,6 +128,17 @@ export async function POST(req: NextRequest) {
       birthdate: aniversario,
       monthlyIncome: parseInt(rendaMensal, 10) || 0,
       professionalOccupation: ocupacao,
+      telefone: { areaCode: telefoneDdd, number: telefoneNumero },
+      endereco: {
+        street: rua,
+        streetNumber: numero,
+        neighborhood: bairro,
+        city: cidade,
+        state: estado,
+        zipCode: String(cep).replace(/\D/g, ""),
+        complementary: complemento || undefined,
+        referencePoint: pontoReferencia || undefined,
+      },
     };
 
     const bankAccount = {

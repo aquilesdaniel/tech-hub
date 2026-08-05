@@ -21,6 +21,7 @@ import {
   Receipt,
   TriangleAlert,
   UserRound,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,7 +45,6 @@ interface Colaborador {
   setor_id: number;
   nome: string;
   email: string;
-  senha: string;
   tipo: "admin" | "user";
   departamento: string;
   cargo: string;
@@ -56,7 +56,8 @@ interface Colaborador {
   country_code: string;
   area_code: string;
   number: string;
-  document: string;
+  possui_documento: boolean;
+  document_mascarado: string | null;
   created_at: Date;
   updated_at: Date;
   recipient_id: string;
@@ -100,7 +101,7 @@ export default function PaymentPage({
     useState<Colaborador | null>(null);
 
   const possuiDadosCompletos =
-    colaboradorCompleto?.document &&
+    colaboradorCompleto?.possui_documento &&
     colaboradorCompleto?.country_code &&
     colaboradorCompleto?.area_code &&
     colaboradorCompleto?.number;
@@ -494,12 +495,70 @@ export default function PaymentPage({
     }
   };
 
+  const handleSimularPagamento = async () => {
+    if (!pagamentoGerado) return;
+    try {
+      const response = await fetch("/api/salgados/pagamentos/simular", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ divida_id: id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        toast.danger("Erro", {
+          description: data.error || "Não foi possível simular o pagamento.",
+        });
+        return;
+      }
+
+      toast("Simulado!", {
+        description:
+          "Pagamento simulado. Aguarde o próximo polling para ver a confirmação.",
+      });
+    } catch (error) {
+      console.error("Erro ao simular pagamento:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível simular o pagamento.",
+      });
+    }
+  };
+
   const handleCancelarPagamento = async () => {
-    // TODO: Implementar lógica de cancelamento do pagamento
-    console.log("Cancelar pagamento de id: ", pagamentoGerado?.id);
-    toast("Info", {
-      description: "Lógica de cancelamento pendente de implementação.",
-    });
+    if (!pagamentoGerado) return;
+    setIsProcessing(true);
+    try {
+      const response = await fetch(
+        `/api/salgados/pagamentos/${pagamentoGerado.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "canceled" }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.danger("Erro", {
+          description: data.error || "Não foi possível cancelar o pagamento.",
+        });
+        return;
+      }
+
+      setPagamentoGerado(data);
+      toast("Pagamento cancelado", {
+        description:
+          "O código Pix foi cancelado. Um novo pagamento já pode ser gerado.",
+      });
+    } catch (error) {
+      console.error("Erro ao cancelar pagamento:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível cancelar o pagamento.",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (loading) {
@@ -513,6 +572,27 @@ export default function PaymentPage({
   }
 
   if (!divida) return null;
+
+  // Deriva um único estado a partir de divida.pago + pagamentoGerado.status + tempoRestante,
+  // usado em todos os pontos da tela (chip, cards de resultado, botões) pra evitar
+  // que cada trecho reimplemente sua própria combinação dessas 3 fontes de verdade.
+  const pagamentoPago = divida.pago || pagamentoGerado?.status === "paid";
+  const pagamentoCancelado =
+    !pagamentoPago && pagamentoGerado?.status === "canceled";
+  const pagamentoExpirado =
+    !pagamentoPago &&
+    !pagamentoCancelado &&
+    pagamentoGerado?.status === "pending" &&
+    tempoRestante === "Expirado";
+  const pagamentoPendenteAtivo =
+    !pagamentoPago &&
+    !pagamentoCancelado &&
+    !pagamentoExpirado &&
+    pagamentoGerado?.status === "pending";
+  // Libera o botão de gerar um novo Pix: nunca foi gerado, ou o anterior foi cancelado/expirou
+  const podeGerarNovoPagamento =
+    !pagamentoPago &&
+    (!pagamentoGerado || pagamentoCancelado || pagamentoExpirado);
 
   return (
     <ProtectedRoute>
@@ -546,11 +626,17 @@ export default function PaymentPage({
                       <Card.Title>Detalhes da Dívida</Card.Title>
                     </div>
 
-                    {divida.pago ||
-                    (pagamentoGerado &&
-                      pagamentoGerado.status !== "pending") ? (
+                    {pagamentoPago ? (
                       <Chip variant="primary" color="success">
                         Pago
+                      </Chip>
+                    ) : pagamentoCancelado ? (
+                      <Chip variant="primary" color="danger">
+                        Cancelado
+                      </Chip>
+                    ) : pagamentoExpirado ? (
+                      <Chip variant="primary" color="accent">
+                        Expirado
                       </Chip>
                     ) : (
                       <Chip variant="primary" color="warning">
@@ -564,7 +650,7 @@ export default function PaymentPage({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">
-                        Devedor (Colaborador)
+                        Devedor
                       </p>
                       <p className="text-lg font-semibold">
                         {divida.colaborador_nome}
@@ -662,10 +748,8 @@ export default function PaymentPage({
                               CPF
                             </p>
                             <p className="font-medium">
-                              {colaboradorGerador.document?.replace(
-                                /(\d{3})(\d{3})(\d{3})(\d{2})/,
-                                "$1.$2.$3-$4",
-                              ) || "Não informado"}
+                              {colaboradorGerador.document_mascarado ||
+                                "Não informado"}
                             </p>
                           </div>
                           <div>
@@ -726,10 +810,7 @@ export default function PaymentPage({
                                 CPF
                               </p>
                               <p className="font-medium">
-                                {colaboradorCompleto?.document.replace(
-                                  /(\d{3})(\d{3})(\d{3})(\d{2})/,
-                                  "$1.$2.$3-$4",
-                                )}
+                                {colaboradorCompleto?.document_mascarado}
                               </p>
                             </div>
                             <div>
@@ -812,13 +893,9 @@ export default function PaymentPage({
                   )}
                 </Card.Content>
 
-                {!(
-                  divida.pago ||
-                  (pagamentoGerado && pagamentoGerado.status !== "pending")
-                ) &&
+                {!pagamentoPago &&
                   ((colaboradorCompleto !== null && !possuiDadosCompletos) ||
-                    (possuiDadosCompletos &&
-                      (!pagamentoGerado || tempoRestante === "Expirado"))) && (
+                    (possuiDadosCompletos && podeGerarNovoPagamento)) && (
                     <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
                       <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
                         {colaboradorCompleto !== null &&
@@ -832,148 +909,167 @@ export default function PaymentPage({
                             </Button>
                           )}
 
-                        {possuiDadosCompletos &&
-                          (!pagamentoGerado ||
-                            tempoRestante === "Expirado") && (
-                            <Button
-                              onPress={handleGerarPagamento}
-                              isDisabled={isProcessing}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              <Check className="w-4 h-4 mr-2" />
-                              {isProcessing
-                                ? "Gerando..."
-                                : "Gerar Pagamento PIX"}
-                            </Button>
-                          )}
+                        {possuiDadosCompletos && podeGerarNovoPagamento && (
+                          <Button
+                            onPress={handleGerarPagamento}
+                            isDisabled={isProcessing}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Check className="w-4 h-4" />
+                            {isProcessing
+                              ? "Gerando..."
+                              : "Gerar Pagamento PIX"}
+                          </Button>
+                        )}
                       </div>
                     </Card.Footer>
                   )}
               </Card>
             </div>
 
-            {/* Card de Sucesso */}
-            {(divida.pago ||
-              (pagamentoGerado && pagamentoGerado.status !== "pending")) && (
-              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 bg-green-50 border-green-200">
+            {pagamentoPago && (
+              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-green-200">
                 <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
                   <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
                     <Check className="w-8 h-8 text-white" />
                   </div>
 
-                  <Card.Title className="text-black text-2xl text-center">
+                  <Card.Title className="text-2xl text-center">
                     Pago com Sucesso!
                   </Card.Title>
 
-                  <p className="text-gray-600 text-center font-medium">
+                  <p className="text-center">
                     Seu pagamento foi confirmado pelo sistema.
                   </p>
                 </Card.Header>
               </Card>
             )}
 
-            {/* Card de pagamento */}
-            {pagamentoGerado &&
-              pagamentoGerado.status === "pending" &&
-              !divida.pago && (
-                <Card className="w-full lg:w-1/3 flex flex-col">
-                  <Card.Header>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
-                        <QrCode className="w-5 h-5 text-green-600" />
-                      </div>
-                      <Card.Title>Pague via PIX</Card.Title>
+            {pagamentoCancelado && (
+              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-red-200">
+                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
+                  <div className="flex items-center justify-center w-16 h-16 bg-red-500 rounded-full">
+                    <X className="w-8 h-8 text-white" />
+                  </div>
+
+                  <Card.Title className="text-2xl text-center">
+                    Pagamento Cancelado
+                  </Card.Title>
+
+                  <p className="text-center">
+                    Este código Pix foi cancelado, mas você pode gerar um novo
+                    pagamento para quitar esta dívida.
+                  </p>
+                </Card.Header>
+              </Card>
+            )}
+
+            {pagamentoExpirado && (
+              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-blue-200">
+                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
+                  <div className="flex items-center justify-center w-16 h-16 bg-blue-500 rounded-full">
+                    <TriangleAlert className="w-8 h-8 text-white" />
+                  </div>
+
+                  <Card.Title className="text-2xl text-center">
+                    Pix Expirado
+                  </Card.Title>
+
+                  <p className="text-center">
+                    O tempo para pagamento deste código Pix se esgotou, mas você
+                    pode gerar um novo QR code para quitar esta dívida.
+                  </p>
+
+                  {/* <Button
+                    onPress={handleGerarPagamento}
+                    isDisabled={
+                      isProcessing ||
+                      (colaboradorCompleto !== null && !possuiDadosCompletos)
+                    }
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {isProcessing ? "Gerando..." : "Gerar Novo QR Code"}
+                  </Button> */}
+                </Card.Header>
+              </Card>
+            )}
+
+            {pagamentoGerado && pagamentoPendenteAtivo && (
+              <Card className="w-full lg:w-1/3 flex flex-col">
+                <Card.Header>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
+                      <QrCode className="w-5 h-5 text-green-600" />
                     </div>
-                  </Card.Header>
+                    <Card.Title>Pague via PIX</Card.Title>
+                  </div>
+                </Card.Header>
 
-                  <Card.Content className="flex flex-col flex-1">
-                    {/* Logica de expiração */}
-                    {tempoRestante === "Expirado" ? (
-                      <div className="flex flex-col items-center justify-center space-y-4 flex-1">
-                        <p className="text-center text-sm text-gray-600 font-medium">
-                          O tempo limite para pagamento deste código se esgotou.
-                        </p>
+                <Card.Content className="flex flex-col flex-1">
+                  <div className="flex flex-col items-center justify-center flex-1">
+                    <div className="flex items-center justify-center gap-1 pb-4">
+                      <span className="text-sm">Valor:</span>
+                      <span className="font-bold">
+                        R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
 
-                        <Button
-                          onPress={handleGerarPagamento}
-                          isDisabled={
-                            isProcessing ||
-                            (colaboradorCompleto !== null &&
-                              !possuiDadosCompletos)
-                          }
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-auto"
-                        >
-                          {isProcessing ? "Gerando..." : "Gerar Novo QR Code"}
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex flex-col items-center justify-center flex-1">
-                          {/* Valor da dívida */}
-                          <div className="flex items-center justify-center gap-1 pb-4">
-                            <span className="text-sm text-gray-500">
-                              Valor:
-                            </span>
-                            <span className="font-bold">
-                              R${" "}
-                              {Number(divida.valor)
-                                .toFixed(2)
-                                .replace(".", ",")}
-                            </span>
-                          </div>
+                    <div className="flex justify-center items-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pagamentoGerado.qr_code)}`}
+                        alt="QR Code Pix"
+                        className="w-56 h-56 object-contain"
+                      />
+                    </div>
 
-                          {/* QR Code Imagem */}
-                          <div className="flex justify-center items-center">
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pagamentoGerado.qr_code)}`}
-                              alt="QR Code Pix"
-                              className="w-56 h-56 object-contain"
-                            />
-                          </div>
+                    <div className="flex items-center justify-center gap-1 my-4">
+                      <span className="text-sm font-medium">Expira em: </span>
+                      <span className="font-bold tracking-wider">
+                        {tempoRestante}
+                      </span>
+                    </div>
+                  </div>
 
-                          {/* Timer pequeno */}
-                          <span className="text-sm text-gray-500 font-medium my-4">
-                            Expira em{" "}
-                            <span className="text-black font-bold tracking-wider">
-                              {tempoRestante}
-                            </span>
-                          </span>
-                        </div>
+                  <div className="flex flex-col w-full mt-auto pt-4">
+                    <p className="text-sm font-medium mb-2">Copia e Cola</p>
 
-                        {/* Copia e Cola */}
-                        <div className="flex flex-col w-full mt-auto pt-4">
-                          <p className="text-sm text-gray-600 font-medium mb-2">
-                            Copia e Cola
-                          </p>
+                    <div className="flex gap-4 items-center justify-between">
+                      <p className="font-mono text-sm truncate select-all">
+                        {pagamentoGerado.qr_code}
+                      </p>
 
-                          <div className="flex gap-4 items-center">
-                            <p className="font-mono text-sm text-gray-700 truncate select-all">
-                              {pagamentoGerado.qr_code}
-                            </p>
-                            <Button
-                              className="bg-slate-800 hover:bg-slate-700 text-white"
-                              size={"sm"}
-                              onPress={handleCopiarCopiar}
-                            >
-                              <Copy className="w-4 h-4" />
-                              Copiar
-                            </Button>
-                          </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onPress={handleCopiarCopiar}
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copiar
+                      </Button>
+                    </div>
 
-                          <Button
-                            className="mt-6 font-semibold"
-                            size={"lg"}
-                            variant={"danger"}
-                            onPress={handleCancelarPagamento}
-                          >
-                            Cancelar pagamento
-                          </Button>
-                        </div>
-                      </>
+                    {process.env.NODE_ENV !== "production" && (
+                      <Button
+                        className="mt-2 font-semibold"
+                        variant="outline"
+                        onPress={handleSimularPagamento}
+                      >
+                        Simular Pagamento (Dev)
+                      </Button>
                     )}
-                  </Card.Content>
-                </Card>
-              )}
+
+                    <Button
+                      className="mt-6"
+                      variant="danger"
+                      isDisabled={isProcessing}
+                      onPress={handleCancelarPagamento}
+                    >
+                      {isProcessing ? "Cancelando..." : "Cancelar pagamento"}
+                    </Button>
+                  </div>
+                </Card.Content>
+              </Card>
+            )}
           </div>
         </div>
       </div>

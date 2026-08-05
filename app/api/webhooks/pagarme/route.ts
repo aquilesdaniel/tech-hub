@@ -1,7 +1,37 @@
+import { timingSafeEqual } from "crypto";
+import { marcarPagamentoComoPago } from "@/lib/pagamentos";
 import { prisma } from "@/lib/prisma";
 import { type NextRequest, NextResponse } from "next/server";
 
+// Valida o Basic Auth configurado no cadastro do webhook no painel da Pagar.me.
+// Sem PAGARME_WEBHOOK_USER/PAGARME_WEBHOOK_PASSWORD definidos, não há o que validar
+// (ex: testes locais via cURL), então a checagem é ignorada.
+function autenticacaoValida(req: NextRequest): boolean {
+  const usuarioEsperado = process.env.PAGARME_WEBHOOK_USER;
+  const senhaEsperada = process.env.PAGARME_WEBHOOK_PASSWORD;
+
+  if (!usuarioEsperado || !senhaEsperada) return true;
+
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Basic ")) return false;
+
+  const recebido = Buffer.from(authHeader.slice(6), "base64").toString(
+    "utf-8",
+  );
+  const esperado = `${usuarioEsperado}:${senhaEsperada}`;
+
+  const bufRecebido = Buffer.from(recebido);
+  const bufEsperado = Buffer.from(esperado);
+  if (bufRecebido.length !== bufEsperado.length) return false;
+
+  return timingSafeEqual(bufRecebido, bufEsperado);
+}
+
 export async function POST(req: NextRequest) {
+  if (!autenticacaoValida(req)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
 
@@ -37,17 +67,12 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.$transaction(async (tx) => {
-      // Atualiza o status e data de alteração na tabela de pagamentos
-      await tx.pagamentos.update({
-        where: { id: pagamento.id },
-        data: { status: novoStatus, updated_at: new Date() },
-      });
-
-      // Se o webhook informou que foi pago, reflete na tabela de dividas também
-      if (novoStatus === "paid" && pagamento.divida_id) {
-        await tx.dividas.update({
-          where: { id: pagamento.divida_id },
-          data: { pago: true, updated_at: new Date() },
+      if (novoStatus === "paid") {
+        await marcarPagamentoComoPago(tx, pagamento.id, pagamento.divida_id);
+      } else {
+        await tx.pagamentos.update({
+          where: { id: pagamento.id },
+          data: { status: novoStatus, updated_at: new Date() },
         });
       }
     });

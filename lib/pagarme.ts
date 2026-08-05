@@ -40,6 +40,18 @@ async function pagarmeFetch(path: string, init: RequestInit = {}) {
   return data;
 }
 
+// Fecha um pedido (order) na Pagar.me com o status informado, impedindo que novas
+// cobranças sejam adicionadas a ele. Usado para cancelar um Pix ainda pendente.
+export async function fecharPedido(
+  orderId: string,
+  status: "canceled" | "paid" = "canceled",
+) {
+  return pagarmeFetch(`/orders/${orderId}/closed`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
 export interface CriarPedidoPixParams {
   itemCode: string;
   itemDescricao: string;
@@ -116,16 +128,60 @@ function serializarContaBancaria(conta: DadosBancariosRecebedor) {
   };
 }
 
+export interface EnderecoRecebedor {
+  street: string;
+  streetNumber: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  complementary?: string;
+  referencePoint?: string;
+}
+
+export interface RegisterInformationParams {
+  email: string;
+  document: string;
+  name: string;
+  birthdate: string;
+  monthlyIncome: number;
+  professionalOccupation: string;
+  telefone: { areaCode: string; number: string };
+  endereco: EnderecoRecebedor;
+}
+
+function serializarRegisterInformation(info: RegisterInformationParams) {
+  return {
+    email: info.email,
+    document: info.document,
+    type: "individual",
+    name: info.name,
+    birthdate: info.birthdate,
+    monthly_income: info.monthlyIncome,
+    professional_occupation: info.professionalOccupation,
+    phone_numbers: [
+      {
+        ddd: info.telefone.areaCode,
+        number: info.telefone.number,
+        type: "mobile",
+      },
+    ],
+    address: {
+      street: info.endereco.street,
+      street_number: info.endereco.streetNumber,
+      neighborhood: info.endereco.neighborhood,
+      city: info.endereco.city,
+      state: info.endereco.state,
+      zip_code: info.endereco.zipCode,
+      complementary: info.endereco.complementary || "",
+      reference_point: info.endereco.referencePoint || "",
+    },
+  };
+}
+
 export interface CriarRecebedorParams {
   code: string;
-  registerInformation: {
-    email: string;
-    document: string;
-    name: string;
-    birthdate: string;
-    monthlyIncome: number;
-    professionalOccupation: string;
-  };
+  registerInformation: RegisterInformationParams;
   bankAccount: DadosBancariosRecebedor;
   observacao?: string;
 }
@@ -136,15 +192,9 @@ export async function criarRecebedor(params: CriarRecebedorParams) {
   return pagarmeFetch("/recipients", {
     method: "POST",
     body: JSON.stringify({
-      register_information: {
-        email: params.registerInformation.email,
-        document: params.registerInformation.document,
-        type: "individual",
-        name: params.registerInformation.name,
-        birthdate: params.registerInformation.birthdate,
-        monthly_income: params.registerInformation.monthlyIncome,
-        professional_occupation: params.registerInformation.professionalOccupation,
-      },
+      register_information: serializarRegisterInformation(
+        params.registerInformation,
+      ),
       default_bank_account: serializarContaBancaria(params.bankAccount),
       code: params.code,
       metadata: params.observacao
@@ -160,7 +210,7 @@ export async function obterRecebedor(recipientId: string) {
 }
 
 export interface AtualizarRecebedorParams {
-  registerInformation: CriarRecebedorParams["registerInformation"];
+  registerInformation: RegisterInformationParams;
   observacao?: string;
 }
 
@@ -172,15 +222,9 @@ export async function atualizarRecebedor(
   return pagarmeFetch(`/recipients/${recipientId}`, {
     method: "PUT",
     body: JSON.stringify({
-      register_information: {
-        email: params.registerInformation.email,
-        document: params.registerInformation.document,
-        type: "individual",
-        name: params.registerInformation.name,
-        birthdate: params.registerInformation.birthdate,
-        monthly_income: params.registerInformation.monthlyIncome,
-        professional_occupation: params.registerInformation.professionalOccupation,
-      },
+      register_information: serializarRegisterInformation(
+        params.registerInformation,
+      ),
       metadata: params.observacao
         ? { observation: params.observacao }
         : undefined,
@@ -195,7 +239,9 @@ export async function atualizarContaBancariaRecebedor(
 ) {
   return pagarmeFetch(`/recipients/${recipientId}/default-bank-account`, {
     method: "PATCH",
-    body: JSON.stringify({ bank_account: serializarContaBancaria(bankAccount) }),
+    body: JSON.stringify({
+      bank_account: serializarContaBancaria(bankAccount),
+    }),
   });
 }
 

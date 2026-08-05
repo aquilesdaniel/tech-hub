@@ -46,7 +46,7 @@ interface Colaborador {
   email: string;
   departamento: string;
   cargo: string;
-  document: string;
+  document_mascarado: string | null;
 }
 
 export default function DetalhesPage({
@@ -133,7 +133,7 @@ export default function DetalhesPage({
             </Link>
             <div>
               <h1 className="text-3xl font-bold">Detalhes da Dívida</h1>
-              <p>Visualize todas as informações desta pendência e pagamento.</p>
+              <p>Visualize todas as informações desta dívida</p>
             </div>
           </div>
 
@@ -173,7 +173,9 @@ export default function DetalhesPage({
                   </div>
                 </div>
 
-                <div className="mt-auto pt-6 flex justify-between items-end">
+                <Separator className="my-3" />
+
+                <div className="mt-auto flex justify-between items-end">
                   <div>
                     <p className="text-sm font-medium">Data de Registro</p>
                     <p className="flex items-center gap-2">
@@ -181,6 +183,7 @@ export default function DetalhesPage({
                       {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
+
                   <div className="text-right">
                     <p className="text-sm font-medium">Valor</p>
                     <p className="text-xl font-bold">
@@ -202,9 +205,6 @@ export default function DetalhesPage({
                   </div>
                   <Card.Title>Emissor do Pagamento</Card.Title>
                 </div>
-                <Card.Description>
-                  Quem gerou e pagou esta cobrança
-                </Card.Description>
               </Card.Header>
               <Card.Content>
                 {colaboradorPagador ? (
@@ -233,10 +233,8 @@ export default function DetalhesPage({
                           Documento Principal
                         </p>
                         <p className="text-sm">
-                          {colaboradorPagador.document.replace(
-                            /^(\d{3})(\d{3})(\d{3})(\d{2})$/,
-                            "***.$2.$3-**",
-                          )}
+                          {colaboradorPagador.document_mascarado ||
+                            "Não informado"}
                         </p>
                       </div>
                     </div>
@@ -244,7 +242,7 @@ export default function DetalhesPage({
                     {pagamento && (
                       <>
                         <Separator />
-                        <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                        <div className="p-4 rounded-lg space-y-2">
                           <p className="text-sm font-medium mb-2">
                             Detalhes Transacionais
                           </p>
@@ -300,37 +298,17 @@ export default function DetalhesPage({
                               )}
                             </span>
                           </div>
-                          {pagamento.expires_at &&
-                            pagamento.status === "pending" && (
-                              <div className="flex justify-between text-sm mt-2">
-                                <span>Expira em:</span>
-                                <span>
-                                  {new Date(
-                                    pagamento.expires_at,
-                                  ).toLocaleString("pt-BR")}
-                                </span>
-                              </div>
-                            )}
                         </div>
                       </>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="mb-2">
-                      Pagamento não registrado ou colaborador não encontrado no
-                      sistema
+                  <div className="flex flex-col h-full gap-1 items-center justify-center text-center">
+                    <p className="font-bold">Pagamento não registrado!</p>
+
+                    <p className="text-sm">
+                      Esta dívida foi baixa manualmente pelo sistema
                     </p>
-                    {divida.pago ? (
-                      <p className="text-sm">
-                        Esta dívida foi baixa manualmente pelo sistema (sem
-                        Pagar.me)
-                      </p>
-                    ) : (
-                      <p className="text-sm">
-                        Aguardando geração do pagamento.
-                      </p>
-                    )}
                   </div>
                 )}
               </Card.Content>

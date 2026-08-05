@@ -1,4 +1,4 @@
-import { criarPedidoPix, PagarmeApiError } from "@/lib/pagarme";
+import { criarPedidoPix, fecharPedido, PagarmeApiError } from "@/lib/pagarme";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
 import { type NextRequest, NextResponse } from "next/server";
@@ -62,6 +62,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Verifica se já existe um pagamento para esta dívida
+    const pagamentoExistente = await prisma.pagamentos.findFirst({
+      where: { divida_id: divida.id },
+      select: { id: true, status: true, order_id: true },
+    });
+
+    // Já foi pago: não faz sentido gerar um novo pedido para a mesma dívida
+    if (pagamentoExistente?.status === "paid") {
+      return NextResponse.json(
+        { error: "Esta dívida já foi paga" },
+        { status: 409 },
+      );
+    }
+
+    // Se o pedido anterior ainda estiver pendente (ex: expirou o QR code sem
+    // ninguém cancelar manualmente), fecha ele na Pagar.me antes de abrir um novo,
+    // pra não deixar pedidos "zumbis" em aberto no gateway
+    if (pagamentoExistente?.status === "pending" && pagamentoExistente.order_id) {
+      try {
+        await fecharPedido(pagamentoExistente.order_id, "canceled");
+      } catch (error) {
+        console.error(
+          "Não foi possível fechar o pedido anterior na Pagar.me (provavelmente já expirado/fechado):",
+          error instanceof PagarmeApiError ? error.details : error,
+        );
+      }
+    }
+
     const valorEmCentavos = Math.round(Number(divida.valor) * 100);
 
     // Gera o pedido/QR code Pix na Pagar.me
@@ -91,12 +119,7 @@ export async function POST(req: NextRequest) {
 
     const charge_id = charge?.id;
     const gateway_id = lastTransaction?.gateway_id;
-
-    // Verifica se já existe um pagamento para esta dívida
-    const pagamentoExistente = await prisma.pagamentos.findFirst({
-      where: { divida_id: divida.id },
-      select: { id: true },
-    });
+    const order_id = pagarMeData.id;
 
     let pagamento;
 
@@ -111,6 +134,7 @@ export async function POST(req: NextRequest) {
           expires_at,
           charge_id,
           gateway_id,
+          order_id,
           updated_at: new Date(),
         },
       });
@@ -125,6 +149,7 @@ export async function POST(req: NextRequest) {
           expires_at,
           charge_id,
           gateway_id,
+          order_id,
         },
       });
     }

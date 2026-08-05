@@ -3,6 +3,7 @@
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
+import { extrairErrosPagarme } from "@/lib/pagarme-errors";
 import {
   Button,
   Card,
@@ -29,7 +30,6 @@ import {
   IdCardIcon,
   LucideSearch,
   Plus,
-  Search,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
@@ -48,7 +48,6 @@ interface Colaborador {
   setor_id: number;
   nome: string;
   email: string;
-  senha: string;
   tipo: "admin" | "user";
   departamento: string;
   cargo: string;
@@ -60,7 +59,8 @@ interface Colaborador {
   country_code: string;
   area_code: string;
   number: string;
-  document: string;
+  possui_documento: boolean;
+  document_mascarado: string | null;
   created_at: Date;
   updated_at: Date;
   recipient_id: string;
@@ -99,6 +99,7 @@ export default function SalgadosPage() {
   const [dividaParaPagar, setDividaParaPagar] = useState<Divida | null>(null);
   const [isSubmittingConta, setIsSubmittingConta] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+  const [isBuscandoCep, setIsBuscandoCep] = useState(false);
   const [jaTemContaCadastrada, setJaTemContaCadastrada] = useState(false);
   const [saldoInfo, setSaldoInfo] = useState({
     available_amount: 0,
@@ -112,6 +113,16 @@ export default function SalgadosPage() {
     aniversario: "",
     rendaMensal: "",
     ocupacao: "",
+    telefoneDdd: "",
+    telefoneNumero: "",
+    cep: "",
+    rua: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    pontoReferencia: "",
     nomeTitular: "",
     documentoTitular: "",
     banco: "",
@@ -249,15 +260,25 @@ export default function SalgadosPage() {
           setJaTemContaCadastrada(true);
           const info = data.recipient.register_information || {};
           const conta = data.recipient.default_bank_account || {};
+          const telefone = info.phone_numbers?.[0] || {};
+          const endereco = info.address || {};
           setContaBancariaData({
             nomeColaborador: info.name || "",
             emailColaborador: info.email || "",
             documentoColaborador: info.document || "",
             aniversario: info.birthdate ? info.birthdate.slice(0, 10) : "",
-            rendaMensal: info.monthly_income
-              ? String(info.monthly_income)
-              : "",
+            rendaMensal: info.monthly_income ? String(info.monthly_income) : "",
             ocupacao: info.professional_occupation || "",
+            telefoneDdd: telefone.ddd || "",
+            telefoneNumero: telefone.number || "",
+            cep: endereco.zip_code || "",
+            rua: endereco.street || "",
+            numero: endereco.street_number || "",
+            complemento: endereco.complementary || "",
+            bairro: endereco.neighborhood || "",
+            cidade: endereco.city || "",
+            estado: endereco.state || "",
+            pontoReferencia: endereco.reference_point || "",
             nomeTitular: conta.holder_name || "",
             documentoTitular: conta.holder_document || "",
             banco: conta.bank || "",
@@ -274,6 +295,39 @@ export default function SalgadosPage() {
       }
     } catch (error) {
       console.error("Erro ao consultar recebedor:", error);
+    }
+  };
+
+  // Autopreenche rua/bairro/cidade/estado a partir de um CEP válido (8 dígitos) usando o ViaCEP
+  const buscarEnderecoPorCep = async (cepDigitado: string) => {
+    const cepLimpo = cepDigitado.replace(/\D/g, "");
+    if (cepLimpo.length !== 8) return;
+
+    setIsBuscandoCep(true);
+    try {
+      const response = await fetch(
+        `https://viacep.com.br/ws/${cepLimpo}/json/`,
+      );
+      const data = await response.json();
+
+      if (data.erro) {
+        toast.danger("CEP não encontrado", {
+          description: "Verifique o CEP informado e preencha o endereço manualmente.",
+        });
+        return;
+      }
+
+      setContaBancariaData((prev) => ({
+        ...prev,
+        rua: data.logradouro || prev.rua,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.localidade || prev.cidade,
+        estado: data.uf || prev.estado,
+      }));
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error);
+    } finally {
+      setIsBuscandoCep(false);
     }
   };
 
@@ -489,6 +543,22 @@ export default function SalgadosPage() {
   //   }
   // };
 
+  // Mostra um toast de erro por campo/mensagem retornado pela Pagar.me (ex: "Telefone:
+  // The phone_numbers field is required."), com fallback pra mensagem genérica da rota.
+  const mostrarErrosResposta = (data: {
+    error?: string;
+    detalhes?: unknown;
+  }) => {
+    const mensagens = extrairErrosPagarme(data.detalhes);
+    if (mensagens.length > 0) {
+      mensagens.forEach((msg) => toast.danger("Erro", { description: msg }));
+    } else {
+      toast.danger("Erro", {
+        description: data.error || "Ocorreu um erro inesperado.",
+      });
+    }
+  };
+
   const handleCadastrarConta = async () => {
     if (!user) return;
 
@@ -498,6 +568,14 @@ export default function SalgadosPage() {
       !contaBancariaData.documentoColaborador ||
       !contaBancariaData.aniversario ||
       !contaBancariaData.ocupacao ||
+      !contaBancariaData.telefoneDdd ||
+      !contaBancariaData.telefoneNumero ||
+      !contaBancariaData.cep ||
+      !contaBancariaData.rua ||
+      !contaBancariaData.numero ||
+      !contaBancariaData.bairro ||
+      !contaBancariaData.cidade ||
+      !contaBancariaData.estado ||
       !contaBancariaData.nomeTitular ||
       !contaBancariaData.documentoTitular ||
       !contaBancariaData.banco ||
@@ -525,10 +603,7 @@ export default function SalgadosPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        toast.danger("Erro", {
-          description:
-            data.error || "Não foi possível cadastrar a conta bancária.",
-        });
+        mostrarErrosResposta(data);
         return;
       }
 
@@ -556,7 +631,9 @@ export default function SalgadosPage() {
     const valor = parseFloat(String(transferData.amount).replace(",", "."));
 
     if (!transferData.amount || isNaN(valor) || valor <= 0) {
-      toast.danger("Erro", { description: "Informe um valor de saque válido." });
+      toast.danger("Erro", {
+        description: "Informe um valor de saque válido.",
+      });
       return;
     }
 
@@ -582,9 +659,7 @@ export default function SalgadosPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        toast.danger("Erro", {
-          description: data.error || "Não foi possível realizar a transferência.",
-        });
+        mostrarErrosResposta(data);
         return;
       }
 
@@ -637,7 +712,7 @@ export default function SalgadosPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card>
-              <Card.Content className="p-6">
+              <Card.Content>
                 <div className="flex items-center">
                   <div className="p-2 bg-red-100 rounded-lg">
                     <Calendar className="w-6 h-6 text-red-600" />
@@ -655,7 +730,7 @@ export default function SalgadosPage() {
             </Card>
 
             <Card>
-              <Card.Content className="p-6">
+              <Card.Content>
                 <div className="flex items-center">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <Check className="w-6 h-6 text-green-600" />
@@ -673,7 +748,7 @@ export default function SalgadosPage() {
             </Card>
 
             <Card>
-              <Card.Content className="p-6">
+              <Card.Content>
                 <div className="flex items-center">
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <DollarSign className="w-6 h-6 text-purple-600" />
@@ -694,7 +769,7 @@ export default function SalgadosPage() {
             </Card>
 
             <Card>
-              <Card.Content className="p-6">
+              <Card.Content>
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Wallet className="w-6 h-6 text-blue-600" />
@@ -715,7 +790,7 @@ export default function SalgadosPage() {
             </Card>
           </div>
 
-          <Tabs defaultSelectedKey="pendentes">
+          <Tabs className="gap-4" defaultSelectedKey="pendentes">
             <Tabs.ListContainer>
               <Tabs.List className="grid w-full grid-cols-2">
                 <Tabs.Tab id="pendentes">
@@ -729,7 +804,7 @@ export default function SalgadosPage() {
               </Tabs.List>
             </Tabs.ListContainer>
 
-            <Tabs.Panel id="pendentes">
+            <Tabs.Panel className="p-0" id="pendentes">
               <Card>
                 <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -739,7 +814,7 @@ export default function SalgadosPage() {
                         Colaboradores com dívidas pendentes de salgados
                       </Card.Description>
                     </div>
-                    <div className="flex gap-2 items-center flex-wrap">
+                    <div className="flex gap-4 items-center flex-wrap">
                       {user?.tipo === "admin" && (
                         <Modal
                           isOpen={isCadastrarContaOpen}
@@ -875,6 +950,178 @@ export default function SalgadosPage() {
                                           setContaBancariaData({
                                             ...contaBancariaData,
                                             ocupacao: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="colab_telefone">
+                                        Telefone
+                                      </Label>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          id="colab_telefone_ddd"
+                                          placeholder="DDD"
+                                          className="w-16"
+                                          maxLength={2}
+                                          value={contaBancariaData.telefoneDdd}
+                                          onChange={(e) =>
+                                            setContaBancariaData({
+                                              ...contaBancariaData,
+                                              telefoneDdd: e.target.value,
+                                            })
+                                          }
+                                        />
+                                        <Input
+                                          id="colab_telefone_numero"
+                                          placeholder="999990000"
+                                          className="flex-1"
+                                          maxLength={9}
+                                          value={
+                                            contaBancariaData.telefoneNumero
+                                          }
+                                          onChange={(e) =>
+                                            setContaBancariaData({
+                                              ...contaBancariaData,
+                                              telefoneNumero: e.target.value,
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
+                                      Endereço
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_cep">
+                                        CEP {isBuscandoCep && "(buscando...)"}
+                                      </Label>
+                                      <Input
+                                        id="endereco_cep"
+                                        placeholder="00000000"
+                                        maxLength={9}
+                                        value={contaBancariaData.cep}
+                                        onChange={(e) => {
+                                          const valor = e.target.value;
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            cep: valor,
+                                          });
+                                          if (valor.replace(/\D/g, "").length === 8) {
+                                            buscarEnderecoPorCep(valor);
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_rua">Rua</Label>
+                                      <Input
+                                        id="endereco_rua"
+                                        placeholder="Av. General Justo"
+                                        value={contaBancariaData.rua}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            rua: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_numero">
+                                        Número
+                                      </Label>
+                                      <Input
+                                        id="endereco_numero"
+                                        placeholder="375"
+                                        value={contaBancariaData.numero}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            numero: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_complemento">
+                                        Complemento
+                                      </Label>
+                                      <Input
+                                        id="endereco_complemento"
+                                        placeholder="Bloco A (opcional)"
+                                        value={contaBancariaData.complemento}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            complemento: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_bairro">
+                                        Bairro
+                                      </Label>
+                                      <Input
+                                        id="endereco_bairro"
+                                        placeholder="Centro"
+                                        value={contaBancariaData.bairro}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            bairro: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_cidade">
+                                        Cidade
+                                      </Label>
+                                      <Input
+                                        id="endereco_cidade"
+                                        placeholder="Rio de Janeiro"
+                                        value={contaBancariaData.cidade}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            cidade: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_estado">
+                                        Estado (UF)
+                                      </Label>
+                                      <Input
+                                        id="endereco_estado"
+                                        placeholder="RJ"
+                                        maxLength={2}
+                                        value={contaBancariaData.estado}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            estado: e.target.value.toUpperCase(),
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="endereco_referencia">
+                                        Ponto de Referência
+                                      </Label>
+                                      <Input
+                                        id="endereco_referencia"
+                                        placeholder="Ao lado da banca de jornal (opcional)"
+                                        value={contaBancariaData.pontoReferencia}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            pontoReferencia: e.target.value,
                                           })
                                         }
                                       />
@@ -1251,7 +1498,6 @@ export default function SalgadosPage() {
                                           inputMode="decimal"
                                           value={newDivida.valorPorCento}
                                           onChange={(e) => {
-                                            // Mascara para aceitar apenas números e vírgula
                                             const valorAjustado =
                                               e.target.value.replace(
                                                 /[^0-9,]/g,
@@ -1324,7 +1570,6 @@ export default function SalgadosPage() {
                                         inputMode="decimal"
                                         value={newDivida.valor}
                                         onChange={(e) => {
-                                          // Mascara para aceitar apenas números e vírgula
                                           const valorAjustado =
                                             e.target.value.replace(
                                               /[^0-9,]/g,
@@ -1371,8 +1616,8 @@ export default function SalgadosPage() {
                 </Card.Header>
                 <Card.Content>
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <TextField className="w-full max-w-full" name="email">
-                      <InputGroup>
+                    <TextField className="w-full max-w-full">
+                      <InputGroup variant="secondary">
                         <InputGroup.Prefix>
                           <LucideSearch className="size-4 text-muted" />
                         </InputGroup.Prefix>
@@ -1384,19 +1629,12 @@ export default function SalgadosPage() {
                         />
                       </InputGroup>
                     </TextField>
-                    {/* <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        placeholder="Pesquisar por nome ou item..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div> */}
+
                     <Select
                       value={filterMotivo}
                       onChange={(value) => setFilterMotivo(value as string)}
                       placeholder="Filtrar por motivo"
+                      variant="secondary"
                       className="w-full sm:w-48"
                     >
                       <Select.Trigger>
@@ -1420,10 +1658,12 @@ export default function SalgadosPage() {
                         </ListBox>
                       </Select.Popover>
                     </Select>
+
                     <Select
                       value={itemsPerPage.toString()}
                       onChange={(val) => setItemsPerPage(Number(val))}
                       placeholder="Itens por pág"
+                      variant="secondary"
                       className="w-full sm:w-32"
                     >
                       <Select.Trigger>
@@ -1472,16 +1712,17 @@ export default function SalgadosPage() {
                                     </h3>
                                     <Chip>{divida.item}</Chip>
                                   </div>
-                                  <p className="text-gray-600 mb-2">
-                                    {divida.motivo}
-                                  </p>
-                                  <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                                  <p className="mb-2">{divida.motivo}</p>
+                                  <div className="flex flex-wrap gap-2 text-sm">
                                     <span>
                                       Data:{" "}
                                       {new Date(
                                         divida.data_inicio,
                                       ).toLocaleDateString("pt-BR")}
                                     </span>
+
+                                    <span> • </span>
+
                                     <span className="font-semibold text-red-600">
                                       Valor:{" "}
                                       {Number(divida.valor).toLocaleString(
@@ -1498,9 +1739,9 @@ export default function SalgadosPage() {
                                   onPress={() =>
                                     abrirConfirmacaoPagamento(divida)
                                   }
-                                  className="bg-green-600 hover:bg-green-700 w-full sm:w-fit"
+                                  className="bg-green-600 hover:bg-green-700 w-full sm:w-fit text-white"
                                 >
-                                  <Check className="w-4 h-4" />
+                                  <Check className="w-4 h-4 text-white" />
                                   Pagar dívida
                                 </Button>
                               </div>
@@ -1554,7 +1795,7 @@ export default function SalgadosPage() {
               </Card>
             </Tabs.Panel>
 
-            <Tabs.Panel id="pagas">
+            <Tabs.Panel className="p-0" id="pagas">
               <Card>
                 <Card.Header>
                   <Card.Title>Dívidas Pagas</Card.Title>
@@ -1564,19 +1805,25 @@ export default function SalgadosPage() {
                 </Card.Header>
                 <Card.Content>
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        placeholder="Pesquisar por nome ou item..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
+                    <TextField className="w-full max-w-full">
+                      <InputGroup variant="secondary">
+                        <InputGroup.Prefix>
+                          <LucideSearch className="size-4 text-muted" />
+                        </InputGroup.Prefix>
+                        <InputGroup.Input
+                          className="w-full max-w-full"
+                          placeholder="Pesquisar por nome ou item..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </InputGroup>
+                    </TextField>
+
                     <Select
                       value={filterMotivo}
                       onChange={(value) => setFilterMotivo(value as string)}
                       placeholder="Filtrar por motivo"
+                      variant="secondary"
                       className="w-full sm:w-48"
                     >
                       <Select.Trigger>
@@ -1604,6 +1851,7 @@ export default function SalgadosPage() {
                       value={itemsPerPage.toString()}
                       onChange={(val) => setItemsPerPage(Number(val))}
                       placeholder="Itens por página"
+                      variant="secondary"
                       className="w-full sm:w-32"
                     >
                       <Select.Trigger>
@@ -1641,7 +1889,7 @@ export default function SalgadosPage() {
                         {paginatedSalgadosPagos.map((divida) => (
                           <Card
                             key={divida.id}
-                            className="border-l-4 border-l-green-500 opacity-80"
+                            className="border-l-4 border-l-green-500"
                           >
                             <Card.Content className="p-4">
                               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1652,16 +1900,17 @@ export default function SalgadosPage() {
                                     </h3>
                                     <Chip>{divida.item}</Chip>
                                   </div>
-                                  <p className="text-gray-600 mb-2">
-                                    {divida.motivo}
-                                  </p>
-                                  <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                                  <p className="mb-2">{divida.motivo}</p>
+                                  <div className="flex flex-wrap gap-2 text-sm">
                                     <span>
                                       Data:{" "}
                                       {new Date(
                                         divida.data_inicio,
                                       ).toLocaleDateString("pt-BR")}
                                     </span>
+
+                                    <span> • </span>
+
                                     <span className="font-semibold text-green-600">
                                       Valor:{" "}
                                       {Number(divida.valor).toLocaleString(
@@ -1736,8 +1985,7 @@ export default function SalgadosPage() {
         </div>
       </div>
 
-      {/* Modal de Confirmação de Pagamento */}
-      <Modal
+      {/* <Modal
         isOpen={isConfirmPaymentOpen}
         onOpenChange={setIsConfirmPaymentOpen}
       >
@@ -1809,7 +2057,7 @@ export default function SalgadosPage() {
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>
-      </Modal>
+      </Modal> */}
     </ProtectedRoute>
   );
 }

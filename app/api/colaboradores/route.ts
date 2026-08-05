@@ -1,4 +1,8 @@
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  COLABORADOR_SELECT_SEGURO,
+  sanitizarColaborador,
+} from "@/lib/colaboradores";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
@@ -31,12 +35,15 @@ export async function GET(req: NextRequest) {
 
     const colaboradores = await prisma.colaboradores.findMany({
       where,
-      include: { setores: { select: { nome: true } } },
+      select: {
+        ...COLABORADOR_SELECT_SEGURO,
+        setores: { select: { nome: true } },
+      },
       orderBy: { nome: "asc" },
     });
 
     const result = colaboradores.map(({ setores, ...colaborador }) => ({
-      ...colaborador,
+      ...sanitizarColaborador(colaborador),
       setor_nome: setores?.nome ?? null,
     }));
 
@@ -87,10 +94,14 @@ export async function POST(req: NextRequest) {
         status: "ativo",
         setor_id: setor_id ? Number(setor_id) : null,
       },
+      select: COLABORADOR_SELECT_SEGURO,
     });
 
     revalidatePath("/admin");
-    return NextResponse.json(serializeDecimals(colaborador), { status: 201 });
+    return NextResponse.json(
+      serializeDecimals(sanitizarColaborador(colaborador)),
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Erro ao criar colaborador:", error);
     return NextResponse.json(

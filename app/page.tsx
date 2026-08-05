@@ -239,7 +239,7 @@ export default function HomePage() {
                   <Link href="/salgados">
                     <div className="mt-4">
                       <Button
-                        className="w-full bg-orange-600 hover:bg-orange-700"
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                         size="lg"
                       >
                         Acessar Salgados

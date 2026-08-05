@@ -1,3 +1,7 @@
+import {
+  COLABORADOR_SELECT_SEGURO,
+  sanitizarColaborador,
+} from "@/lib/colaboradores";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
 import { NextRequest, NextResponse } from "next/server";
@@ -12,7 +16,10 @@ export async function GET(
 
     const colaborador = await prisma.colaboradores.findUnique({
       where: { id },
-      include: { setores: { select: { nome: true } } },
+      select: {
+        ...COLABORADOR_SELECT_SEGURO,
+        setores: { select: { nome: true } },
+      },
     });
 
     if (!colaborador) {
@@ -23,7 +30,7 @@ export async function GET(
     }
 
     const { setores, ...rest } = colaborador;
-    const result = { ...rest, setor_nome: setores?.nome ?? null };
+    const result = { ...sanitizarColaborador(rest), setor_nome: setores?.nome ?? null };
 
     return NextResponse.json(serializeDecimals(result));
   } catch (error) {
@@ -85,9 +92,13 @@ export async function PATCH(
     const colaborador = await prisma.colaboradores.update({
       where: { id },
       data,
+      select: COLABORADOR_SELECT_SEGURO,
     });
 
-    return NextResponse.json(serializeDecimals(colaborador), { status: 200 });
+    return NextResponse.json(
+      serializeDecimals(sanitizarColaborador(colaborador)),
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Erro ao atualizar colaborador:", error);
     return NextResponse.json(
