@@ -1,9 +1,9 @@
 "use client";
 
+import { AuthProvider } from "@/contexts/auth-context";
 import { Toast } from "@heroui/react";
 import { ThemeProvider } from "next-themes";
 import type React from "react";
-import { AuthProvider } from "@/contexts/auth-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

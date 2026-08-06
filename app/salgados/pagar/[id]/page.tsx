@@ -699,7 +699,7 @@ export default function PaymentPage({
                     </div>
                     <Card.Title>
                       {pagamentoGerado
-                        ? "Emissor do Pagamento"
+                        ? "Minhas informações"
                         : "Responsável pela Baixa"}
                     </Card.Title>
                   </div>

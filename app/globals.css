@@ -47,12 +47,30 @@
   --warning-foreground: oklch(21.03% 0.0059 72.33);
 
   /* Border Radius */
-  --radius: 0.25rem;
-  --field-radius: 0.25rem;
+  --radius: 0.5rem;
+  --field-radius: 0.5rem;
 
   /* Font Family */
-  /* Make sure to load Hanken Grotesk font in your app */
-  --font-sans: var(--font-hanken-grotesk);
+  --font-sans: var(--font-public-sans);
+
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-8: #e34948;
+
+  --viz-seq-100: #cde2fb;
+  --viz-seq-250: #86b6ef;
+  --viz-seq-400: #3987e5;
+  --viz-seq-550: #1c5cab;
+  --viz-seq-700: #0d366b;
+
+  --viz-grid: var(--separator);
+  --viz-axis: var(--border);
+  --viz-de-emphasis: #b9bcc2;
 }
 
 .dark,
@@ -90,4 +108,27 @@
   --surface-tertiary-foreground: oklch(99.11% 0.0045 253.83);
   --warning: oklch(82.03% 0.1401 76.34);
   --warning-foreground: oklch(21.03% 0.0059 76.34);
+
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-7: #9085e9;
+  --viz-8: #e66767;
+
+  --viz-seq-100: #0d366b;
+  --viz-seq-250: #1c5cab;
+  --viz-seq-400: #3987e5;
+  --viz-seq-550: #86b6ef;
+  --viz-seq-700: #cde2fb;
+
+  --viz-de-emphasis: #4b4f55;
+}
+
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

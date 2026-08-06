@@ -1,5 +1,7 @@
 "use client";
 
+import { StatTile } from "@/components/dashboard/stat-tile";
+import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
@@ -16,7 +18,15 @@ import {
   Tabs,
   toast,
 } from "@heroui/react";
-import { ArrowLeft, BookOpen, Plus, Search, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Library,
+  Plus,
+  RotateCcw,
+  Search,
+  Users,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -312,6 +322,24 @@ export default function BibliotecaPage() {
     (e) => e.status === "emprestado",
   );
 
+  // ------------------------------------------------- indicadores do topo
+  // Acervo é sempre da empresa; empréstimos seguem o escopo de quem olha.
+  const ehAdmin = user?.tipo === "admin";
+  const livrosDisponiveis = livros.filter((l) => l.disponivel).length;
+  const taxaDisponibilidade =
+    livros.length > 0 ? (livrosDisponiveis / livros.length) * 100 : 0;
+
+  const emprestimosVisiveis = ehAdmin ? emprestimos : userEmprestimos;
+  const ativosVisiveis = ehAdmin ? emprestimosAtivos : userEmprestimosAtivos;
+  const atrasados = ativosVisiveis.filter((e) => {
+    const dias = diasAte(e.data_prevista_devolucao);
+    return dias !== null && dias < 0;
+  }).length;
+
+  const devolvidos = emprestimosVisiveis.filter(
+    (e) => e.data_real_devolucao,
+  ).length;
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -340,65 +368,43 @@ export default function BibliotecaPage() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <BookOpen className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total de Livros
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {livros.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <BookOpen className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Disponíveis
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {livros.filter((l) => l.disponivel).length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <Users className="w-6 h-6 text-yellow-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      {user?.tipo === "admin"
-                        ? "Emprestados"
-                        : "Seus Empréstimos"}
-                    </p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {user?.tipo === "admin"
-                        ? emprestimosAtivos.length
-                        : userEmprestimosAtivos.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-          </div>
+          <section
+            aria-label="Indicadores da biblioteca"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
+          >
+            <StatTile
+              rotulo="Acervo"
+              valor={inteiro(livros.length)}
+              icone={BookOpen}
+              deltaLegenda={`${inteiro(livrosDisponiveis)} título(s) na estante agora`}
+            />
+            <StatTile
+              rotulo="Disponibilidade"
+              valor={percentual(taxaDisponibilidade, 0)}
+              icone={Library}
+              deltaLegenda={
+                livros.length > 0
+                  ? `${inteiro(livrosDisponiveis)} de ${inteiro(livros.length)} livros`
+                  : "nenhum livro cadastrado"
+              }
+            />
+            <StatTile
+              rotulo={ehAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
+              valor={inteiro(ativosVisiveis.length)}
+              icone={Users}
+              deltaLegenda={
+                atrasados > 0
+                  ? `${inteiro(atrasados)} em atraso`
+                  : "nenhum em atraso"
+              }
+            />
+            <StatTile
+              rotulo={ehAdmin ? "Empréstimos no histórico" : "Seu histórico"}
+              valor={inteiro(emprestimosVisiveis.length)}
+              icone={RotateCcw}
+              deltaLegenda={`${inteiro(devolvidos)} já devolvido(s)`}
+            />
+          </section>
 
           <Tabs defaultSelectedKey="catalogo" className="space-y-6">
             <Tabs.ListContainer>

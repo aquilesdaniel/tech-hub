@@ -1,5 +1,8 @@
 "use client";
 
+import { StatTile } from "@/components/dashboard/stat-tile";
+import type { DashboardData } from "@/components/dashboard/types";
+import { inteiro, moeda, moedaCompacta } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
@@ -83,7 +86,6 @@ export default function SalgadosPage() {
   const [dividas, setDividas] = useState<Divida[]>([]);
   const [salgadosPagos, setSalgadosPagos] = useState<Divida[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [totalGeralGasto, setTotalGeralGasto] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMotivo, setFilterMotivo] = useState("todos");
   const [currentPagePendentes, setCurrentPagePendentes] = useState(1);
@@ -106,6 +108,9 @@ export default function SalgadosPage() {
     waiting_funds_amount: 0,
     transferred_amount: 0,
   });
+
+  const [resumo, setResumo] = useState<DashboardData | null>(null);
+  const [carregandoResumo, setCarregandoResumo] = useState(true);
   const [contaBancariaData, setContaBancariaData] = useState({
     nomeColaborador: "",
     emailColaborador: "",
@@ -160,7 +165,6 @@ export default function SalgadosPage() {
 
   const fetchData = async () => {
     try {
-      // Ajusta parâmetros da URL com base nos estados atuais
       const searchParams = new URLSearchParams();
       if (searchTerm) searchParams.append("search", searchTerm);
       if (filterMotivo && filterMotivo !== "todos")
@@ -193,24 +197,13 @@ export default function SalgadosPage() {
           setMotivosUnicos(motivos.sort());
         }
 
-        // Dividas - Resposta com paginação { data, totalPages, page, total }
         setDividas(dividasData.data || []);
         setTotalPagesPendentes(dividasData.totalPages || 1);
 
-        // Pagas - Resposta com paginação { data, totalPages, page, total }
         setSalgadosPagos(salgadosPagosData.data || []);
         setTotalPagesPagas(salgadosPagosData.totalPages || 1);
 
         setColaboradores(colaboradoresData);
-
-        // Calcular total geral gasto por todos os usuários
-        const totalGeral = colaboradoresData.reduce(
-          (total: number, colaborador: any) => {
-            return total + (Number(colaborador.total_gasto_salgados) || 0);
-          },
-          0,
-        );
-        setTotalGeralGasto(totalGeral);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -226,8 +219,20 @@ export default function SalgadosPage() {
     if (user) {
       fetchSaldo();
       fetchRecebedor();
+      fetchResumo();
     }
   }, [user]);
+
+  const fetchResumo = async () => {
+    try {
+      const response = await fetch("/api/dashboard?meses=0");
+      if (response.ok) setResumo((await response.json()) as DashboardData);
+    } catch (error) {
+      console.error("Erro ao carregar o resumo de salgados:", error);
+    } finally {
+      setCarregandoResumo(false);
+    }
+  };
 
   const fetchSaldo = async () => {
     if (!user) return;
@@ -312,7 +317,8 @@ export default function SalgadosPage() {
 
       if (data.erro) {
         toast.danger("CEP não encontrado", {
-          description: "Verifique o CEP informado e preencha o endereço manualmente.",
+          description:
+            "Verifique o CEP informado e preencha o endereço manualmente.",
         });
         return;
       }
@@ -336,40 +342,6 @@ export default function SalgadosPage() {
 
   const abrirConfirmacaoPagamento = (divida: Divida) => {
     router.push(`/salgados/pagar/${divida.id}`);
-  };
-
-  const marcarComoPago = async (dividaId: number) => {
-    try {
-      const response = await fetch(`/api/salgados/dividas/${dividaId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pago: true }),
-      });
-
-      if (response.ok) {
-        setIsConfirmPaymentOpen(false);
-        setDividaParaPagar(null);
-        toast("Pagamento confirmado!", {
-          description: "Salgado marcado como pago automaticamente.",
-        });
-        fetchData(); // Atualizar dados para recalcular totalizador
-      }
-    } catch (error) {
-      console.error("Erro ao marcar como pago:", error);
-      toast.danger("Erro", {
-        description: "Não foi possível marcar como pago.",
-      });
-    }
-  };
-
-  // Função para normalizar texto (remover acentos, converter para minúsculas, remover espaços extras)
-  const normalizarTexto = (texto: string): string => {
-    return texto
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-      .replace(/[^a-z0-9]/g, "") // Remove caracteres especiais e espaços
-      .trim();
   };
 
   // Função para calcular o valor total baseado na quantidade de centos
@@ -469,82 +441,6 @@ export default function SalgadosPage() {
     }
   };
 
-  // const adicionarDivida = async () => {
-  //   // Validação para centos
-  //   if (newDivida.item === "1 cento" || newDivida.item === "2 centos") {
-  //     if (
-  //       !newDivida.colaborador_id ||
-  //       !newDivida.item ||
-  //       !newDivida.motivo ||
-  //       !newDivida.valorPorCento ||
-  //       parseFloat(newDivida.valorPorCento) <= 0
-  //     ) {
-  //       toast({
-  //         title: "Erro",
-  //         description: "Preencha todos os campos obrigatórios.",
-  //         variant: "destructive",
-  //       });
-  //       return;
-  //     }
-  //   } else {
-  //     // Validação para salgado avulso
-  //     if (
-  //       !newDivida.colaborador_id ||
-  //       !newDivida.item ||
-  //       !newDivida.motivo ||
-  //       !newDivida.valor ||
-  //       parseFloat(newDivida.valor) <= 0
-  //     ) {
-  //       toast({
-  //         title: "Erro",
-  //         description: "Preencha todos os campos obrigatórios.",
-  //         variant: "destructive",
-  //       });
-  //       return;
-  //     }
-  //   }
-
-  //   try {
-  //     const response = await fetch("/api/salgados/dividas", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({
-  //         colaborador_id: parseInt(newDivida.colaborador_id),
-  //         item: newDivida.item,
-  //         motivo: newDivida.motivo,
-  //         valor: parseFloat(newDivida.valor),
-  //       }),
-  //     });
-
-  //     if (response.ok) {
-  //       fetchData();
-  //       setIsAddDialogOpen(false);
-  //       setNewDivida({
-  //         colaborador_id: "",
-  //         item: "",
-  //         quantidadeCentos: "1",
-  //         valorPorCento: "",
-  //         motivo: "",
-  //         valor: "",
-  //       });
-
-  //       toast({
-  //         title: "Dívida adicionada!",
-  //         description: "Nova dívida de salgado foi registrada.",
-  //       });
-  //     }
-  //   } catch (error) {
-  //     console.error("Erro ao adicionar dívida:", error);
-  //     toast({
-  //       title: "Erro",
-  //       description: "Não foi possível adicionar a dívida.",
-  //       variant: "destructive",
-  //     });
-  //   }
-  // };
-
-  // Mostra um toast de erro por campo/mensagem retornado pela Pagar.me (ex: "Telefone:
-  // The phone_numbers field is required."), com fallback pra mensagem genérica da rota.
   const mostrarErrosResposta = (data: {
     error?: string;
     detalhes?: unknown;
@@ -682,7 +578,7 @@ export default function SalgadosPage() {
     }
   };
 
-  if (loading) {
+  if (loading || carregandoResumo) {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
@@ -710,85 +606,40 @@ export default function SalgadosPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <Card.Content>
-                <div className="flex items-center">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <Calendar className="w-6 h-6 text-red-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Dívidas Pendentes
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {dividas.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
+          <section
+            aria-label="Indicadores de salgados"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
+          >
+            <StatTile
+              rotulo="Em aberto"
+              valor={moedaCompacta(resumo?.kpis.valorEmAberto ?? 0)}
+              icone={Calendar}
+              deltaLegenda={`${inteiro(resumo?.kpis.dividasEmAberto ?? 0)} lançamento(s) aguardando pagamento`}
+            />
+            <StatTile
+              rotulo="Total quitado"
+              valor={moedaCompacta(resumo?.kpis.valorQuitado ?? 0)}
+              icone={Check}
+              deltaLegenda={`${inteiro(resumo?.kpis.dividasQuitadas ?? 0)} lançamento(s) já pagos`}
+            />
+            <StatTile
+              rotulo="Ticket médio"
+              valor={moeda(resumo?.kpis.ticketMedio ?? 0)}
+              icone={DollarSign}
+              deltaLegenda="valor médio por lançamento"
+            />
 
-            <Card>
-              <Card.Content>
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Check className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Salgados Pagos
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {salgadosPagos.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content>
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <DollarSign className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total Geral Gasto
-                    </p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {totalGeralGasto.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content>
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Wallet className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Valor Total Saque
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {saldoInfo.available_amount.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-          </div>
+            <StatTile
+              rotulo="Disponível para saque"
+              valor={moeda(saldoInfo.available_amount)}
+              icone={Wallet}
+              deltaLegenda={
+                saldoInfo.waiting_funds_amount > 0
+                  ? `${moeda(saldoInfo.waiting_funds_amount)} ainda a liberar`
+                  : "nada pendente de liberação"
+              }
+            />
+          </section>
 
           <Tabs className="gap-4" defaultSelectedKey="pendentes">
             <Tabs.ListContainer>
@@ -1009,7 +860,10 @@ export default function SalgadosPage() {
                                             ...contaBancariaData,
                                             cep: valor,
                                           });
-                                          if (valor.replace(/\D/g, "").length === 8) {
+                                          if (
+                                            valor.replace(/\D/g, "").length ===
+                                            8
+                                          ) {
                                             buscarEnderecoPorCep(valor);
                                           }
                                         }}
@@ -1105,7 +959,8 @@ export default function SalgadosPage() {
                                         onChange={(e) =>
                                           setContaBancariaData({
                                             ...contaBancariaData,
-                                            estado: e.target.value.toUpperCase(),
+                                            estado:
+                                              e.target.value.toUpperCase(),
                                           })
                                         }
                                       />
@@ -1117,7 +972,9 @@ export default function SalgadosPage() {
                                       <Input
                                         id="endereco_referencia"
                                         placeholder="Ao lado da banca de jornal (opcional)"
-                                        value={contaBancariaData.pontoReferencia}
+                                        value={
+                                          contaBancariaData.pontoReferencia
+                                        }
                                         onChange={(e) =>
                                           setContaBancariaData({
                                             ...contaBancariaData,

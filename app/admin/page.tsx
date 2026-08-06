@@ -1,5 +1,7 @@
 "use client";
 
+import { StatTile } from "@/components/dashboard/stat-tile";
+import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
@@ -411,6 +413,18 @@ export default function AdminPage() {
   ).length;
   const totalSetores = setores.length;
 
+  const taxaAtividade =
+    colaboradores.length > 0
+      ? (colaboradoresAtivos / colaboradores.length) * 100
+      : 0;
+  const totalAdmins = colaboradoresAdmin.filter(
+    (c) => c.tipo === "admin",
+  ).length;
+  const adminsTemporarios = colaboradoresAdmin.filter((c) => {
+    const dias = diasAte(c.admin_temporario_ate);
+    return !c.admin_permanente && dias !== null && dias >= 0;
+  }).length;
+
   // Verificar se o usuário é admin permanente
   const isAdminPermanente =
     user?.admin_permanente ||
@@ -450,80 +464,40 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Cards de Estatísticas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Users className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total Colaboradores
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {colaboradores.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Colaboradores Ativos
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {colaboradoresAtivos}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Building className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total Setores
-                    </p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {totalSetores}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <BarChart3 className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Inativos
-                    </p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {colaboradores.length - colaboradoresAtivos}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-          </div>
+          {/* Indicadores do quadro */}
+          <section
+            aria-label="Indicadores do quadro"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
+          >
+            <StatTile
+              rotulo="Colaboradores"
+              valor={inteiro(colaboradores.length)}
+              icone={Users}
+              deltaLegenda={`${inteiro(colaboradores.length - colaboradoresAtivos)} inativo(s) no cadastro`}
+            />
+            <StatTile
+              rotulo="Quadro ativo"
+              valor={percentual(taxaAtividade, 0)}
+              icone={TrendingUp}
+              deltaLegenda={`${inteiro(colaboradoresAtivos)} de ${inteiro(colaboradores.length)} colaboradores`}
+            />
+            <StatTile
+              rotulo="Setores"
+              valor={inteiro(totalSetores)}
+              icone={Building}
+              deltaLegenda={`${inteiro(departamentosUnicos.length)} departamento(s) distintos`}
+            />
+            <StatTile
+              rotulo="Administradores"
+              valor={inteiro(totalAdmins)}
+              icone={BarChart3}
+              deltaLegenda={
+                adminsTemporarios > 0
+                  ? `${inteiro(adminsTemporarios)} com acesso temporário`
+                  : "todos permanentes"
+              }
+            />
+          </section>
 
           <Tabs defaultSelectedKey="colaboradores" className="space-y-6">
             <Tabs.ListContainer>
@@ -763,100 +737,98 @@ export default function AdminPage() {
                     </Select>
                   </div>
 
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <Table.ScrollContainer>
-                        <Table.Content aria-label="Colaboradores">
-                          <Table.Header>
-                            <Table.Column isRowHeader>Nome</Table.Column>
-                            <Table.Column className="hidden sm:table-cell">
-                              Email
-                            </Table.Column>
-                            <Table.Column>Departamento</Table.Column>
-                            <Table.Column className="hidden md:table-cell">
-                              Setor
-                            </Table.Column>
-                            <Table.Column>Status</Table.Column>
-                            <Table.Column className="text-right">
-                              Ações
-                            </Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {filteredColaboradores.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell
-                                  colSpan={6}
-                                  className="text-center py-8"
-                                >
-                                  <div className="flex flex-col items-center gap-2">
-                                    <AlertCircle className="w-8 h-8 text-gray-400" />
-                                    <p className="text-gray-500">
-                                      Nenhum colaborador encontrado
-                                    </p>
+                  <Table>
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Colaboradores">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Nome</Table.Column>
+                          <Table.Column className="hidden sm:table-cell">
+                            Email
+                          </Table.Column>
+                          <Table.Column>Departamento</Table.Column>
+                          <Table.Column className="hidden md:table-cell">
+                            Setor
+                          </Table.Column>
+                          <Table.Column>Status</Table.Column>
+                          <Table.Column className="text-right">
+                            Ações
+                          </Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {filteredColaboradores.length === 0 ? (
+                            <Table.Row>
+                              <Table.Cell
+                                colSpan={6}
+                                className="text-center py-8"
+                              >
+                                <div className="flex flex-col items-center gap-2">
+                                  <AlertCircle className="w-8 h-8 text-gray-400" />
+                                  <p className="text-gray-500">
+                                    Nenhum colaborador encontrado
+                                  </p>
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : (
+                            filteredColaboradores.map((colaborador) => (
+                              <Table.Row key={colaborador.id}>
+                                <Table.Cell className="font-medium">
+                                  {colaborador.nome}
+                                </Table.Cell>
+                                <Table.Cell className="hidden sm:table-cell text-gray-600">
+                                  {colaborador.email}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Chip>{colaborador.departamento}</Chip>
+                                </Table.Cell>
+                                <Table.Cell className="hidden md:table-cell text-gray-600">
+                                  {colaborador.setor_nome || "Não definido"}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Chip>
+                                    {colaborador.status === "ativo"
+                                      ? "Ativo"
+                                      : "Inativo"}
+                                  </Chip>
+                                </Table.Cell>
+                                <Table.Cell className="text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onPress={() => {
+                                        setSelectedColaborador(colaborador);
+                                        setIsEditColaboradorOpen(true);
+                                      }}
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant={
+                                        colaborador.status === "ativo"
+                                          ? "danger"
+                                          : undefined
+                                      }
+                                      size="sm"
+                                      onPress={() =>
+                                        inativarColaborador(colaborador.id)
+                                      }
+                                    >
+                                      {colaborador.status === "ativo" ? (
+                                        <Trash2 className="w-4 h-4" />
+                                      ) : (
+                                        <Users className="w-4 h-4" />
+                                      )}
+                                    </Button>
                                   </div>
                                 </Table.Cell>
                               </Table.Row>
-                            ) : (
-                              filteredColaboradores.map((colaborador) => (
-                                <Table.Row key={colaborador.id}>
-                                  <Table.Cell className="font-medium">
-                                    {colaborador.nome}
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden sm:table-cell text-gray-600">
-                                    {colaborador.email}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Chip>{colaborador.departamento}</Chip>
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden md:table-cell text-gray-600">
-                                    {colaborador.setor_nome || "Não definido"}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Chip>
-                                      {colaborador.status === "ativo"
-                                        ? "Ativo"
-                                        : "Inativo"}
-                                    </Chip>
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onPress={() => {
-                                          setSelectedColaborador(colaborador);
-                                          setIsEditColaboradorOpen(true);
-                                        }}
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </Button>
-                                      <Button
-                                        variant={
-                                          colaborador.status === "ativo"
-                                            ? "danger"
-                                            : undefined
-                                        }
-                                        size="sm"
-                                        onPress={() =>
-                                          inativarColaborador(colaborador.id)
-                                        }
-                                      >
-                                        {colaborador.status === "ativo" ? (
-                                          <Trash2 className="w-4 h-4" />
-                                        ) : (
-                                          <Users className="w-4 h-4" />
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </Table.Cell>
-                                </Table.Row>
-                              ))
-                            )}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
-                  </div>
+                            ))
+                          )}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
                 </Card.Content>
               </Card>
             </Tabs.Panel>

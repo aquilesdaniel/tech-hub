@@ -1,5 +1,7 @@
 "use client";
 
+import { StatTile } from "@/components/dashboard/stat-tile";
+import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
@@ -19,7 +21,9 @@ import {
 import {
   ArrowLeft,
   Award,
+  BadgeCheck,
   Calendar,
+  CalendarClock,
   Edit,
   ExternalLink,
   Plus,
@@ -296,6 +300,33 @@ export default function CertificacoesPage() {
 
   const tiposUnicos = [...new Set(certificacoes.map((c) => c.tipo))];
 
+  // ------------------------------------------------- indicadores do topo
+  // A lista já vem no escopo de quem olha: admin vê a empresa, o resto vê o seu.
+  const ehAdmin = user?.tipo === "admin";
+  const senior = certificacoes.filter(
+    (c) => c.tipo === "Certificação Senior",
+  ).length;
+  const participacaoSenior =
+    certificacoes.length > 0 ? (senior / certificacoes.length) * 100 : 0;
+
+  // Contagens de estado, não de janela: quem está certificado e o que exige ação.
+  const colaboradoresCertificados = new Set(
+    certificacoes.map((c) => c.colaborador_id),
+  ).size;
+  const instituicoes = new Set(
+    certificacoes.map((c) => c.instituicao).filter(Boolean),
+  ).size;
+
+  const vencendo90 = certificacoes.filter((c) => {
+    const dias = diasAte(c.data_vencimento);
+    return dias !== null && dias >= 0 && dias <= 90;
+  }).length;
+
+  const vencidas = certificacoes.filter((c) => {
+    const dias = diasAte(c.data_vencimento);
+    return dias !== null && dias < 0;
+  }).length;
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -324,47 +355,53 @@ export default function CertificacoesPage() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Award className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total de Certificações
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {certificacoes.length}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card>
-              <Card.Content className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Calendar className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Certificações Sênior
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {
-                        certificacoes.filter(
-                          (c) => c.tipo === "Certificação Senior",
-                        ).length
-                      }
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
-          </div>
+          <section
+            aria-label="Indicadores de certificações"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
+          >
+            <StatTile
+              rotulo={ehAdmin ? "Certificações" : "Suas certificações"}
+              valor={inteiro(certificacoes.length)}
+              icone={Award}
+              deltaLegenda={
+                tiposUnicos.length > 0
+                  ? `${inteiro(tiposUnicos.length)} tipo(s) diferentes`
+                  : "nenhuma registrada ainda"
+              }
+            />
+            <StatTile
+              rotulo="Certificações Sênior"
+              valor={inteiro(senior)}
+              icone={BadgeCheck}
+              deltaLegenda={
+                certificacoes.length > 0
+                  ? `${percentual(participacaoSenior, 0)} do total`
+                  : "-"
+              }
+            />
+            <StatTile
+              rotulo={ehAdmin ? "Colaboradores certificados" : "Instituições"}
+              valor={inteiro(
+                ehAdmin ? colaboradoresCertificados : instituicoes,
+              )}
+              icone={Calendar}
+              deltaLegenda={
+                ehAdmin
+                  ? `de ${inteiro(colaboradores.length)} cadastrados`
+                  : "emissoras das suas credenciais"
+              }
+            />
+            <StatTile
+              rotulo="Vencendo em 90 dias"
+              valor={inteiro(vencendo90)}
+              icone={CalendarClock}
+              deltaLegenda={
+                vencidas > 0
+                  ? `${inteiro(vencidas)} já vencida(s)`
+                  : "nenhuma vencida"
+              }
+            />
+          </section>
 
           <Card>
             <Card.Header>
