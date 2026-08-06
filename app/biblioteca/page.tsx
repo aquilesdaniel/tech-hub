@@ -3,6 +3,7 @@
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
+import { Paginador } from "@/components/paginador";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -15,6 +16,7 @@ import {
   Modal,
   Select,
   Spinner,
+  Table,
   Tabs,
   toast,
 } from "@heroui/react";
@@ -65,7 +67,21 @@ export default function BibliotecaPage() {
   const { user } = useAuth();
   const [livros, setLivros] = useState<Livro[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [emprestimos, setEmprestimos] = useState<Emprestimo[]>([]);
+
+  const [emprestimosAtivos, setEmprestimosAtivos] = useState<Emprestimo[]>([]);
+  const [historico, setHistorico] = useState<Emprestimo[]>([]);
+  const [paginaAtivos, setPaginaAtivos] = useState(1);
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
+  const [totalPaginasAtivos, setTotalPaginasAtivos] = useState(1);
+  const [totalPaginasHistorico, setTotalPaginasHistorico] = useState(1);
+  const [itensPorPagina, setItensPorPagina] = useState(10);
+
+  const [resumo, setResumo] = useState({
+    total: 0,
+    ativos: 0,
+    atrasados: 0,
+    devolvidos: 0,
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGenero, setFilterGenero] = useState("todos");
   const [isAddLivroOpen, setIsAddLivroOpen] = useState(false);
@@ -85,24 +101,49 @@ export default function BibliotecaPage() {
   });
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     fetchData();
-  }, []);
+  }, [user, paginaAtivos, paginaHistorico, itensPorPagina]);
 
   const fetchData = async () => {
     try {
-      const [livrosRes, colaboradoresRes, emprestimosRes] = await Promise.all([
-        fetch("/api/biblioteca/livros"),
-        fetch("/api/colaboradores"),
-        fetch("/api/biblioteca/emprestimos"),
-      ]);
+      const base = new URLSearchParams({ limit: String(itensPorPagina) });
+      const meuId = Number(user?.id);
+      if (user?.tipo !== "admin" && Number.isFinite(meuId))
+        base.set("colaborador_id", String(meuId));
+
+      const paramsAtivos = new URLSearchParams(base);
+      paramsAtivos.set("status", "emprestado");
+      paramsAtivos.set("page", String(paginaAtivos));
+
+      const paramsHistorico = new URLSearchParams(base);
+      paramsHistorico.set("page", String(paginaHistorico));
+
+      const [livrosRes, colaboradoresRes, ativosRes, historicoRes] =
+        await Promise.all([
+          fetch("/api/biblioteca/livros"),
+          fetch("/api/colaboradores"),
+          fetch(`/api/biblioteca/emprestimos?${paramsAtivos}`),
+          fetch(`/api/biblioteca/emprestimos?${paramsHistorico}`),
+        ]);
 
       const livrosData = await livrosRes.json();
       const colaboradoresData = await colaboradoresRes.json();
-      const emprestimosData = await emprestimosRes.json();
+      const ativosData = await ativosRes.json();
+      const historicoData = await historicoRes.json();
 
       setLivros(livrosData);
       setColaboradores(colaboradoresData);
-      setEmprestimos(emprestimosData);
+
+      setEmprestimosAtivos(ativosData.data ?? []);
+      setTotalPaginasAtivos(ativosData.totalPages ?? 1);
+
+      setHistorico(historicoData.data ?? []);
+      setTotalPaginasHistorico(historicoData.totalPages ?? 1);
+      if (historicoData.resumo) setResumo(historicoData.resumo);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
     } finally {
@@ -308,37 +349,13 @@ export default function BibliotecaPage() {
     }
   };
 
-  const emprestimosAtivos = emprestimos.filter(
-    (e) => e.status === "emprestado",
-  );
-
-  // Filter emprestimos for regular users to show only their own
-  const userEmprestimos =
-    user?.tipo === "admin"
-      ? emprestimos
-      : emprestimos.filter((e) => e.colaborador_id === user?.id);
-
-  const userEmprestimosAtivos = userEmprestimos.filter(
-    (e) => e.status === "emprestado",
-  );
-
   // ------------------------------------------------- indicadores do topo
-  // Acervo é sempre da empresa; empréstimos seguem o escopo de quem olha.
+  // Acervo é sempre da empresa; os empréstimos vêm somados no escopo de quem
+  // olha, então nenhum indicador depende da página carregada.
   const ehAdmin = user?.tipo === "admin";
   const livrosDisponiveis = livros.filter((l) => l.disponivel).length;
   const taxaDisponibilidade =
     livros.length > 0 ? (livrosDisponiveis / livros.length) * 100 : 0;
-
-  const emprestimosVisiveis = ehAdmin ? emprestimos : userEmprestimos;
-  const ativosVisiveis = ehAdmin ? emprestimosAtivos : userEmprestimosAtivos;
-  const atrasados = ativosVisiveis.filter((e) => {
-    const dias = diasAte(e.data_prevista_devolucao);
-    return dias !== null && dias < 0;
-  }).length;
-
-  const devolvidos = emprestimosVisiveis.filter(
-    (e) => e.data_real_devolucao,
-  ).length;
 
   if (loading) {
     return (
@@ -390,19 +407,19 @@ export default function BibliotecaPage() {
             />
             <StatTile
               rotulo={ehAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
-              valor={inteiro(ativosVisiveis.length)}
+              valor={inteiro(resumo.ativos)}
               icone={Users}
               deltaLegenda={
-                atrasados > 0
-                  ? `${inteiro(atrasados)} em atraso`
+                resumo.atrasados > 0
+                  ? `${inteiro(resumo.atrasados)} em atraso`
                   : "nenhum em atraso"
               }
             />
             <StatTile
               rotulo={ehAdmin ? "Empréstimos no histórico" : "Seu histórico"}
-              valor={inteiro(emprestimosVisiveis.length)}
+              valor={inteiro(resumo.total)}
               icone={RotateCcw}
-              deltaLegenda={`${inteiro(devolvidos)} já devolvido(s)`}
+              deltaLegenda={`${inteiro(resumo.devolvidos)} já devolvido(s)`}
             />
           </section>
 
@@ -682,69 +699,112 @@ export default function BibliotecaPage() {
                       : "Livros que você emprestou"}
                   </Card.Description>
                 </Card.Header>
-                <Card.Content>
-                  <div className="space-y-4">
-                    {userEmprestimosAtivos.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500">
-                          {user?.tipo === "admin"
-                            ? "Nenhum empréstimo ativo"
-                            : "Você não possui empréstimos ativos"}
-                        </p>
-                      </div>
-                    ) : (
-                      userEmprestimosAtivos.map((emprestimo) => (
-                        <Card
-                          key={emprestimo.id}
-                          className="border-l-4 border-l-yellow-500"
-                        >
-                          <Card.Content className="p-6">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                              <div className="flex-1">
-                                <h3 className="text-lg font-semibold mb-1">
-                                  {getLivroTitulo(emprestimo.livro_id)}
-                                </h3>
-                                <p className="text-gray-600 mb-2">
-                                  Emprestado para:{" "}
-                                  {getColaboradorNome(
-                                    emprestimo.colaborador_id,
-                                  )}
-                                </p>
-                                <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                                  <span>
-                                    Empréstimo:{" "}
+                <Card.Content className="space-y-4">
+                  <Table>
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Empréstimos ativos">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Livro</Table.Column>
+                          <Table.Column className="hidden sm:table-cell">
+                            Colaborador
+                          </Table.Column>
+                          <Table.Column className="hidden md:table-cell">
+                            Empréstimo
+                          </Table.Column>
+                          <Table.Column>Devolução prevista</Table.Column>
+                          <Table.Column className="text-right">
+                            Ações
+                          </Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {emprestimosAtivos.length === 0 ? (
+                            <Table.Row>
+                              <Table.Cell
+                                colSpan={5}
+                                className="text-center py-8 text-muted"
+                              >
+                                {ehAdmin
+                                  ? "Nenhum empréstimo ativo"
+                                  : "Você não possui empréstimos ativos"}
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : (
+                            emprestimosAtivos.map((emprestimo) => {
+                              const dias = diasAte(
+                                emprestimo.data_prevista_devolucao,
+                              );
+                              const atrasado = dias !== null && dias < 0;
+
+                              return (
+                                <Table.Row key={emprestimo.id}>
+                                  <Table.Cell className="font-medium">
+                                    {emprestimo.livro_titulo ??
+                                      getLivroTitulo(emprestimo.livro_id)}
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden sm:table-cell text-muted">
+                                    {emprestimo.colaborador_nome ??
+                                      getColaboradorNome(
+                                        emprestimo.colaborador_id,
+                                      )}
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden md:table-cell text-muted">
                                     {new Date(
                                       emprestimo.data_emprestimo,
                                     ).toLocaleDateString("pt-BR")}
-                                  </span>
-                                  <span>
-                                    Devolução prevista:{" "}
-                                    {new Date(
-                                      emprestimo.data_prevista_devolucao,
-                                    ).toLocaleDateString("pt-BR")}
-                                  </span>
-                                </div>
-                              </div>
-                              {(user?.tipo === "admin" ||
-                                emprestimo.colaborador_id === user?.id) && (
-                                <Button
-                                  onPress={() =>
-                                    devolverLivro(
-                                      emprestimo.id,
-                                      emprestimo.livro_id,
-                                    )
-                                  }
-                                  variant="outline"
-                                >
-                                  Devolver
-                                </Button>
-                              )}
-                            </div>
-                          </Card.Content>
-                        </Card>
-                      ))
-                    )}
-                  </div>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <div className="flex items-center gap-2">
+                                      <span>
+                                        {new Date(
+                                          emprestimo.data_prevista_devolucao,
+                                        ).toLocaleDateString("pt-BR")}
+                                      </span>
+                                      {atrasado && (
+                                        <Chip size="sm" color="danger">
+                                          {inteiro(Math.abs(dias))} d de atraso
+                                        </Chip>
+                                      )}
+                                    </div>
+                                  </Table.Cell>
+                                  <Table.Cell className="text-right">
+                                    {(ehAdmin ||
+                                      emprestimo.colaborador_id ===
+                                        user?.id) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onPress={() =>
+                                          devolverLivro(
+                                            emprestimo.id,
+                                            emprestimo.livro_id,
+                                          )
+                                        }
+                                      >
+                                        Devolver
+                                      </Button>
+                                    )}
+                                  </Table.Cell>
+                                </Table.Row>
+                              );
+                            })
+                          )}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+
+                  <Paginador
+                    pagina={paginaAtivos}
+                    totalPaginas={totalPaginasAtivos}
+                    onMudarPagina={setPaginaAtivos}
+                    total={resumo.ativos}
+                    itensPorPagina={itensPorPagina}
+                    onMudarItensPorPagina={(itens) => {
+                      setItensPorPagina(itens);
+                      setPaginaAtivos(1);
+                      setPaginaHistorico(1);
+                    }}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
@@ -757,69 +817,91 @@ export default function BibliotecaPage() {
                     Todos os empréstimos realizados
                   </Card.Description>
                 </Card.Header>
-                <Card.Content>
-                  <div className="space-y-4">
-                    {emprestimos.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500">
-                          Nenhum empréstimo registrado
-                        </p>
-                      </div>
-                    ) : (
-                      emprestimos.map((emprestimo) => (
-                        <Card
-                          key={emprestimo.id}
-                          className={`border-l-4 ${
-                            emprestimo.status === "emprestado"
-                              ? "border-l-yellow-500"
-                              : "border-l-green-500"
-                          }`}
-                        >
-                          <Card.Content className="p-6">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                              <div className="flex-1">
-                                <h3 className="text-lg font-semibold mb-1">
-                                  {getLivroTitulo(emprestimo.livro_id)}
-                                </h3>
-                                <p className="text-gray-600 mb-2">
-                                  {getColaboradorNome(
-                                    emprestimo.colaborador_id,
-                                  )}
-                                </p>
-                                <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                                  <span>
-                                    Empréstimo:{" "}
-                                    {new Date(
-                                      emprestimo.data_emprestimo,
-                                    ).toLocaleDateString("pt-BR")}
-                                  </span>
-                                  {emprestimo.data_real_devolucao && (
-                                    <span>
-                                      Devolvido:{" "}
-                                      {new Date(
-                                        emprestimo.data_real_devolucao,
-                                      ).toLocaleDateString("pt-BR")}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <Chip
-                                color={
-                                  emprestimo.status === "emprestado"
-                                    ? "danger"
-                                    : "default"
-                                }
+                <Card.Content className="space-y-4">
+                  <Table>
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Histórico de empréstimos">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Livro</Table.Column>
+                          <Table.Column className="hidden sm:table-cell">
+                            Colaborador
+                          </Table.Column>
+                          <Table.Column className="hidden md:table-cell">
+                            Empréstimo
+                          </Table.Column>
+                          <Table.Column>Devolvido em</Table.Column>
+                          <Table.Column className="text-right">
+                            Situação
+                          </Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {historico.length === 0 ? (
+                            <Table.Row>
+                              <Table.Cell
+                                colSpan={5}
+                                className="text-center py-8 text-muted"
                               >
-                                {emprestimo.status === "emprestado"
-                                  ? "Emprestado"
-                                  : "Devolvido"}
-                              </Chip>
-                            </div>
-                          </Card.Content>
-                        </Card>
-                      ))
-                    )}
-                  </div>
+                                Nenhum empréstimo registrado
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : (
+                            historico.map((emprestimo) => (
+                              <Table.Row key={emprestimo.id}>
+                                <Table.Cell className="font-medium">
+                                  {emprestimo.livro_titulo ??
+                                    getLivroTitulo(emprestimo.livro_id)}
+                                </Table.Cell>
+                                <Table.Cell className="hidden sm:table-cell text-muted">
+                                  {emprestimo.colaborador_nome ??
+                                    getColaboradorNome(
+                                      emprestimo.colaborador_id,
+                                    )}
+                                </Table.Cell>
+                                <Table.Cell className="hidden md:table-cell text-muted">
+                                  {new Date(
+                                    emprestimo.data_emprestimo,
+                                  ).toLocaleDateString("pt-BR")}
+                                </Table.Cell>
+                                <Table.Cell className="text-muted">
+                                  {emprestimo.data_real_devolucao
+                                    ? new Date(
+                                        emprestimo.data_real_devolucao,
+                                      ).toLocaleDateString("pt-BR")
+                                    : "-"}
+                                </Table.Cell>
+                                <Table.Cell className="text-right">
+                                  <Chip
+                                    color={
+                                      emprestimo.status === "emprestado"
+                                        ? "danger"
+                                        : "default"
+                                    }
+                                  >
+                                    {emprestimo.status === "emprestado"
+                                      ? "Emprestado"
+                                      : "Devolvido"}
+                                  </Chip>
+                                </Table.Cell>
+                              </Table.Row>
+                            ))
+                          )}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+
+                  <Paginador
+                    pagina={paginaHistorico}
+                    totalPaginas={totalPaginasHistorico}
+                    onMudarPagina={setPaginaHistorico}
+                    total={resumo.total}
+                    itensPorPagina={itensPorPagina}
+                    onMudarItensPorPagina={(itens) => {
+                      setItensPorPagina(itens);
+                      setPaginaAtivos(1);
+                      setPaginaHistorico(1);
+                    }}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>

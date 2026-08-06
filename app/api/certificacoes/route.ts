@@ -7,11 +7,107 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const colaborador_id = searchParams.get("colaborador_id");
     const tipo = searchParams.get("tipo");
+    const search = searchParams.get("search");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
     const where: Prisma.certificacoesWhereInput = {};
 
     if (colaborador_id) where.colaborador_id = Number(colaborador_id);
-    if (tipo) where.tipo = tipo;
+    if (tipo && tipo !== "todos") where.tipo = tipo;
+
+    if (search) {
+      where.OR = [
+        { nome: { contains: search, mode: "insensitive" } },
+        { instituicao: { contains: search, mode: "insensitive" } },
+        { colaboradores: { nome: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+
+    // Com paginação a resposta ganha envelope: a lista é só uma fatia, então os
+    // indicadores e o filtro de tipo precisam vir somados do banco.
+    if (page && limit) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+      const skip = (pageNum - 1) * limitNum;
+
+      // O resumo ignora busca e tipo: ele descreve o escopo, não o recorte.
+      const escopo: Prisma.certificacoesWhereInput = colaborador_id
+        ? { colaborador_id: Number(colaborador_id) }
+        : {};
+
+      const hoje = new Date();
+      const em90Dias = new Date(hoje);
+      em90Dias.setDate(em90Dias.getDate() + 90);
+
+      const [
+        certificacoes,
+        total,
+        totalEscopo,
+        senior,
+        vencendo90,
+        vencidas,
+        porColaborador,
+        instituicoes,
+        tipos,
+      ] = await prisma.$transaction([
+        prisma.certificacoes.findMany({
+          where,
+          include: { colaboradores: { select: { nome: true } } },
+          orderBy: { data_obtencao: "desc" },
+          skip,
+          take: limitNum,
+        }),
+        prisma.certificacoes.count({ where }),
+        prisma.certificacoes.count({ where: escopo }),
+        prisma.certificacoes.count({
+          where: { ...escopo, tipo: "Certificação Senior" },
+        }),
+        prisma.certificacoes.count({
+          where: { ...escopo, data_vencimento: { gte: hoje, lte: em90Dias } },
+        }),
+        prisma.certificacoes.count({
+          where: { ...escopo, data_vencimento: { lt: hoje } },
+        }),
+        prisma.certificacoes.groupBy({
+          by: ["colaborador_id"],
+          where: escopo,
+          orderBy: { colaborador_id: "asc" },
+        }),
+        prisma.certificacoes.findMany({
+          where: escopo,
+          distinct: ["instituicao"],
+          select: { instituicao: true },
+        }),
+        prisma.certificacoes.findMany({
+          where: escopo,
+          distinct: ["tipo"],
+          select: { tipo: true },
+          orderBy: { tipo: "asc" },
+        }),
+      ]);
+
+      const data = certificacoes.map(({ colaboradores, ...cert }) => ({
+        ...cert,
+        colaborador_nome: colaboradores.nome,
+      }));
+
+      return NextResponse.json({
+        data,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        resumo: {
+          total: totalEscopo,
+          senior,
+          vencendo90,
+          vencidas,
+          colaboradoresCertificados: porColaborador.length,
+          instituicoes: instituicoes.filter((i) => i.instituicao).length,
+        },
+        tipos: tipos.map((t) => t.tipo),
+      });
+    }
 
     const certificacoes = await prisma.certificacoes.findMany({
       where,

@@ -2,17 +2,6 @@
 
 import { FiltroDashboard } from "@/components/dashboard/filters";
 import {
-  PainelRanking,
-  PainelTiposCertificacao,
-  PainelTopCertificadores,
-  agruparPorTipo,
-  recortarColaboradores,
-  type ColaboradorStats,
-  type EstatisticasGerais,
-  type FiltroTipo,
-  type Ordenacao,
-} from "@/components/dashboard/ranking";
-import {
   PainelAlertas,
   PainelIndicadores,
 } from "@/components/dashboard/indicators";
@@ -25,6 +14,17 @@ import {
   PainelItens,
   PainelSetores,
 } from "@/components/dashboard/panels";
+import {
+  PainelRanking,
+  PainelTiposCertificacao,
+  PainelTopCertificadores,
+  agruparPorTipo,
+  recortarColaboradores,
+  type ColaboradorStats,
+  type EstatisticasGerais,
+  type FiltroTipo,
+  type Ordenacao,
+} from "@/components/dashboard/ranking";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
 import {
@@ -76,14 +76,12 @@ export default function RankingPage() {
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("total_desc");
 
-  /** Usuários vindos do Senior podem ter id não numérico. */
   const meuId = useMemo(() => {
     if (user?.id == null) return null;
     const numero = Number(user.id);
     return Number.isFinite(numero) ? numero : null;
   }, [user?.id]);
 
-  // O panorama de admin é da empresa inteira; para o resto ele nem é buscado.
   const colaboradorId = ehAdmin ? null : meuId;
 
   const buscar = useCallback(
@@ -134,8 +132,6 @@ export default function RankingPage() {
     }
   }, []);
 
-  // O panorama só existe para quem administra — para os demais a tela é só o
-  // ranking, então nem vale a chamada.
   useEffect(() => {
     if (!user || !ehAdmin) {
       return;
@@ -413,7 +409,6 @@ export default function RankingPage() {
                     />
                   </div>
 
-                  {/* Os gráficos são leitura de gestão; o colaborador vê a lista. */}
                   {ehAdmin && (
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                       <PainelTopCertificadores linhas={ranking} />

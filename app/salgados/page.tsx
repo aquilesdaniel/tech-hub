@@ -19,6 +19,7 @@ import {
   Pagination,
   Select,
   Spinner,
+  Table,
   Tabs,
   TextArea,
   TextField,
@@ -1547,64 +1548,76 @@ export default function SalgadosPage() {
                   </div>
 
                   <div className="space-y-4">
-                    {paginatedDividas.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500">
-                          Nenhuma dívida encontrada
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {paginatedDividas.map((divida) => (
-                          <Card
-                            key={divida.id}
-                            className="border-l-4 border-l-red-500"
-                          >
-                            <Card.Content className="p-4">
-                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h3 className="text-lg font-semibold">
-                                      {divida.colaborador_nome}
-                                    </h3>
-                                    <Chip>{divida.item}</Chip>
-                                  </div>
-                                  <p className="mb-2">{divida.motivo}</p>
-                                  <div className="flex flex-wrap gap-2 text-sm">
-                                    <span>
-                                      Data:{" "}
-                                      {new Date(
-                                        divida.data_inicio,
-                                      ).toLocaleDateString("pt-BR")}
-                                    </span>
-
-                                    <span> • </span>
-
-                                    <span className="font-semibold text-red-600">
-                                      Valor:{" "}
-                                      {Number(divida.valor).toLocaleString(
-                                        "pt-BR",
-                                        {
-                                          style: "currency",
-                                          currency: "BRL",
-                                        },
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                                <Button
-                                  onPress={() =>
-                                    abrirConfirmacaoPagamento(divida)
-                                  }
-                                  className="bg-green-600 hover:bg-green-700 w-full sm:w-fit text-white"
+                    <Table>
+                      <Table.ScrollContainer>
+                        <Table.Content aria-label="Dívidas pendentes">
+                          <Table.Header>
+                            <Table.Column isRowHeader>Colaborador</Table.Column>
+                            <Table.Column>Item</Table.Column>
+                            <Table.Column className="hidden md:table-cell">
+                              Motivo
+                            </Table.Column>
+                            <Table.Column className="hidden sm:table-cell">
+                              Data
+                            </Table.Column>
+                            <Table.Column className="text-right">
+                              Valor
+                            </Table.Column>
+                            <Table.Column className="text-right">
+                              Ações
+                            </Table.Column>
+                          </Table.Header>
+                          <Table.Body>
+                            {paginatedDividas.length === 0 ? (
+                              <Table.Row>
+                                <Table.Cell
+                                  colSpan={6}
+                                  className="text-center py-8 text-muted"
                                 >
-                                  <Check className="w-4 h-4 text-white" />
-                                  Pagar dívida
-                                </Button>
-                              </div>
-                            </Card.Content>
-                          </Card>
-                        ))}
+                                  Nenhuma dívida encontrada
+                                </Table.Cell>
+                              </Table.Row>
+                            ) : (
+                              paginatedDividas.map((divida) => (
+                                <Table.Row key={divida.id}>
+                                  <Table.Cell className="font-medium">
+                                    {divida.colaborador_nome}
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Chip>{divida.item}</Chip>
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden md:table-cell text-muted">
+                                    {divida.motivo || "-"}
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden sm:table-cell text-muted">
+                                    {new Date(
+                                      divida.data_inicio,
+                                    ).toLocaleDateString("pt-BR")}
+                                  </Table.Cell>
+                                  <Table.Cell className="text-right font-semibold tabular-nums">
+                                    {moeda(Number(divida.valor))}
+                                  </Table.Cell>
+                                  <Table.Cell className="text-right">
+                                    <Button
+                                      size="sm"
+                                      onPress={() =>
+                                        abrirConfirmacaoPagamento(divida)
+                                      }
+                                    >
+                                      <Check className="w-4 h-4" />
+                                      Pagar
+                                    </Button>
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))
+                            )}
+                          </Table.Body>
+                        </Table.Content>
+                      </Table.ScrollContainer>
+                    </Table>
+
+                    {paginatedDividas.length > 0 && (
+                      <>
                         {totalPagesPendentes > 1 && (
                           <Pagination className="mt-4">
                             <Pagination.Content>
@@ -1735,64 +1748,74 @@ export default function SalgadosPage() {
                   </div>
 
                   <div className="space-y-4">
-                    {paginatedSalgadosPagos.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500">
-                          Nenhum histórico encontrado
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {paginatedSalgadosPagos.map((divida) => (
-                          <Card
-                            key={divida.id}
-                            className="border-l-4 border-l-green-500"
-                          >
-                            <Card.Content className="p-4">
-                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h3 className="text-lg font-semibold">
-                                      {divida.colaborador_nome}
-                                    </h3>
+                    <Table>
+                      <Table.ScrollContainer>
+                        <Table.Content aria-label="Dívidas pagas">
+                          <Table.Header>
+                            <Table.Column isRowHeader>Colaborador</Table.Column>
+                            <Table.Column>Item</Table.Column>
+                            <Table.Column className="hidden md:table-cell">
+                              Motivo
+                            </Table.Column>
+                            <Table.Column className="hidden sm:table-cell">
+                              Data
+                            </Table.Column>
+                            <Table.Column className="text-right">
+                              Valor
+                            </Table.Column>
+                            <Table.Column className="text-right">
+                              Ações
+                            </Table.Column>
+                          </Table.Header>
+                          <Table.Body>
+                            {paginatedSalgadosPagos.length === 0 ? (
+                              <Table.Row>
+                                <Table.Cell
+                                  colSpan={6}
+                                  className="text-center py-8 text-muted"
+                                >
+                                  Nenhum histórico encontrado
+                                </Table.Cell>
+                              </Table.Row>
+                            ) : (
+                              paginatedSalgadosPagos.map((divida) => (
+                                <Table.Row key={divida.id}>
+                                  <Table.Cell className="font-medium">
+                                    {divida.colaborador_nome}
+                                  </Table.Cell>
+                                  <Table.Cell>
                                     <Chip>{divida.item}</Chip>
-                                  </div>
-                                  <p className="mb-2">{divida.motivo}</p>
-                                  <div className="flex flex-wrap gap-2 text-sm">
-                                    <span>
-                                      Data:{" "}
-                                      {new Date(
-                                        divida.data_inicio,
-                                      ).toLocaleDateString("pt-BR")}
-                                    </span>
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden md:table-cell text-muted">
+                                    {divida.motivo || "-"}
+                                  </Table.Cell>
+                                  <Table.Cell className="hidden sm:table-cell text-muted">
+                                    {new Date(
+                                      divida.data_inicio,
+                                    ).toLocaleDateString("pt-BR")}
+                                  </Table.Cell>
+                                  <Table.Cell className="text-right font-semibold tabular-nums">
+                                    {moeda(Number(divida.valor))}
+                                  </Table.Cell>
+                                  <Table.Cell className="text-right">
+                                    <Link
+                                      href={`/salgados/detalhes/${divida.id}`}
+                                    >
+                                      <Button variant="outline" size="sm">
+                                        Detalhes
+                                      </Button>
+                                    </Link>
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))
+                            )}
+                          </Table.Body>
+                        </Table.Content>
+                      </Table.ScrollContainer>
+                    </Table>
 
-                                    <span> • </span>
-
-                                    <span className="font-semibold text-green-600">
-                                      Valor:{" "}
-                                      {Number(divida.valor).toLocaleString(
-                                        "pt-BR",
-                                        {
-                                          style: "currency",
-                                          currency: "BRL",
-                                        },
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                                <Link href={`/salgados/detalhes/${divida.id}`}>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full sm:w-fit"
-                                  >
-                                    Detalhes
-                                  </Button>
-                                </Link>
-                              </div>
-                            </Card.Content>
-                          </Card>
-                        ))}
+                    {paginatedSalgadosPagos.length > 0 && (
+                      <>
                         {totalPagesPagas > 1 && (
                           <Pagination className="mt-4">
                             <Pagination.Content>

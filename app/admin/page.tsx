@@ -3,6 +3,7 @@
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { Navbar } from "@/components/navbar";
+import { Paginador } from "@/components/paginador";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -73,6 +74,13 @@ export default function AdminPage() {
   const { user } = useAuth();
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [setores, setSetores] = useState<Setor[]>([]);
+  // A tabela de setores é paginada no servidor; `setores` continua completo
+  // porque os seletores do cadastro de colaborador dependem dele.
+  const [setoresPagina, setSetoresPagina] = useState<Setor[]>([]);
+  const [paginaSetores, setPaginaSetores] = useState(1);
+  const [totalPaginasSetores, setTotalPaginasSetores] = useState(1);
+  const [totalSetores, setTotalSetores] = useState(0);
+  const [itensPorPagina, setItensPorPagina] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDepartamento, setFilterDepartamento] = useState("todos");
   const [isAddColaboradorOpen, setIsAddColaboradorOpen] = useState(false);
@@ -107,14 +115,22 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginaSetores, itensPorPagina]);
 
   const fetchData = async () => {
     try {
-      const [colaboradoresRes, setoresRes, usuariosAdminRes] =
+      const paramsSetores = new URLSearchParams({
+        page: String(paginaSetores),
+        limit: String(itensPorPagina),
+      });
+
+      const [colaboradoresRes, setoresRes, setoresPaginaRes, usuariosAdminRes] =
         await Promise.all([
           fetch("/api/colaboradores"),
+          // Lista inteira: alimenta os seletores de setor do cadastro.
           fetch("/api/admin/setores"),
+          fetch(`/api/admin/setores?${paramsSetores}`),
           fetch(`/api/admin/usuarios?user_email=${user?.email}`),
         ]);
 
@@ -124,6 +140,13 @@ export default function AdminPage() {
 
         setColaboradores(colaboradoresData);
         setSetores(setoresData);
+
+        if (setoresPaginaRes.ok) {
+          const pagina = await setoresPaginaRes.json();
+          setSetoresPagina(pagina.data ?? []);
+          setTotalPaginasSetores(pagina.totalPages ?? 1);
+          setTotalSetores(pagina.total ?? 0);
+        }
 
         // Carregar dados de usuários admin se o usuário tem permissão
         if (usuariosAdminRes.ok) {
@@ -411,7 +434,6 @@ export default function AdminPage() {
   const colaboradoresAtivos = colaboradores.filter(
     (c) => c.status === "ativo",
   ).length;
-  const totalSetores = setores.length;
 
   const taxaAtividade =
     colaboradores.length > 0
@@ -699,7 +721,7 @@ export default function AdminPage() {
                 <Card.Content>
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" />
                       <Input
                         placeholder="Pesquisar por nome ou email..."
                         value={searchTerm}
@@ -762,10 +784,8 @@ export default function AdminPage() {
                                 className="text-center py-8"
                               >
                                 <div className="flex flex-col items-center gap-2">
-                                  <AlertCircle className="w-8 h-8 text-gray-400" />
-                                  <p className="text-gray-500">
-                                    Nenhum colaborador encontrado
-                                  </p>
+                                  <AlertCircle className="w-8 h-8" />
+                                  <p>Nenhum colaborador encontrado</p>
                                 </div>
                               </Table.Cell>
                             </Table.Row>
@@ -775,13 +795,13 @@ export default function AdminPage() {
                                 <Table.Cell className="font-medium">
                                   {colaborador.nome}
                                 </Table.Cell>
-                                <Table.Cell className="hidden sm:table-cell text-gray-600">
+                                <Table.Cell className="hidden sm:table-cell">
                                   {colaborador.email}
                                 </Table.Cell>
                                 <Table.Cell>
                                   <Chip>{colaborador.departamento}</Chip>
                                 </Table.Cell>
-                                <Table.Cell className="hidden md:table-cell text-gray-600">
+                                <Table.Cell className="hidden md:table-cell">
                                   {colaborador.setor_nome || "Não definido"}
                                 </Table.Cell>
                                 <Table.Cell>
@@ -912,56 +932,76 @@ export default function AdminPage() {
                   </div>
                 </Card.Header>
 
-                <Card.Content>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {setores.length === 0 ? (
-                      <div className="md:col-span-2 lg:col-span-3 flex flex-col items-center justify-center py-12">
-                        <AlertCircle className="w-12 h-12 text-gray-400 mb-4" />
-                        <p className="text-gray-500 text-lg">
-                          Nenhum setor cadastrado
-                        </p>
-                        <p className="text-gray-400 mt-2">
-                          Clique em "Novo Setor" para adicionar
-                        </p>
-                      </div>
-                    ) : (
-                      setores.map((setor) => (
-                        <Card
-                          key={setor.id}
-                          className="border-l-4 border-l-blue-500"
-                        >
-                          <Card.Header className="pb-3">
-                            <div className="flex items-center justify-between">
-                              <Card.Title className="text-lg">
-                                {setor.nome}
-                              </Card.Title>
-                              <Chip>{setor.total_colaboradores} pessoas</Chip>
-                            </div>
-                            <Card.Description>
-                              {setor.descricao}
-                            </Card.Description>
-                          </Card.Header>
-                          <Card.Content>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Users className="w-4 h-4" />
-                                <span>
-                                  Responsável:{" "}
-                                  {setor.responsavel || "Não definido"}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Building className="w-4 h-4" />
-                                <span>
-                                  {setor.total_colaboradores} colaborador(es)
-                                </span>
-                              </div>
-                            </div>
-                          </Card.Content>
-                        </Card>
-                      ))
-                    )}
-                  </div>
+                <Card.Content className="space-y-4">
+                  <Table>
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Setores">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Setor</Table.Column>
+                          <Table.Column className="hidden md:table-cell">
+                            Descrição
+                          </Table.Column>
+                          <Table.Column className="hidden sm:table-cell">
+                            Responsável
+                          </Table.Column>
+                          <Table.Column className="text-right">
+                            Colaboradores
+                          </Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {setoresPagina.length === 0 ? (
+                            <Table.Row>
+                              <Table.Cell colSpan={4} className="py-12">
+                                <div className="flex flex-col items-center gap-2">
+                                  <AlertCircle className="w-8 h-8 text-muted" />
+                                  <p className="text-muted">
+                                    Nenhum setor cadastrado
+                                  </p>
+                                  <p className="text-sm text-muted">
+                                    Clique em "Novo Setor" para adicionar
+                                  </p>
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : (
+                            setoresPagina.map((setor) => (
+                              <Table.Row key={setor.id}>
+                                <Table.Cell className="font-medium">
+                                  {setor.nome}
+                                </Table.Cell>
+                                <Table.Cell className="hidden md:table-cell text-muted">
+                                  {setor.descricao || "-"}
+                                </Table.Cell>
+                                <Table.Cell className="hidden sm:table-cell text-muted">
+                                  <span className="flex items-center gap-2">
+                                    <Users className="w-4 h-4" />
+                                    {setor.responsavel || "Não definido"}
+                                  </span>
+                                </Table.Cell>
+                                <Table.Cell className="text-right">
+                                  <Chip>
+                                    {setor.total_colaboradores} pessoa(s)
+                                  </Chip>
+                                </Table.Cell>
+                              </Table.Row>
+                            ))
+                          )}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+
+                  <Paginador
+                    pagina={paginaSetores}
+                    totalPaginas={totalPaginasSetores}
+                    onMudarPagina={setPaginaSetores}
+                    total={totalSetores}
+                    itensPorPagina={itensPorPagina}
+                    onMudarItensPorPagina={(itens) => {
+                      setItensPorPagina(itens);
+                      setPaginaSetores(1);
+                    }}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>

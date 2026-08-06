@@ -10,10 +10,69 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const colaboradorId = searchParams.get("colaborador_id");
 
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
+
     const where: Prisma.emprestimosWhereInput = {};
 
     if (status && status !== "todos") where.status = status;
     if (colaboradorId) where.colaborador_id = Number(colaboradorId);
+
+    // Com paginação a lista é só uma fatia; os totais vêm somados do banco.
+    if (page && limit) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+      const skip = (pageNum - 1) * limitNum;
+
+      // O resumo descreve o escopo do usuário, não o recorte de status.
+      const escopo: Prisma.emprestimosWhereInput = colaboradorId
+        ? { colaborador_id: Number(colaboradorId) }
+        : {};
+
+      const [pagina, total, totalEscopo, ativos, atrasados, devolvidos] =
+        await prisma.$transaction([
+          prisma.emprestimos.findMany({
+            where,
+            include: {
+              livros: { select: { titulo: true, autor: true } },
+              colaboradores: { select: { nome: true } },
+            },
+            orderBy: { data_emprestimo: "desc" },
+            skip,
+            take: limitNum,
+          }),
+          prisma.emprestimos.count({ where }),
+          prisma.emprestimos.count({ where: escopo }),
+          prisma.emprestimos.count({
+            where: { ...escopo, status: "emprestado" },
+          }),
+          prisma.emprestimos.count({
+            where: {
+              ...escopo,
+              status: "emprestado",
+              data_prevista_devolucao: { lt: new Date() },
+            },
+          }),
+          prisma.emprestimos.count({
+            where: { ...escopo, data_real_devolucao: { not: null } },
+          }),
+        ]);
+
+      const data = pagina.map(({ livros, colaboradores, ...emprestimo }) => ({
+        ...emprestimo,
+        livro_titulo: livros.titulo,
+        livro_autor: livros.autor,
+        colaborador_nome: colaboradores.nome,
+      }));
+
+      return NextResponse.json({
+        data,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        resumo: { total: totalEscopo, ativos, atrasados, devolvidos },
+      });
+    }
 
     const emprestimos = await prisma.emprestimos.findMany({
       where,

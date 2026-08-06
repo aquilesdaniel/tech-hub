@@ -342,7 +342,6 @@ function Numero({
   );
 }
 
-/** Uma linha do ranking. `ehVoce` destaca a linha de quem está olhando. */
 function LinhaRanking({
   colaborador,
   posicao,
@@ -398,7 +397,6 @@ function LinhaRanking({
             : ""}
         </p>
 
-        {/* Total relativo ao líder, repartido por tipo. */}
         <div
           aria-hidden
           className="mt-2 flex h-1 w-full max-w-64 overflow-hidden rounded-full bg-surface-tertiary"
@@ -433,11 +431,6 @@ function LinhaRanking({
   );
 }
 
-/**
- * O ranking. Mostra o top `limite` inteiro na tela — sem rolagem interna — e,
- * quando quem olha está fora dele, repete a própria linha embaixo com a posição
- * real. A posição é um número escrito, não uma cor.
- */
 export function PainelRanking({
   linhas,
   filtroTipo,
@@ -454,9 +447,7 @@ export function PainelRanking({
   onFiltroTipoChange: (filtro: FiltroTipo) => void;
   ordenacao: Ordenacao;
   onOrdenacaoChange: (ordenacao: Ordenacao) => void;
-  /** Os recortes só fazem sentido para quem administra a lista inteira. */
   mostrarFiltros?: boolean;
-  /** Colaborador de quem está olhando — ganha destaque e linha própria. */
   destaqueId?: number | null;
   limite?: number;
   revalidando?: boolean;
