@@ -2,9 +2,10 @@
 
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { DataTable } from "@/components/data-table";
 import { Navbar } from "@/components/navbar";
-import { Paginador } from "@/components/paginador";
 import { ProtectedRoute } from "@/components/protected-route";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -15,11 +16,10 @@ import {
   ListBox,
   Modal,
   Select,
-  Spinner,
-  Table,
   TextArea,
   toast,
 } from "@heroui/react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
   Award,
@@ -29,7 +29,6 @@ import {
   Edit,
   ExternalLink,
   Plus,
-  Search,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -60,7 +59,6 @@ export default function CertificacoesPage() {
   const { user } = useAuth();
   const [certificacoes, setCertificacoes] = useState<Certificacao[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [filterTipo, setFilterTipo] = useState("todos");
 
@@ -109,14 +107,6 @@ export default function CertificacoesPage() {
     "Agile",
     "Outros",
   ];
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setBuscaAplicada(searchTerm);
-      setPagina(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   useEffect(() => {
     fetchData();
@@ -330,19 +320,152 @@ export default function CertificacoesPage() {
   const participacaoSenior =
     resumo.total > 0 ? (resumo.senior / resumo.total) * 100 : 0;
 
+  const colunasCertificacoes: ColumnDef<Certificacao, any>[] = [
+    {
+      accessorKey: "nome",
+      header: "Certificação",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "tipo",
+      header: "Tipo",
+      cell: (info) => (
+        <Chip className="whitespace-nowrap">
+          {String(info.getValue() ?? "")}
+        </Chip>
+      ),
+    },
+    {
+      accessorKey: "colaborador_nome",
+      header: "Colaborador",
+      meta: { classe: "hidden lg:table-cell text-muted" },
+    },
+    {
+      accessorKey: "instituicao",
+      header: "Instituição",
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_obtencao",
+      header: "Obtida em",
+      cell: (info) =>
+        new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_vencimento",
+      header: "Vencimento",
+      cell: ({ row, getValue }) => {
+        if (!getValue())
+          return <span className="text-muted">Sem validade</span>;
+        const dias = diasAte(row.original.data_vencimento);
+        return (
+          <div className="flex items-center gap-2">
+            <span>
+              {new Date(String(getValue())).toLocaleDateString("pt-BR")}
+            </span>
+            {dias !== null && dias < 0 && (
+              <Chip size="sm" color="danger">
+                Vencida
+              </Chip>
+            )}
+            {dias !== null && dias >= 0 && dias <= 90 && (
+              <Chip size="sm" color="warning">
+                {inteiro(dias)} d
+              </Chip>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => {
+        const certificacao = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            {certificacao.url_credencial && (
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Ver credencial"
+                onPress={() =>
+                  window.open(certificacao.url_credencial!, "_blank")
+                }
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            )}
+            {podeEditarCertificacao(certificacao) && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label="Editar certificação"
+                  onPress={() => abrirDialogEdicao(certificacao)}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  aria-label="Remover certificação"
+                  onPress={() => removerCertificacao(certificacao.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const filtroTipoCertificacao = (
+    <Select
+      selectedKey={filterTipo}
+      onSelectionChange={(chave) => {
+        setFilterTipo(String(chave));
+        setPagina(1);
+      }}
+      variant="secondary"
+      aria-label="Filtrar por tipo"
+    >
+      <Select.Trigger className="w-full sm:w-48">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="todos" textValue="Todos os tipos">
+            Todos os tipos
+          </ListBox.Item>
+          {tiposDisponiveis.map((tipo) => (
+            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+              {tipo}
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -618,193 +741,28 @@ export default function CertificacoesPage() {
               </div>
             </Card.Header>
             <Card.Content>
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Pesquisar por nome, certificação ou instituição..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select
-                  selectedKey={filterTipo}
-                  onSelectionChange={(chave) => {
-                    setFilterTipo(String(chave));
-                    setPagina(1);
-                  }}
-                  aria-label="Filtrar por tipo"
-                >
-                  <Select.Trigger className="w-full sm:w-48">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="todos" textValue="Todos os tipos">
-                        Todos os tipos
-                      </ListBox.Item>
-                      {tiposDisponiveis.map((tipo) => (
-                        <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
-                          {tipo}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-
-              <div className="space-y-4">
-                <Table>
-                  <Table.ScrollContainer>
-                    <Table.Content aria-label="Certificações">
-                      <Table.Header>
-                        <Table.Column isRowHeader>Certificação</Table.Column>
-                        <Table.Column>Tipo</Table.Column>
-                        <Table.Column className="hidden lg:table-cell">
-                          Colaborador
-                        </Table.Column>
-                        <Table.Column className="hidden md:table-cell">
-                          Instituição
-                        </Table.Column>
-                        <Table.Column className="hidden sm:table-cell">
-                          Obtida em
-                        </Table.Column>
-                        <Table.Column>Vencimento</Table.Column>
-                        <Table.Column className="text-right">
-                          Ações
-                        </Table.Column>
-                      </Table.Header>
-                      <Table.Body>
-                        {certificacoes.length === 0 ? (
-                          <Table.Row>
-                            <Table.Cell
-                              colSpan={7}
-                              className="text-center py-8 text-muted"
-                            >
-                              Nenhuma certificação encontrada
-                            </Table.Cell>
-                          </Table.Row>
-                        ) : (
-                          certificacoes.map((certificacao) => {
-                            const diasVencimento = diasAte(
-                              certificacao.data_vencimento,
-                            );
-
-                            return (
-                              <Table.Row key={certificacao.id}>
-                                <Table.Cell className="font-medium">
-                                  {certificacao.nome}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <Chip className="whitespace-nowrap">
-                                    {certificacao.tipo}
-                                  </Chip>
-                                </Table.Cell>
-                                <Table.Cell className="hidden lg:table-cell text-muted">
-                                  {certificacao.colaborador_nome}
-                                </Table.Cell>
-                                <Table.Cell className="hidden md:table-cell text-muted">
-                                  {certificacao.instituicao}
-                                </Table.Cell>
-                                <Table.Cell className="hidden sm:table-cell text-muted">
-                                  {new Date(
-                                    certificacao.data_obtencao,
-                                  ).toLocaleDateString("pt-BR")}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  {certificacao.data_vencimento ? (
-                                    <div className="flex items-center gap-2">
-                                      <span>
-                                        {new Date(
-                                          certificacao.data_vencimento,
-                                        ).toLocaleDateString("pt-BR")}
-                                      </span>
-                                      {diasVencimento !== null &&
-                                        diasVencimento < 0 && (
-                                          <Chip size="sm" color="danger">
-                                            Vencida
-                                          </Chip>
-                                        )}
-                                      {diasVencimento !== null &&
-                                        diasVencimento >= 0 &&
-                                        diasVencimento <= 90 && (
-                                          <Chip size="sm" color="warning">
-                                            {inteiro(diasVencimento)} d
-                                          </Chip>
-                                        )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted">
-                                      Sem validade
-                                    </span>
-                                  )}
-                                </Table.Cell>
-                                <Table.Cell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    {certificacao.url_credencial && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        aria-label="Ver credencial"
-                                        onPress={() =>
-                                          window.open(
-                                            certificacao.url_credencial!,
-                                            "_blank",
-                                          )
-                                        }
-                                      >
-                                        <ExternalLink className="w-4 h-4" />
-                                      </Button>
-                                    )}
-                                    {podeEditarCertificacao(certificacao) && (
-                                      <>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          aria-label="Editar certificação"
-                                          onPress={() =>
-                                            abrirDialogEdicao(certificacao)
-                                          }
-                                        >
-                                          <Edit className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                          variant="danger"
-                                          size="sm"
-                                          aria-label="Remover certificação"
-                                          onPress={() =>
-                                            removerCertificacao(certificacao.id)
-                                          }
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                      </>
-                                    )}
-                                  </div>
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })
-                        )}
-                      </Table.Body>
-                    </Table.Content>
-                  </Table.ScrollContainer>
-                </Table>
-
-                <Paginador
-                  pagina={pagina}
-                  totalPaginas={totalPaginas}
-                  onMudarPagina={setPagina}
-                  total={totalFiltrado}
-                  itensPorPagina={itensPorPagina}
-                  onMudarItensPorPagina={(itens) => {
-                    setItensPorPagina(itens);
-                    setPagina(1);
-                  }}
-                />
-              </div>
+              <DataTable
+                colunas={colunasCertificacoes}
+                dados={certificacoes}
+                rotulo="Certificações"
+                vazio="Nenhuma certificação encontrada"
+                total={totalFiltrado}
+                pagina={pagina}
+                totalPaginas={totalPaginas}
+                onMudarPagina={setPagina}
+                itensPorPagina={itensPorPagina}
+                onMudarItensPorPagina={(itens) => {
+                  setItensPorPagina(itens);
+                  setPagina(1);
+                }}
+                busca={buscaAplicada}
+                onMudarBusca={(valor) => {
+                  setBuscaAplicada(valor);
+                  setPagina(1);
+                }}
+                placeholderBusca="Pesquisar por certificação, colaborador ou instituição..."
+                filtros={filtroTipoCertificacao}
+              />
             </Card.Content>
           </Card>
         </div>

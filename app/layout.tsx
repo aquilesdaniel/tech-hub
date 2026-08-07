@@ -22,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={publicSans.variable} suppressHydrationWarning>
-      <body className="bg-background text-foreground">
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

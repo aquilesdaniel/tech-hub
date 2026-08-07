@@ -36,7 +36,7 @@ import {
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
-import { Button, Card, Separator, Skeleton } from "@heroui/react";
+import { Button, Card, Separator, Spinner } from "@heroui/react";
 import {
   ArrowLeft,
   Award,
@@ -218,7 +218,7 @@ export default function RankingPage() {
           )}
 
           {!ehAdmin ? null : carregando || !dados || !kpis ? (
-            <EsqueletoPanorama />
+            <CarregandoBloco />
           ) : (
             <>
               <section
@@ -228,7 +228,9 @@ export default function RankingPage() {
                 <Card className="lg:col-span-1">
                   <Card.Content className="flex h-full flex-col justify-between gap-4">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-muted">Em aberto na empresa</p>
+                      <p className="text-sm text-muted">
+                        Dívidas em aberto na empresa
+                      </p>
                       <Wallet
                         aria-hidden
                         className="size-4 shrink-0 text-muted"
@@ -337,8 +339,7 @@ export default function RankingPage() {
                       Certificações
                     </h2>
                     <p className="mt-1 text-sm text-muted">
-                      Acumulado histórico de toda a empresa, esta seção não
-                      responde ao filtro de período acima.
+                      Acumulado histórico de toda a empresa
                     </p>
                   </div>
                 </div>
@@ -365,7 +366,7 @@ export default function RankingPage() {
               )}
 
               {carregandoRanking ? (
-                <EsqueletoRanking comGraficos={ehAdmin} />
+                <CarregandoBloco />
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -435,46 +436,15 @@ export default function RankingPage() {
   );
 }
 
-function EsqueletoPanorama() {
+function CarregandoBloco() {
   return (
-    <div className="flex flex-col gap-6" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Carregando indicadores…</span>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <Skeleton className="h-40 rounded-xl" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
-      </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Skeleton className="h-80 rounded-xl" />
-        <Skeleton className="h-80 rounded-xl" />
-      </div>
-    </div>
-  );
-}
-
-function EsqueletoRanking({ comGraficos }: { comGraficos: boolean }) {
-  return (
-    <div className="flex flex-col gap-4" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Carregando o ranking de certificações…</span>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
-        ))}
-      </div>
-      {comGraficos && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Skeleton className="h-80 rounded-xl" />
-          <Skeleton className="h-80 rounded-xl" />
-        </div>
-      )}
-      <Skeleton className="h-96 rounded-xl" />
+    <div
+      className="flex min-h-64 items-center justify-center"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <span className="sr-only">Carregando…</span>
+      <Spinner />
     </div>
   );
 }

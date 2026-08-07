@@ -54,7 +54,7 @@ const MODULOS: Modulo[] = [
     href: "/ranking",
     titulo: "Ranking",
     descricao:
-      "Veja a classificação de certificações da empresa e a sua posição nela.",
+      "Consulte o ranking de certificações da empresa, métricas e a sua posição nela.",
     icone: Trophy,
     cor: SERIE.s4,
   },
@@ -130,12 +130,10 @@ function CartaoModulo({ modulo }: { modulo: Modulo }) {
           </p>
         </div>
 
-        {/* O cartão inteiro é o alvo do clique, mas existe um único link. */}
         <Link
           href={modulo.href}
           className="mt-auto w-fit rounded-lg outline-none after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
-          {/* O foco vive no link; o botão é a superfície visual da ação. */}
           <Button excludeFromTabOrder>
             Acessar
             <ArrowRight

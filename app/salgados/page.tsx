@@ -3,8 +3,10 @@
 import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
 import { inteiro, moeda, moedaCompacta } from "@/components/dashboard/viz";
+import { DataTable } from "@/components/data-table";
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import { extrairErrosPagarme } from "@/lib/pagarme-errors";
 import {
@@ -12,19 +14,15 @@ import {
   Card,
   Chip,
   Input,
-  InputGroup,
   Label,
   ListBox,
   Modal,
-  Pagination,
   Select,
-  Spinner,
-  Table,
   Tabs,
   TextArea,
-  TextField,
   toast,
 } from "@heroui/react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
   Calendar,
@@ -32,7 +30,6 @@ import {
   DollarSign,
   HandCoins,
   IdCardIcon,
-  LucideSearch,
   Plus,
   Wallet,
 } from "lucide-react";
@@ -93,6 +90,8 @@ export default function SalgadosPage() {
   const [currentPagePagas, setCurrentPagePagas] = useState(1);
   const [totalPagesPendentes, setTotalPagesPendentes] = useState(1);
   const [totalPagesPagas, setTotalPagesPagas] = useState(1);
+  const [totalPendentes, setTotalPendentes] = useState(0);
+  const [totalPagas, setTotalPagas] = useState(0);
   const [motivosUnicos, setMotivosUnicos] = useState<string[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -200,9 +199,11 @@ export default function SalgadosPage() {
 
         setDividas(dividasData.data || []);
         setTotalPagesPendentes(dividasData.totalPages || 1);
+        setTotalPendentes(dividasData.total || 0);
 
         setSalgadosPagos(salgadosPagosData.data || []);
         setTotalPagesPagas(salgadosPagosData.totalPages || 1);
+        setTotalPagas(salgadosPagosData.total || 0);
 
         setColaboradores(colaboradoresData);
       }
@@ -338,12 +339,111 @@ export default function SalgadosPage() {
     }
   };
 
-  const paginatedDividas = dividas;
-  const paginatedSalgadosPagos = salgadosPagos;
-
   const abrirConfirmacaoPagamento = (divida: Divida) => {
     router.push(`/salgados/pagar/${divida.id}`);
   };
+
+  const reiniciarPaginas = () => {
+    setCurrentPagePendentes(1);
+    setCurrentPagePagas(1);
+  };
+
+  const colunasBase: ColumnDef<Divida, any>[] = [
+    {
+      accessorKey: "colaborador_nome",
+      header: "Colaborador",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "item",
+      header: "Item",
+      cell: (info) => <Chip>{String(info.getValue() ?? "")}</Chip>,
+    },
+    {
+      accessorKey: "motivo",
+      header: "Motivo",
+      cell: (info) => String(info.getValue() || "-"),
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_inicio",
+      header: "Data",
+      cell: (info) =>
+        new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "valor",
+      header: "Valor",
+      cell: (info) => moeda(Number(info.getValue())),
+      meta: { alinhar: "direita", classe: "font-semibold tabular-nums" },
+    },
+  ];
+
+  const colunasPendentes: ColumnDef<Divida, any>[] = [
+    ...colunasBase,
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          onPress={() => abrirConfirmacaoPagamento(row.original)}
+        >
+          <Check className="w-4 h-4" />
+          Pagar
+        </Button>
+      ),
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const colunasPagas: ColumnDef<Divida, any>[] = [
+    ...colunasBase,
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => (
+        <Link href={`/salgados/detalhes/${row.original.id}`}>
+          <Button variant="outline" size="sm">
+            Detalhes
+          </Button>
+        </Link>
+      ),
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const filtroMotivo = (
+    <Select
+      selectedKey={filterMotivo}
+      onSelectionChange={(chave) => {
+        setFilterMotivo(String(chave));
+        reiniciarPaginas();
+      }}
+      variant="secondary"
+      aria-label="Filtrar por motivo"
+    >
+      <Select.Trigger className="w-full sm:w-48">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="todos" textValue="Todos os motivos">
+            Todos os motivos
+          </ListBox.Item>
+          {motivosUnicos.map((motivo) => (
+            <ListBox.Item key={motivo} id={motivo} textValue={motivo}>
+              {motivo}
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
 
   // Função para calcular o valor total baseado na quantidade de centos
   const calcularValorTotal = (): number => {
@@ -582,16 +682,14 @@ export default function SalgadosPage() {
   if (loading || carregandoResumo) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -642,7 +740,7 @@ export default function SalgadosPage() {
             />
           </section>
 
-          <Tabs className="gap-4" defaultSelectedKey="pendentes">
+          <Tabs defaultSelectedKey="pendentes" className="gap-4">
             <Tabs.ListContainer>
               <Tabs.List className="grid w-full grid-cols-2">
                 <Tabs.Tab id="pendentes">
@@ -1107,7 +1205,7 @@ export default function SalgadosPage() {
                                       </Label>
                                       <select
                                         id="sacar_tipo_conta"
-                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                         value={contaBancariaData.tipoConta}
                                         onChange={(e) =>
                                           setContaBancariaData({
@@ -1473,194 +1571,28 @@ export default function SalgadosPage() {
                   </div>
                 </Card.Header>
                 <Card.Content>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <TextField className="w-full max-w-full">
-                      <InputGroup variant="secondary">
-                        <InputGroup.Prefix>
-                          <LucideSearch className="size-4 text-muted" />
-                        </InputGroup.Prefix>
-                        <InputGroup.Input
-                          className="w-full max-w-full"
-                          placeholder="Pesquisar por nome ou item..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                      </InputGroup>
-                    </TextField>
-
-                    <Select
-                      value={filterMotivo}
-                      onChange={(value) => setFilterMotivo(value as string)}
-                      placeholder="Filtrar por motivo"
-                      variant="secondary"
-                      className="w-full sm:w-48"
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="todos" textValue="Todos os motivos">
-                            Todos os motivos
-                          </ListBox.Item>
-                          {motivosUnicos.map((motivo) => (
-                            <ListBox.Item
-                              key={motivo}
-                              id={motivo}
-                              textValue={motivo}
-                            >
-                              {motivo}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-
-                    <Select
-                      value={itemsPerPage.toString()}
-                      onChange={(val) => setItemsPerPage(Number(val))}
-                      placeholder="Itens por pág"
-                      variant="secondary"
-                      className="w-full sm:w-32"
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="5" textValue="5 itens">
-                            5 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="10" textValue="10 itens">
-                            10 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="20" textValue="20 itens">
-                            20 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="50" textValue="50 itens">
-                            50 itens
-                          </ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <Table>
-                      <Table.ScrollContainer>
-                        <Table.Content aria-label="Dívidas pendentes">
-                          <Table.Header>
-                            <Table.Column isRowHeader>Colaborador</Table.Column>
-                            <Table.Column>Item</Table.Column>
-                            <Table.Column className="hidden md:table-cell">
-                              Motivo
-                            </Table.Column>
-                            <Table.Column className="hidden sm:table-cell">
-                              Data
-                            </Table.Column>
-                            <Table.Column className="text-right">
-                              Valor
-                            </Table.Column>
-                            <Table.Column className="text-right">
-                              Ações
-                            </Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {paginatedDividas.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell
-                                  colSpan={6}
-                                  className="text-center py-8 text-muted"
-                                >
-                                  Nenhuma dívida encontrada
-                                </Table.Cell>
-                              </Table.Row>
-                            ) : (
-                              paginatedDividas.map((divida) => (
-                                <Table.Row key={divida.id}>
-                                  <Table.Cell className="font-medium">
-                                    {divida.colaborador_nome}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Chip>{divida.item}</Chip>
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden md:table-cell text-muted">
-                                    {divida.motivo || "-"}
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden sm:table-cell text-muted">
-                                    {new Date(
-                                      divida.data_inicio,
-                                    ).toLocaleDateString("pt-BR")}
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right font-semibold tabular-nums">
-                                    {moeda(Number(divida.valor))}
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right">
-                                    <Button
-                                      size="sm"
-                                      onPress={() =>
-                                        abrirConfirmacaoPagamento(divida)
-                                      }
-                                    >
-                                      <Check className="w-4 h-4" />
-                                      Pagar
-                                    </Button>
-                                  </Table.Cell>
-                                </Table.Row>
-                              ))
-                            )}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
-
-                    {paginatedDividas.length > 0 && (
-                      <>
-                        {totalPagesPendentes > 1 && (
-                          <Pagination className="mt-4">
-                            <Pagination.Content>
-                              <Pagination.Item>
-                                <Pagination.Previous
-                                  isDisabled={currentPagePendentes === 1}
-                                  onPress={() =>
-                                    setCurrentPagePendentes((p) =>
-                                      Math.max(1, p - 1),
-                                    )
-                                  }
-                                >
-                                  <Pagination.PreviousIcon />
-                                  <span>Anterior</span>
-                                </Pagination.Previous>
-                              </Pagination.Item>
-                              <Pagination.Item>
-                                <span className="flex items-center justify-center px-4 text-sm font-medium">
-                                  Página {currentPagePendentes} de{" "}
-                                  {totalPagesPendentes}
-                                </span>
-                              </Pagination.Item>
-                              <Pagination.Item>
-                                <Pagination.Next
-                                  isDisabled={
-                                    currentPagePendentes === totalPagesPendentes
-                                  }
-                                  onPress={() =>
-                                    setCurrentPagePendentes((p) =>
-                                      Math.min(totalPagesPendentes, p + 1),
-                                    )
-                                  }
-                                >
-                                  <span>Próximo</span>
-                                  <Pagination.NextIcon />
-                                </Pagination.Next>
-                              </Pagination.Item>
-                            </Pagination.Content>
-                          </Pagination>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  <DataTable
+                    colunas={colunasPendentes}
+                    dados={dividas}
+                    rotulo="Dívidas pendentes"
+                    vazio="Nenhuma dívida encontrada"
+                    total={totalPendentes}
+                    pagina={currentPagePendentes}
+                    totalPaginas={totalPagesPendentes}
+                    onMudarPagina={setCurrentPagePendentes}
+                    itensPorPagina={itemsPerPage}
+                    onMudarItensPorPagina={(itens) => {
+                      setItemsPerPage(itens);
+                      reiniciarPaginas();
+                    }}
+                    busca={searchTerm}
+                    onMudarBusca={(valor) => {
+                      setSearchTerm(valor);
+                      reiniciarPaginas();
+                    }}
+                    placeholderBusca="Pesquisar por colaborador ou item..."
+                    filtros={filtroMotivo}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
@@ -1674,270 +1606,34 @@ export default function SalgadosPage() {
                   </Card.Description>
                 </Card.Header>
                 <Card.Content>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <TextField className="w-full max-w-full">
-                      <InputGroup variant="secondary">
-                        <InputGroup.Prefix>
-                          <LucideSearch className="size-4 text-muted" />
-                        </InputGroup.Prefix>
-                        <InputGroup.Input
-                          className="w-full max-w-full"
-                          placeholder="Pesquisar por nome ou item..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                      </InputGroup>
-                    </TextField>
-
-                    <Select
-                      value={filterMotivo}
-                      onChange={(value) => setFilterMotivo(value as string)}
-                      placeholder="Filtrar por motivo"
-                      variant="secondary"
-                      className="w-full sm:w-48"
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="todos" textValue="Todos os motivos">
-                            Todos os motivos
-                          </ListBox.Item>
-                          {motivosUnicos.map((motivo) => (
-                            <ListBox.Item
-                              key={motivo}
-                              id={motivo}
-                              textValue={motivo}
-                            >
-                              {motivo}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                    <Select
-                      value={itemsPerPage.toString()}
-                      onChange={(val) => setItemsPerPage(Number(val))}
-                      placeholder="Itens por página"
-                      variant="secondary"
-                      className="w-full sm:w-32"
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="5" textValue="5 itens">
-                            5 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="10" textValue="10 itens">
-                            10 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="20" textValue="20 itens">
-                            20 itens
-                          </ListBox.Item>
-                          <ListBox.Item id="50" textValue="50 itens">
-                            50 itens
-                          </ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <Table>
-                      <Table.ScrollContainer>
-                        <Table.Content aria-label="Dívidas pagas">
-                          <Table.Header>
-                            <Table.Column isRowHeader>Colaborador</Table.Column>
-                            <Table.Column>Item</Table.Column>
-                            <Table.Column className="hidden md:table-cell">
-                              Motivo
-                            </Table.Column>
-                            <Table.Column className="hidden sm:table-cell">
-                              Data
-                            </Table.Column>
-                            <Table.Column className="text-right">
-                              Valor
-                            </Table.Column>
-                            <Table.Column className="text-right">
-                              Ações
-                            </Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {paginatedSalgadosPagos.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell
-                                  colSpan={6}
-                                  className="text-center py-8 text-muted"
-                                >
-                                  Nenhum histórico encontrado
-                                </Table.Cell>
-                              </Table.Row>
-                            ) : (
-                              paginatedSalgadosPagos.map((divida) => (
-                                <Table.Row key={divida.id}>
-                                  <Table.Cell className="font-medium">
-                                    {divida.colaborador_nome}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Chip>{divida.item}</Chip>
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden md:table-cell text-muted">
-                                    {divida.motivo || "-"}
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden sm:table-cell text-muted">
-                                    {new Date(
-                                      divida.data_inicio,
-                                    ).toLocaleDateString("pt-BR")}
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right font-semibold tabular-nums">
-                                    {moeda(Number(divida.valor))}
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right">
-                                    <Link
-                                      href={`/salgados/detalhes/${divida.id}`}
-                                    >
-                                      <Button variant="outline" size="sm">
-                                        Detalhes
-                                      </Button>
-                                    </Link>
-                                  </Table.Cell>
-                                </Table.Row>
-                              ))
-                            )}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
-
-                    {paginatedSalgadosPagos.length > 0 && (
-                      <>
-                        {totalPagesPagas > 1 && (
-                          <Pagination className="mt-4">
-                            <Pagination.Content>
-                              <Pagination.Item>
-                                <Pagination.Previous
-                                  isDisabled={currentPagePagas === 1}
-                                  onPress={() =>
-                                    setCurrentPagePagas((p) =>
-                                      Math.max(1, p - 1),
-                                    )
-                                  }
-                                >
-                                  <Pagination.PreviousIcon />
-                                  <span>Anterior</span>
-                                </Pagination.Previous>
-                              </Pagination.Item>
-                              <Pagination.Item>
-                                <span className="flex items-center justify-center px-4 text-sm font-medium">
-                                  Página {currentPagePagas} de {totalPagesPagas}
-                                </span>
-                              </Pagination.Item>
-                              <Pagination.Item>
-                                <Pagination.Next
-                                  isDisabled={
-                                    currentPagePagas === totalPagesPagas
-                                  }
-                                  onPress={() =>
-                                    setCurrentPagePagas((p) =>
-                                      Math.min(totalPagesPagas, p + 1),
-                                    )
-                                  }
-                                >
-                                  <span>Próximo</span>
-                                  <Pagination.NextIcon />
-                                </Pagination.Next>
-                              </Pagination.Item>
-                            </Pagination.Content>
-                          </Pagination>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  <DataTable
+                    colunas={colunasPagas}
+                    dados={salgadosPagos}
+                    rotulo="Dívidas pagas"
+                    vazio="Nenhum histórico encontrado"
+                    total={totalPagas}
+                    pagina={currentPagePagas}
+                    totalPaginas={totalPagesPagas}
+                    onMudarPagina={setCurrentPagePagas}
+                    itensPorPagina={itemsPerPage}
+                    onMudarItensPorPagina={(itens) => {
+                      setItemsPerPage(itens);
+                      reiniciarPaginas();
+                    }}
+                    busca={searchTerm}
+                    onMudarBusca={(valor) => {
+                      setSearchTerm(valor);
+                      reiniciarPaginas();
+                    }}
+                    placeholderBusca="Pesquisar por colaborador ou item..."
+                    filtros={filtroMotivo}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
           </Tabs>
         </div>
       </div>
-
-      {/* <Modal
-        isOpen={isConfirmPaymentOpen}
-        onOpenChange={setIsConfirmPaymentOpen}
-      >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Confirmar Pagamento</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <p className="text-sm text-muted-foreground">
-                  Tem certeza que deseja marcar este salgado como pago?
-                </p>
-                {dividaParaPagar && (
-                  <div className="py-4">
-                    <div className="p-4 rounded-lg">
-                      <h4 className="font-semibold text-lg mb-2">
-                        {dividaParaPagar.colaborador_nome}
-                      </h4>
-                      <div className="space-y-1 text-sm text-gray-600">
-                        <p>
-                          <strong>Item:</strong> {dividaParaPagar.item}
-                        </p>
-                        <p>
-                          <strong>Motivo:</strong> {dividaParaPagar.motivo}
-                        </p>
-                        <p>
-                          <strong>Valor:</strong>{" "}
-                          {Number(dividaParaPagar.valor).toLocaleString(
-                            "pt-BR",
-                            {
-                              style: "currency",
-                              currency: "BRL",
-                            },
-                          )}
-                        </p>
-                        <p>
-                          <strong>Data:</strong>{" "}
-                          {new Date(
-                            dividaParaPagar.data_inicio,
-                          ).toLocaleDateString("pt-BR")}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </Modal.Body>
-              <Modal.Footer className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onPress={() => {
-                    setIsConfirmPaymentOpen(false);
-                    setDividaParaPagar(null);
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onPress={() =>
-                    dividaParaPagar && marcarComoPago(dividaParaPagar.id)
-                  }
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Check className="w-4 h-4" />
-                  Confirmar Pagamento
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal> */}
     </ProtectedRoute>
   );
 }

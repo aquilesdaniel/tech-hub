@@ -2,16 +2,9 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
-import {
-  Button,
-  Card,
-  Chip,
-  Input,
-  Separator,
-  Spinner,
-  toast,
-} from "@heroui/react";
+import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
 import confetti from "canvas-confetti";
 import {
   ArrowLeft,
@@ -564,18 +557,15 @@ export default function PaymentPage({
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
-  if (!divida) return null;
+  if (!divida) {
+    return null;
+  }
 
-  // Deriva um único estado a partir de divida.pago + pagamentoGerado.status + tempoRestante,
-  // usado em todos os pontos da tela (chip, cards de resultado, botões) pra evitar
-  // que cada trecho reimplemente sua própria combinação dessas 3 fontes de verdade.
   const pagamentoPago = divida.pago || pagamentoGerado?.status === "paid";
   const pagamentoCancelado =
     !pagamentoPago && pagamentoGerado?.status === "canceled";
@@ -589,7 +579,7 @@ export default function PaymentPage({
     !pagamentoCancelado &&
     !pagamentoExpirado &&
     pagamentoGerado?.status === "pending";
-  // Libera o botão de gerar um novo Pix: nunca foi gerado, ou o anterior foi cancelado/expirou
+
   const podeGerarNovoPagamento =
     !pagamentoPago &&
     (!pagamentoGerado || pagamentoCancelado || pagamentoExpirado);

@@ -2,7 +2,8 @@
 
 import { Navbar } from "@/components/navbar";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Button, Card, Chip, Separator, Spinner, toast } from "@heroui/react";
+import { SpinnerTela } from "@/components/spinner-tela";
+import { Button, Card, Chip, Separator, toast } from "@heroui/react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -110,9 +111,7 @@ export default function DetalhesPage({
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }

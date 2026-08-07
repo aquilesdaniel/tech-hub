@@ -1,11 +1,5 @@
 "use client";
 
-/**
- * Painéis do dashboard. Cada painel é um par gráfico + tabela dentro de um
- * `ChartCard`; a forma foi escolhida pelo trabalho do dado (magnitude, série
- * temporal, parte-do-todo) antes de qualquer decisão de cor.
- */
-
 import {
   Area,
   AreaChart,
@@ -47,8 +41,6 @@ import {
   nomeCurto,
   rotuloDireto,
 } from "./viz";
-
-// ------------------------------------------------- salgados: fluxo financeiro
 
 export function PainelFinanceiro({
   serie,
@@ -156,8 +148,6 @@ export function PainelFinanceiro({
   );
 }
 
-// ------------------------------------------- certificações: série temporal
-
 export function PainelCertificacoes({
   serie,
   revalidando,
@@ -242,8 +232,6 @@ export function PainelCertificacoes({
   );
 }
 
-// ------------------------------------------------- biblioteca: giro do acervo
-
 export function PainelGiroBiblioteca({
   serie,
   revalidando,
@@ -266,7 +254,6 @@ export function PainelGiroBiblioteca({
       grafico={
         temDados ? (
           <ResponsiveContainer width="100%" height="100%">
-            {/* Barras lado a lado com 2px de respiro: a superfície separa. */}
             <BarChart data={serie} margin={margemVertical} barGap={2}>
               <CartesianGrid {...gradeBase} />
               <XAxis dataKey="label" {...eixoBase} />
@@ -323,8 +310,6 @@ export function PainelGiroBiblioteca({
   );
 }
 
-// --------------------------------------- ranking de certificações por pessoa
-
 export function PainelRankingCertificacoes({
   linhas,
   revalidando,
@@ -361,7 +346,6 @@ export function PainelRankingCertificacoes({
                 cursor={cursorBarra}
                 content={conteudoTooltip((valor) => inteiro(valor))}
               />
-              {/* Empilhado com traço na cor da superfície: o vão de 2px. */}
               <Bar
                 dataKey="senior"
                 name="Sênior"
@@ -434,8 +418,6 @@ export function PainelRankingCertificacoes({
   );
 }
 
-// ----------------------------------------------- ranking de valores em aberto
-
 export function PainelDevedores({
   linhas,
   revalidando,
@@ -472,7 +454,6 @@ export function PainelDevedores({
                 cursor={cursorBarra}
                 content={conteudoTooltip((valor) => moeda(valor))}
               />
-              {/* Categorias nominais: uma série, um tom. */}
               <Bar
                 dataKey="valor"
                 name="Em aberto"
@@ -525,8 +506,6 @@ export function PainelDevedores({
     />
   );
 }
-
-// ------------------------------------------------------ certificações por setor
 
 export function PainelSetores({
   linhas,
@@ -619,8 +598,6 @@ export function PainelSetores({
     />
   );
 }
-
-// -------------------------------------------------- acervo: parte do todo
 
 export function PainelGeneros({
   linhas,
@@ -727,8 +704,6 @@ export function PainelGeneros({
     />
   );
 }
-
-// ------------------------------------------------------- itens mais lançados
 
 export function PainelItens({
   linhas,

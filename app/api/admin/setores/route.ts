@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
@@ -52,6 +53,16 @@ export async function GET(req: NextRequest) {
   try {
     const page = req.nextUrl.searchParams.get("page");
     const limit = req.nextUrl.searchParams.get("limit");
+    const search = req.nextUrl.searchParams.get("search");
+
+    const where: Prisma.setoresWhereInput = search
+      ? {
+          OR: [
+            { nome: { contains: search, mode: "insensitive" } },
+            { descricao: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {};
 
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
@@ -60,12 +71,13 @@ export async function GET(req: NextRequest) {
 
       const [setores, total, contagens] = await prisma.$transaction([
         prisma.setores.findMany({
+          where,
           select: selecaoSetor,
           orderBy: { nome: "asc" },
           skip,
           take: limitNum,
         }),
-        prisma.setores.count(),
+        prisma.setores.count({ where }),
         prisma.colaboradores.groupBy({
           by: ["setor_id"],
           where: { status: "ativo" },

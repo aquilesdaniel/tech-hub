@@ -2,9 +2,10 @@
 
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { DataTable } from "@/components/data-table";
 import { Navbar } from "@/components/navbar";
-import { Paginador } from "@/components/paginador";
 import { ProtectedRoute } from "@/components/protected-route";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -15,11 +16,10 @@ import {
   ListBox,
   Modal,
   Select,
-  Spinner,
-  Table,
   Tabs,
-  toast,
+  toast
 } from "@heroui/react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertCircle,
   ArrowLeft,
@@ -27,7 +27,6 @@ import {
   Building,
   Edit,
   Plus,
-  Search,
   Trash2,
   TrendingUp,
   UserPlus,
@@ -74,12 +73,27 @@ export default function AdminPage() {
   const { user } = useAuth();
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [setores, setSetores] = useState<Setor[]>([]);
-  // A tabela de setores é paginada no servidor; `setores` continua completo
-  // porque os seletores do cadastro de colaborador dependem dele.
+
   const [setoresPagina, setSetoresPagina] = useState<Setor[]>([]);
   const [paginaSetores, setPaginaSetores] = useState(1);
   const [totalPaginasSetores, setTotalPaginasSetores] = useState(1);
   const [totalSetores, setTotalSetores] = useState(0);
+  const [buscaSetores, setBuscaSetores] = useState("");
+
+  const [paginaColaboradores, setPaginaColaboradores] = useState(1);
+  const [totalPaginasColaboradores, setTotalPaginasColaboradores] = useState(1);
+  const [totalColaboradores, setTotalColaboradores] = useState(0);
+  const [paginaUsuariosAdmin, setPaginaUsuariosAdmin] = useState(1);
+  const [totalPaginasUsuariosAdmin, setTotalPaginasUsuariosAdmin] = useState(1);
+  const [totalUsuariosAdmin, setTotalUsuariosAdmin] = useState(0);
+  const [buscaUsuariosAdmin, setBuscaUsuariosAdmin] = useState("");
+  const [resumoColaboradores, setResumoColaboradores] = useState({
+    total: 0,
+    ativos: 0,
+    inativos: 0,
+    departamentos: [] as string[],
+  });
+  const [resumoAdmins, setResumoAdmins] = useState({ admins: 0 });
   const [itensPorPagina, setItensPorPagina] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDepartamento, setFilterDepartamento] = useState("todos");
@@ -100,14 +114,11 @@ export default function AdminPage() {
     descricao: "",
   });
 
-  // Estados para gerenciamento de usuários admin
   const [colaboradoresAdmin, setColaboradoresAdmin] = useState<
     ColaboradorAdmin[]
   >([]);
-  const [searchTermAdmin, setSearchTermAdmin] = useState("");
   const [isAddAdminTempOpen, setIsAddAdminTempOpen] = useState(false);
-  const [selectedColaboradorAdmin, setSelectedColaboradorAdmin] =
-    useState<ColaboradorAdmin | null>(null);
+
   const [adminTempData, setAdminTempData] = useState({
     colaborador_id: "",
     admin_ate: "",
@@ -115,30 +126,58 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paginaSetores, itensPorPagina]);
+  }, [
+    paginaColaboradores,
+    paginaSetores,
+    paginaUsuariosAdmin,
+    itensPorPagina,
+    searchTerm,
+    filterDepartamento,
+    buscaSetores,
+    buscaUsuariosAdmin,
+  ]);
 
   const fetchData = async () => {
     try {
+      const paramsColaboradores = new URLSearchParams({
+        page: String(paginaColaboradores),
+        limit: String(itensPorPagina),
+      });
+      if (searchTerm) paramsColaboradores.set("search", searchTerm);
+      if (filterDepartamento !== "todos")
+        paramsColaboradores.set("departamento", filterDepartamento);
+
       const paramsSetores = new URLSearchParams({
         page: String(paginaSetores),
         limit: String(itensPorPagina),
       });
+      if (buscaSetores) paramsSetores.set("search", buscaSetores);
+
+      const paramsUsuarios = new URLSearchParams({
+        user_email: user?.email ?? "",
+        page: String(paginaUsuariosAdmin),
+        limit: String(itensPorPagina),
+      });
+      if (buscaUsuariosAdmin) paramsUsuarios.set("search", buscaUsuariosAdmin);
 
       const [colaboradoresRes, setoresRes, setoresPaginaRes, usuariosAdminRes] =
         await Promise.all([
-          fetch("/api/colaboradores"),
-          // Lista inteira: alimenta os seletores de setor do cadastro.
+          fetch(`/api/colaboradores?${paramsColaboradores}`),
           fetch("/api/admin/setores"),
           fetch(`/api/admin/setores?${paramsSetores}`),
-          fetch(`/api/admin/usuarios?user_email=${user?.email}`),
+          fetch(`/api/admin/usuarios?${paramsUsuarios}`),
         ]);
 
       if (colaboradoresRes.ok && setoresRes.ok) {
         const colaboradoresData = await colaboradoresRes.json();
         const setoresData = await setoresRes.json();
 
-        setColaboradores(colaboradoresData);
+        setColaboradores(colaboradoresData.data ?? []);
+        setTotalPaginasColaboradores(colaboradoresData.totalPages ?? 1);
+        setTotalColaboradores(colaboradoresData.total ?? 0);
+        if (colaboradoresData.resumo)
+          setResumoColaboradores(colaboradoresData.resumo);
+
         setSetores(setoresData);
 
         if (setoresPaginaRes.ok) {
@@ -148,10 +187,13 @@ export default function AdminPage() {
           setTotalSetores(pagina.total ?? 0);
         }
 
-        // Carregar dados de usuários admin se o usuário tem permissão
         if (usuariosAdminRes.ok) {
           const usuariosAdminData = await usuariosAdminRes.json();
-          setColaboradoresAdmin(usuariosAdminData);
+          setColaboradoresAdmin(usuariosAdminData.data ?? []);
+          setTotalPaginasUsuariosAdmin(usuariosAdminData.totalPages ?? 1);
+          setTotalUsuariosAdmin(usuariosAdminData.total ?? 0);
+          if (usuariosAdminData.resumo)
+            setResumoAdmins(usuariosAdminData.resumo);
         }
       } else {
         toast.danger("Erro", {
@@ -168,16 +210,201 @@ export default function AdminPage() {
     }
   };
 
-  const filteredColaboradores = colaboradores.filter((colaborador) => {
-    const matchesSearch =
-      colaborador.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      colaborador.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter =
-      filterDepartamento === "todos" ||
-      colaborador.departamento === filterDepartamento;
+  const reiniciarPaginas = () => {
+    setPaginaColaboradores(1);
+    setPaginaSetores(1);
+    setPaginaUsuariosAdmin(1);
+  };
 
-    return matchesSearch && matchesFilter;
-  });
+  const colunasColaboradores: ColumnDef<Colaborador, any>[] = [
+    {
+      accessorKey: "nome",
+      header: "Nome",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "departamento",
+      header: "Departamento",
+      cell: (info) => <Chip>{String(info.getValue() ?? "")}</Chip>,
+    },
+    {
+      accessorKey: "setor_nome",
+      header: "Setor",
+      cell: (info) => String(info.getValue() || "Não definido"),
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => (
+        <Chip>{info.getValue() === "ativo" ? "Ativo" : "Inativo"}</Chip>
+      ),
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Editar colaborador"
+            onPress={() => {
+              setSelectedColaborador(row.original);
+              setIsEditColaboradorOpen(true);
+            }}
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            variant={row.original.status === "ativo" ? "danger" : undefined}
+            size="sm"
+            aria-label={
+              row.original.status === "ativo"
+                ? "Inativar colaborador"
+                : "Reativar colaborador"
+            }
+            onPress={() => inativarColaborador(row.original.id)}
+          >
+            {row.original.status === "ativo" ? (
+              <Trash2 className="w-4 h-4" />
+            ) : (
+              <Users className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      ),
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const colunasSetores: ColumnDef<Setor, any>[] = [
+    {
+      accessorKey: "nome",
+      header: "Setor",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "descricao",
+      header: "Descrição",
+      cell: (info) => String(info.getValue() || "-"),
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      accessorKey: "responsavel",
+      header: "Responsável",
+      cell: (info) => (
+        <span className="flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          {String(info.getValue() || "Não definido")}
+        </span>
+      ),
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "total_colaboradores",
+      header: "Colaboradores",
+      cell: (info) => <Chip>{Number(info.getValue() ?? 0)} pessoa(s)</Chip>,
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const colunasUsuariosAdmin: ColumnDef<ColaboradorAdmin, any>[] = [
+    {
+      accessorKey: "nome",
+      header: "Nome",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "departamento",
+      header: "Departamento",
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      id: "status_admin",
+      header: "Status Admin",
+      cell: ({ row }) =>
+        row.original.admin_permanente ? (
+          <Chip color="accent">Admin Permanente</Chip>
+        ) : row.original.tipo === "admin" ? (
+          <Chip color="warning">Admin Temporário</Chip>
+        ) : (
+          <Chip>Usuário</Chip>
+        ),
+    },
+    {
+      accessorKey: "admin_temporario_ate",
+      header: "Admin até",
+      cell: (info) =>
+        info.getValue() ? (
+          new Date(String(info.getValue())).toLocaleDateString("pt-BR")
+        ) : (
+          <span className="text-muted">-</span>
+        ),
+      meta: { classe: "text-muted" },
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) =>
+        !row.original.admin_permanente && row.original.tipo === "admin" ? (
+          <Button
+            variant="danger"
+            size="sm"
+            onPress={() => removerAdminTemporario(row.original.id)}
+          >
+            <Trash2 className="w-4 h-4" />
+            Remover admin
+          </Button>
+        ) : null,
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const filtroDepartamentoSelect = (
+    <Select
+      selectedKey={filterDepartamento}
+      onSelectionChange={(chave) => {
+        setFilterDepartamento(String(chave));
+        setPaginaColaboradores(1);
+      }}
+      variant="secondary"
+      aria-label="Filtrar por departamento"
+    >
+      <Select.Trigger className="w-full sm:w-52">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="todos" textValue="Todos os departamentos">
+            Todos os departamentos
+          </ListBox.Item>
+          {resumoColaboradores.departamentos.map((dept) => (
+            <ListBox.Item key={dept} id={dept} textValue={dept}>
+              {dept}
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
 
   const adicionarColaborador = async () => {
     if (
@@ -343,13 +570,6 @@ export default function AdminPage() {
     }
   };
 
-  // Funções para gerenciamento de usuários admin
-  const filteredColaboradoresAdmin = colaboradoresAdmin.filter(
-    (colaborador) =>
-      colaborador.nome.toLowerCase().includes(searchTermAdmin.toLowerCase()) ||
-      colaborador.email.toLowerCase().includes(searchTermAdmin.toLowerCase()),
-  );
-
   const definirAdminTemporario = async () => {
     if (!adminTempData.colaborador_id || !adminTempData.admin_ate) {
       toast.danger("Erro", {
@@ -428,26 +648,20 @@ export default function AdminPage() {
     }
   };
 
-  const departamentosUnicos = [
-    ...new Set(colaboradores.map((c) => c.departamento)),
-  ];
-  const colaboradoresAtivos = colaboradores.filter(
-    (c) => c.status === "ativo",
-  ).length;
+  const departamentosUnicos = resumoColaboradores.departamentos;
+  const colaboradoresAtivos = resumoColaboradores.ativos;
 
   const taxaAtividade =
     colaboradores.length > 0
-      ? (colaboradoresAtivos / colaboradores.length) * 100
+      ? (colaboradoresAtivos / resumoColaboradores.total) * 100
       : 0;
-  const totalAdmins = colaboradoresAdmin.filter(
-    (c) => c.tipo === "admin",
-  ).length;
-  const adminsTemporarios = colaboradoresAdmin.filter((c) => {
+  const totalAdmins = resumoAdmins.admins;
+
+  const adminsTemporariosVisiveis = colaboradoresAdmin.filter((c) => {
     const dias = diasAte(c.admin_temporario_ate);
     return !c.admin_permanente && dias !== null && dias >= 0;
   }).length;
 
-  // Verificar se o usuário é admin permanente
   const isAdminPermanente =
     user?.admin_permanente ||
     [
@@ -461,16 +675,14 @@ export default function AdminPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+       <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute requiredRole="admin">
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -486,22 +698,21 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Indicadores do quadro */}
           <section
             aria-label="Indicadores do quadro"
             className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
           >
             <StatTile
               rotulo="Colaboradores"
-              valor={inteiro(colaboradores.length)}
+              valor={inteiro(resumoColaboradores.total)}
               icone={Users}
-              deltaLegenda={`${inteiro(colaboradores.length - colaboradoresAtivos)} inativo(s) no cadastro`}
+              deltaLegenda={`${inteiro(resumoColaboradores.inativos)} inativo(s) no cadastro`}
             />
             <StatTile
               rotulo="Quadro ativo"
               valor={percentual(taxaAtividade, 0)}
               icone={TrendingUp}
-              deltaLegenda={`${inteiro(colaboradoresAtivos)} de ${inteiro(colaboradores.length)} colaboradores`}
+              deltaLegenda={`${inteiro(colaboradoresAtivos)} de ${inteiro(resumoColaboradores.total)} colaboradores`}
             />
             <StatTile
               rotulo="Setores"
@@ -514,14 +725,14 @@ export default function AdminPage() {
               valor={inteiro(totalAdmins)}
               icone={BarChart3}
               deltaLegenda={
-                adminsTemporarios > 0
-                  ? `${inteiro(adminsTemporarios)} com acesso temporário`
-                  : "todos permanentes"
+                adminsTemporariosVisiveis > 0
+                  ? `${inteiro(adminsTemporariosVisiveis)} temporário(s) nesta página`
+                  : "nenhum temporário nesta página"
               }
             />
           </section>
 
-          <Tabs defaultSelectedKey="colaboradores" className="space-y-6">
+          <Tabs defaultSelectedKey="colaboradores" className="gap-4">
             <Tabs.ListContainer>
               <Tabs.List className="grid w-full grid-cols-3">
                 <Tabs.Tab id="colaboradores">
@@ -539,7 +750,7 @@ export default function AdminPage() {
               </Tabs.List>
             </Tabs.ListContainer>
 
-            <Tabs.Panel id="colaboradores">
+            <Tabs.Panel id="colaboradores" className="p-0">
               <Card>
                 <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -719,141 +930,33 @@ export default function AdminPage() {
                   </div>
                 </Card.Header>
                 <Card.Content>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" />
-                      <Input
-                        placeholder="Pesquisar por nome ou email..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    <Select
-                      value={filterDepartamento}
-                      onChange={(value) =>
-                        setFilterDepartamento(value as string)
-                      }
-                      placeholder="Filtrar por departamento"
-                      className="w-full sm:w-48"
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item
-                            id="todos"
-                            textValue="Todos os departamentos"
-                          >
-                            Todos os departamentos
-                          </ListBox.Item>
-                          {departamentosUnicos.map((dept) => (
-                            <ListBox.Item key={dept} id={dept} textValue={dept}>
-                              {dept}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
-
-                  <Table>
-                    <Table.ScrollContainer>
-                      <Table.Content aria-label="Colaboradores">
-                        <Table.Header>
-                          <Table.Column isRowHeader>Nome</Table.Column>
-                          <Table.Column className="hidden sm:table-cell">
-                            Email
-                          </Table.Column>
-                          <Table.Column>Departamento</Table.Column>
-                          <Table.Column className="hidden md:table-cell">
-                            Setor
-                          </Table.Column>
-                          <Table.Column>Status</Table.Column>
-                          <Table.Column className="text-right">
-                            Ações
-                          </Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {filteredColaboradores.length === 0 ? (
-                            <Table.Row>
-                              <Table.Cell
-                                colSpan={6}
-                                className="text-center py-8"
-                              >
-                                <div className="flex flex-col items-center gap-2">
-                                  <AlertCircle className="w-8 h-8" />
-                                  <p>Nenhum colaborador encontrado</p>
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            filteredColaboradores.map((colaborador) => (
-                              <Table.Row key={colaborador.id}>
-                                <Table.Cell className="font-medium">
-                                  {colaborador.nome}
-                                </Table.Cell>
-                                <Table.Cell className="hidden sm:table-cell">
-                                  {colaborador.email}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <Chip>{colaborador.departamento}</Chip>
-                                </Table.Cell>
-                                <Table.Cell className="hidden md:table-cell">
-                                  {colaborador.setor_nome || "Não definido"}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <Chip>
-                                    {colaborador.status === "ativo"
-                                      ? "Ativo"
-                                      : "Inativo"}
-                                  </Chip>
-                                </Table.Cell>
-                                <Table.Cell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onPress={() => {
-                                        setSelectedColaborador(colaborador);
-                                        setIsEditColaboradorOpen(true);
-                                      }}
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      variant={
-                                        colaborador.status === "ativo"
-                                          ? "danger"
-                                          : undefined
-                                      }
-                                      size="sm"
-                                      onPress={() =>
-                                        inativarColaborador(colaborador.id)
-                                      }
-                                    >
-                                      {colaborador.status === "ativo" ? (
-                                        <Trash2 className="w-4 h-4" />
-                                      ) : (
-                                        <Users className="w-4 h-4" />
-                                      )}
-                                    </Button>
-                                  </div>
-                                </Table.Cell>
-                              </Table.Row>
-                            ))
-                          )}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
+                  <DataTable
+                    colunas={colunasColaboradores}
+                    dados={colaboradores}
+                    rotulo="Colaboradores"
+                    vazio="Nenhum colaborador encontrado"
+                    total={totalColaboradores}
+                    pagina={paginaColaboradores}
+                    totalPaginas={totalPaginasColaboradores}
+                    onMudarPagina={setPaginaColaboradores}
+                    itensPorPagina={itensPorPagina}
+                    onMudarItensPorPagina={(itens) => {
+                      setItensPorPagina(itens);
+                      reiniciarPaginas();
+                    }}
+                    busca={searchTerm}
+                    onMudarBusca={(valor) => {
+                      setSearchTerm(valor);
+                      setPaginaColaboradores(1);
+                    }}
+                    placeholderBusca="Pesquisar por nome ou email..."
+                    filtros={filtroDepartamentoSelect}
+                  />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
 
-            <Tabs.Panel id="setores">
+            <Tabs.Panel id="setores" className="p-0">
               <Card>
                 <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -932,82 +1035,33 @@ export default function AdminPage() {
                   </div>
                 </Card.Header>
 
-                <Card.Content className="space-y-4">
-                  <Table>
-                    <Table.ScrollContainer>
-                      <Table.Content aria-label="Setores">
-                        <Table.Header>
-                          <Table.Column isRowHeader>Setor</Table.Column>
-                          <Table.Column className="hidden md:table-cell">
-                            Descrição
-                          </Table.Column>
-                          <Table.Column className="hidden sm:table-cell">
-                            Responsável
-                          </Table.Column>
-                          <Table.Column className="text-right">
-                            Colaboradores
-                          </Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {setoresPagina.length === 0 ? (
-                            <Table.Row>
-                              <Table.Cell colSpan={4} className="py-12">
-                                <div className="flex flex-col items-center gap-2">
-                                  <AlertCircle className="w-8 h-8 text-muted" />
-                                  <p className="text-muted">
-                                    Nenhum setor cadastrado
-                                  </p>
-                                  <p className="text-sm text-muted">
-                                    Clique em "Novo Setor" para adicionar
-                                  </p>
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            setoresPagina.map((setor) => (
-                              <Table.Row key={setor.id}>
-                                <Table.Cell className="font-medium">
-                                  {setor.nome}
-                                </Table.Cell>
-                                <Table.Cell className="hidden md:table-cell text-muted">
-                                  {setor.descricao || "-"}
-                                </Table.Cell>
-                                <Table.Cell className="hidden sm:table-cell text-muted">
-                                  <span className="flex items-center gap-2">
-                                    <Users className="w-4 h-4" />
-                                    {setor.responsavel || "Não definido"}
-                                  </span>
-                                </Table.Cell>
-                                <Table.Cell className="text-right">
-                                  <Chip>
-                                    {setor.total_colaboradores} pessoa(s)
-                                  </Chip>
-                                </Table.Cell>
-                              </Table.Row>
-                            ))
-                          )}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
-
-                  <Paginador
+                <Card.Content>
+                  <DataTable
+                    colunas={colunasSetores}
+                    dados={setoresPagina}
+                    rotulo="Setores"
+                    vazio="Nenhum setor cadastrado"
+                    total={totalSetores}
                     pagina={paginaSetores}
                     totalPaginas={totalPaginasSetores}
                     onMudarPagina={setPaginaSetores}
-                    total={totalSetores}
                     itensPorPagina={itensPorPagina}
                     onMudarItensPorPagina={(itens) => {
                       setItensPorPagina(itens);
+                      reiniciarPaginas();
+                    }}
+                    busca={buscaSetores}
+                    onMudarBusca={(valor) => {
+                      setBuscaSetores(valor);
                       setPaginaSetores(1);
                     }}
+                    placeholderBusca="Pesquisar por setor ou descrição..."
                   />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
 
-            {/* Nova aba para gerenciamento de usuários admin */}
-            <Tabs.Panel id="usuarios-admin">
+            <Tabs.Panel id="usuarios-admin" className="p-0">
               {isAdminPermanente ? (
                 <Card>
                   <Card.Header>
@@ -1112,101 +1166,27 @@ export default function AdminPage() {
                     </div>
                   </Card.Header>
                   <Card.Content>
-                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <Input
-                          placeholder="Pesquisar por nome ou email..."
-                          value={searchTermAdmin}
-                          onChange={(e) => setSearchTermAdmin(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-
-                    <Table>
-                      <Table.ScrollContainer>
-                        <Table.Content aria-label="Usuários Admin">
-                          <Table.Header>
-                            <Table.Column isRowHeader>Nome</Table.Column>
-                            <Table.Column>Email</Table.Column>
-                            <Table.Column>Departamento</Table.Column>
-                            <Table.Column>Status Admin</Table.Column>
-                            <Table.Column>Admin até</Table.Column>
-                            <Table.Column>Ações</Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {filteredColaboradoresAdmin.length === 0 ? (
-                              <Table.Row>
-                                <Table.Cell
-                                  colSpan={6}
-                                  className="text-center py-8"
-                                >
-                                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                  <p className="text-gray-500">
-                                    Nenhum colaborador encontrado
-                                  </p>
-                                </Table.Cell>
-                              </Table.Row>
-                            ) : (
-                              filteredColaboradoresAdmin.map((colaborador) => (
-                                <Table.Row key={colaborador.id}>
-                                  <Table.Cell className="font-medium">
-                                    {colaborador.nome}
-                                  </Table.Cell>
-                                  <Table.Cell>{colaborador.email}</Table.Cell>
-                                  <Table.Cell>
-                                    {colaborador.departamento}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    {colaborador.admin_permanente ? (
-                                      <Chip color="accent">
-                                        Admin Permanente
-                                      </Chip>
-                                    ) : colaborador.tipo === "admin" ? (
-                                      <Chip color="warning">
-                                        Admin Temporário
-                                      </Chip>
-                                    ) : (
-                                      <Chip>Usuário</Chip>
-                                    )}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    {colaborador.admin_temporario_ate ? (
-                                      <span className="text-sm">
-                                        {new Date(
-                                          colaborador.admin_temporario_ate,
-                                        ).toLocaleDateString("pt-BR")}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">-</span>
-                                    )}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    {!colaborador.admin_permanente &&
-                                      colaborador.tipo === "admin" && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onPress={() =>
-                                            removerAdminTemporario(
-                                              colaborador.id,
-                                            )
-                                          }
-                                          className="text-red-600 hover:text-red-700"
-                                        >
-                                          <Trash2 className="w-4 h-4 mr-1" />
-                                          Remover Admin
-                                        </Button>
-                                      )}
-                                  </Table.Cell>
-                                </Table.Row>
-                              ))
-                            )}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
+                    <DataTable
+                      colunas={colunasUsuariosAdmin}
+                      dados={colaboradoresAdmin}
+                      rotulo="Usuários admin"
+                      vazio="Nenhum colaborador encontrado"
+                      total={totalUsuariosAdmin}
+                      pagina={paginaUsuariosAdmin}
+                      totalPaginas={totalPaginasUsuariosAdmin}
+                      onMudarPagina={setPaginaUsuariosAdmin}
+                      itensPorPagina={itensPorPagina}
+                      onMudarItensPorPagina={(itens) => {
+                        setItensPorPagina(itens);
+                        reiniciarPaginas();
+                      }}
+                      busca={buscaUsuariosAdmin}
+                      onMudarBusca={(valor) => {
+                        setBuscaUsuariosAdmin(valor);
+                        setPaginaUsuariosAdmin(1);
+                      }}
+                      placeholderBusca="Pesquisar por nome ou email..."
+                    />
                   </Card.Content>
                 </Card>
               ) : (
@@ -1226,7 +1206,6 @@ export default function AdminPage() {
             </Tabs.Panel>
           </Tabs>
 
-          {/* Dialog de Edição de Colaborador */}
           <Modal
             isOpen={isEditColaboradorOpen}
             onOpenChange={setIsEditColaboradorOpen}

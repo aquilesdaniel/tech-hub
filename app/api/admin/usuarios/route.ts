@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -27,19 +28,60 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const search = searchParams.get("search");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
+
+    const where: Prisma.colaboradoresWhereInput = search
+      ? {
+          OR: [
+            { nome: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {};
+
+    const selecao = {
+      id: true,
+      nome: true,
+      email: true,
+      tipo: true,
+      departamento: true,
+      cargo: true,
+      admin_permanente: true,
+      admin_temporario_ate: true,
+      status: true,
+      created_at: true,
+    };
+
+    if (page && limit) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+
+      const [colaboradores, total, admins] = await prisma.$transaction([
+        prisma.colaboradores.findMany({
+          where,
+          select: selecao,
+          orderBy: { nome: "asc" },
+          skip: (pageNum - 1) * limitNum,
+          take: limitNum,
+        }),
+        prisma.colaboradores.count({ where }),
+        prisma.colaboradores.count({ where: { tipo: "admin" } }),
+      ]);
+
+      return NextResponse.json({
+        data: colaboradores,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        resumo: { admins },
+      });
+    }
+
     const colaboradores = await prisma.colaboradores.findMany({
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        tipo: true,
-        departamento: true,
-        cargo: true,
-        admin_permanente: true,
-        admin_temporario_ate: true,
-        status: true,
-        created_at: true,
-      },
+      where,
+      select: selecao,
       orderBy: { nome: "asc" },
     });
 

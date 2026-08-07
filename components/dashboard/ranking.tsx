@@ -462,7 +462,7 @@ export function PainelRanking({
 
   return (
     <Card>
-      <Card.Header className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-start sm:justify-between">
+      <Card.Header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Card.Title className="text-base">
             Ranking de certificações
@@ -486,6 +486,7 @@ export function PainelRanking({
                   onFiltroTipoChange(String(chave) as FiltroTipo)
                 }
                 aria-labelledby="rotulo-tipo"
+                variant="secondary"
               >
                 <Select.Trigger className="w-full">
                   <Select.Value />
@@ -499,8 +500,8 @@ export function PainelRanking({
                     <ListBox.Item id="senior" textValue="Com Sênior">
                       Com Sênior
                     </ListBox.Item>
-                    <ListBox.Item id="outras" textValue="Com outras">
-                      Com outras
+                    <ListBox.Item id="outras" textValue="Com Outras">
+                      Com Outras
                     </ListBox.Item>
                   </ListBox>
                 </Select.Popover>
@@ -520,6 +521,7 @@ export function PainelRanking({
                   onOrdenacaoChange(String(chave) as Ordenacao)
                 }
                 aria-labelledby="rotulo-ordem"
+                variant="secondary"
               >
                 <Select.Trigger className="w-full">
                   <Select.Value />

@@ -3,9 +3,9 @@
 import type React from "react";
 
 import { useAuth } from "@/contexts/auth-context";
-import { Spinner } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { SpinnerTela } from "./spinner-tela";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -35,11 +35,7 @@ export function ProtectedRoute({
   }, [user, isLoading, router, requiredRole]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <SpinnerTela />;
   }
 
   if (!user) {

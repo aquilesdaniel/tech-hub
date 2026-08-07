@@ -3,9 +3,16 @@
 import { Card } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
-import { CHROME, SERIE, percentual } from "./viz";
+import { percentual } from "./viz";
+
+// Recharts entra só quando existe série para desenhar: as telas de lista usam
+// este mesmo tile sem gráfico nenhum e não devem pagar pelo pacote.
+const Sparkline = dynamic(
+  () => import("./sparkline").then((m) => m.Sparkline),
+  { ssr: false },
+);
 
 type Props = {
   rotulo: string;
@@ -37,8 +44,7 @@ export function StatTile({
     bom === null ? "text-muted" : bom ? "text-success" : "text-danger";
   const IconeDelta = subiu ? ArrowUpRight : desceu ? ArrowDownRight : Minus;
 
-  const dadosSparkline = serie?.map((v, i) => ({ i, v })) ?? [];
-  const temSparkline = dadosSparkline.length >= 3;
+  const temSparkline = (serie?.length ?? 0) >= 3;
 
   return (
     <Card className="h-full">
@@ -71,40 +77,9 @@ export function StatTile({
           )}
         </div>
 
-        {temSparkline && (
+        {temSparkline && serie && (
           <div className="mt-auto h-8" aria-hidden>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={dadosSparkline}
-                margin={{ top: 2, right: 0, bottom: 0, left: 0 }}
-              >
-                <Area
-                  type="monotone"
-                  dataKey="v"
-                  stroke={CHROME.atenuado}
-                  strokeWidth={2}
-                  fill={CHROME.atenuado}
-                  fillOpacity={0.1}
-                  isAnimationActive={false}
-                  dot={(props: any) =>
-                    props.index === dadosSparkline.length - 1 ? (
-                      <circle
-                        key="atual"
-                        cx={props.cx}
-                        cy={props.cy}
-                        r={3}
-                        fill={SERIE.s1}
-                        stroke={CHROME.superficie}
-                        strokeWidth={2}
-                      />
-                    ) : (
-                      <g key={props.index} />
-                    )
-                  }
-                  activeDot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Sparkline valores={serie} />
           </div>
         )}
 

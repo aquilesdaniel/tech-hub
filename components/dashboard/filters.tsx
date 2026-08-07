@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Card,
   ListBox,
   Select,
   ToggleButton,
@@ -39,11 +40,11 @@ export function FiltroDashboard({
   onAtualizar,
 }: Props) {
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+    <Card className="flex flex-row items-center">
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted" id="rotulo-periodo">
+        {/* <span className="text-xs font-medium text-muted" id="rotulo-periodo">
           Período
-        </span>
+        </span> */}
         <ToggleButtonGroup
           size="sm"
           selectionMode="single"
@@ -51,7 +52,9 @@ export function FiltroDashboard({
           selectedKeys={[String(meses)]}
           onSelectionChange={(chaves) => {
             const escolhida = Array.from(chaves)[0];
-            if (escolhida != null) onMesesChange(Number(escolhida));
+            if (escolhida != null) {
+              onMesesChange(Number(escolhida));
+            }
           }}
           aria-labelledby="rotulo-periodo"
         >
@@ -65,13 +68,14 @@ export function FiltroDashboard({
 
       {mostrarSetor && (
         <div className="flex min-w-52 flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted" id="rotulo-setor">
+          {/* <span className="text-xs font-medium text-muted" id="rotulo-setor">
             Setor
-          </span>
+          </span> */}
           <Select
             selectedKey={setorId}
             onSelectionChange={(chave) => onSetorChange(String(chave))}
             aria-labelledby="rotulo-setor"
+            variant="secondary"
           >
             <Select.Trigger className="w-full">
               <Select.Value />
@@ -99,7 +103,7 @@ export function FiltroDashboard({
 
       <Button
         size="sm"
-        variant="ghost"
+        variant="secondary"
         onPress={onAtualizar}
         isPending={revalidando}
         className="ml-auto"
@@ -110,6 +114,6 @@ export function FiltroDashboard({
         />
         Atualizar
       </Button>
-    </div>
+    </Card>
   );
 }

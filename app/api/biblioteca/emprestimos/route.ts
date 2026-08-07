@@ -12,11 +12,20 @@ export async function GET(req: NextRequest) {
 
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
+    const search = searchParams.get("search");
 
     const where: Prisma.emprestimosWhereInput = {};
 
     if (status && status !== "todos") where.status = status;
     if (colaboradorId) where.colaborador_id = Number(colaboradorId);
+
+    if (search) {
+      where.OR = [
+        { livros: { titulo: { contains: search, mode: "insensitive" } } },
+        { livros: { autor: { contains: search, mode: "insensitive" } } },
+        { colaboradores: { nome: { contains: search, mode: "insensitive" } } },
+      ];
+    }
 
     // Com paginação a lista é só uma fatia; os totais vêm somados do banco.
     if (page && limit) {

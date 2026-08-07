@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
     const departamento = searchParams.get("departamento");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
     const where: Prisma.colaboradoresWhereInput = {};
 
@@ -33,21 +35,71 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    const selecao = {
+      ...COLABORADOR_SELECT_SEGURO,
+      setores: { select: { nome: true } },
+    };
+
+    type LinhaColaborador = { setores: { nome: string } | null } & Record<
+      string,
+      unknown
+    >;
+
+    const formatar = (linhas: LinhaColaborador[]) =>
+      linhas.map(({ setores, ...colaborador }) => ({
+        ...sanitizarColaborador(colaborador as never),
+        setor_nome: setores?.nome ?? null,
+      }));
+
+    if (page && limit) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+
+      const [colaboradores, total, ativos, departamentos] =
+        await prisma.$transaction([
+          prisma.colaboradores.findMany({
+            where,
+            select: selecao,
+            orderBy: { nome: "asc" },
+            skip: (pageNum - 1) * limitNum,
+            take: limitNum,
+          }),
+          prisma.colaboradores.count({ where }),
+          prisma.colaboradores.count({ where: { status: "ativo" } }),
+          prisma.colaboradores.findMany({
+            distinct: ["departamento"],
+            select: { departamento: true },
+            orderBy: { departamento: "asc" },
+          }),
+        ]);
+
+      const totalGeral = await prisma.colaboradores.count();
+
+      return NextResponse.json({
+        data: serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        resumo: {
+          total: totalGeral,
+          ativos,
+          inativos: totalGeral - ativos,
+          departamentos: departamentos
+            .map((d) => d.departamento)
+            .filter((d): d is string => Boolean(d)),
+        },
+      });
+    }
+
     const colaboradores = await prisma.colaboradores.findMany({
       where,
-      select: {
-        ...COLABORADOR_SELECT_SEGURO,
-        setores: { select: { nome: true } },
-      },
+      select: selecao,
       orderBy: { nome: "asc" },
     });
 
-    const result = colaboradores.map(({ setores, ...colaborador }) => ({
-      ...sanitizarColaborador(colaborador),
-      setor_nome: setores?.nome ?? null,
-    }));
-
-    return NextResponse.json(serializeDecimals(result));
+    return NextResponse.json(
+      serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+    );
   } catch (error) {
     console.error("Erro ao buscar colaboradores:", error);
     return NextResponse.json(

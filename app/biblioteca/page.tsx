@@ -2,27 +2,31 @@
 
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { DataTable } from "@/components/data-table";
 import { Navbar } from "@/components/navbar";
-import { Paginador } from "@/components/paginador";
 import { ProtectedRoute } from "@/components/protected-route";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
   Card,
   Chip,
   Input,
+  InputGroup,
   Label,
   ListBox,
   Modal,
   Select,
-  Spinner,
-  Table,
   Tabs,
+  TextField,
   toast,
+  Typography,
 } from "@heroui/react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
   BookOpen,
+  Hand,
   Library,
   Plus,
   RotateCcw,
@@ -74,6 +78,9 @@ export default function BibliotecaPage() {
   const [paginaHistorico, setPaginaHistorico] = useState(1);
   const [totalPaginasAtivos, setTotalPaginasAtivos] = useState(1);
   const [totalPaginasHistorico, setTotalPaginasHistorico] = useState(1);
+  const [totalAtivos, setTotalAtivos] = useState(0);
+  const [totalHistorico, setTotalHistorico] = useState(0);
+  const [buscaEmprestimos, setBuscaEmprestimos] = useState("");
   const [itensPorPagina, setItensPorPagina] = useState(10);
 
   const [resumo, setResumo] = useState({
@@ -106,11 +113,12 @@ export default function BibliotecaPage() {
     }
 
     fetchData();
-  }, [user, paginaAtivos, paginaHistorico, itensPorPagina]);
+  }, [user, paginaAtivos, paginaHistorico, itensPorPagina, buscaEmprestimos]);
 
   const fetchData = async () => {
     try {
       const base = new URLSearchParams({ limit: String(itensPorPagina) });
+      if (buscaEmprestimos) base.set("search", buscaEmprestimos);
       const meuId = Number(user?.id);
       if (user?.tipo !== "admin" && Number.isFinite(meuId))
         base.set("colaborador_id", String(meuId));
@@ -140,9 +148,11 @@ export default function BibliotecaPage() {
 
       setEmprestimosAtivos(ativosData.data ?? []);
       setTotalPaginasAtivos(ativosData.totalPages ?? 1);
+      setTotalAtivos(ativosData.total ?? 0);
 
       setHistorico(historicoData.data ?? []);
       setTotalPaginasHistorico(historicoData.totalPages ?? 1);
+      setTotalHistorico(historicoData.total ?? 0);
       if (historicoData.resumo) setResumo(historicoData.resumo);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -353,6 +363,101 @@ export default function BibliotecaPage() {
   // Acervo é sempre da empresa; os empréstimos vêm somados no escopo de quem
   // olha, então nenhum indicador depende da página carregada.
   const ehAdmin = user?.tipo === "admin";
+
+  /** A busca dos empréstimos vale para as duas abas. */
+  const reiniciarPaginas = () => {
+    setPaginaAtivos(1);
+    setPaginaHistorico(1);
+  };
+
+  const colunasEmprestimoBase: ColumnDef<Emprestimo, any>[] = [
+    {
+      id: "livro",
+      header: "Livro",
+      accessorFn: (linha) =>
+        linha.livro_titulo ?? getLivroTitulo(linha.livro_id),
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      id: "colaborador",
+      header: "Colaborador",
+      accessorFn: (linha) =>
+        linha.colaborador_nome ?? getColaboradorNome(linha.colaborador_id),
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_emprestimo",
+      header: "Empréstimo",
+      cell: (info) =>
+        new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+  ];
+
+  const colunasAtivos: ColumnDef<Emprestimo, any>[] = [
+    ...colunasEmprestimoBase,
+    {
+      accessorKey: "data_prevista_devolucao",
+      header: "Devolução prevista",
+      cell: ({ row, getValue }) => {
+        const dias = diasAte(row.original.data_prevista_devolucao);
+        return (
+          <div className="flex items-center gap-2">
+            <span>
+              {new Date(String(getValue())).toLocaleDateString("pt-BR")}
+            </span>
+            {dias !== null && dias < 0 && (
+              <Chip size="sm" color="danger">
+                {inteiro(Math.abs(dias))} d de atraso
+              </Chip>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) =>
+        ehAdmin || row.original.colaborador_id === user?.id ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() =>
+              devolverLivro(row.original.id, row.original.livro_id)
+            }
+          >
+            Devolver
+          </Button>
+        ) : null,
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const colunasHistorico: ColumnDef<Emprestimo, any>[] = [
+    ...colunasEmprestimoBase,
+    {
+      accessorKey: "data_real_devolucao",
+      header: "Devolvido em",
+      cell: (info) =>
+        info.getValue()
+          ? new Date(String(info.getValue())).toLocaleDateString("pt-BR")
+          : "-",
+      meta: { classe: "text-muted" },
+    },
+    {
+      accessorKey: "status",
+      header: "Situação",
+      cell: (info) => (
+        <Chip color={info.getValue() === "emprestado" ? "danger" : "default"}>
+          {info.getValue() === "emprestado" ? "Emprestado" : "Devolvido"}
+        </Chip>
+      ),
+      meta: { alinhar: "direita" },
+    },
+  ];
   const livrosDisponiveis = livros.filter((l) => l.disponivel).length;
   const taxaDisponibilidade =
     livros.length > 0 ? (livrosDisponiveis / livros.length) * 100 : 0;
@@ -360,16 +465,14 @@ export default function BibliotecaPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner />
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 mb-8">
@@ -423,7 +526,7 @@ export default function BibliotecaPage() {
             />
           </section>
 
-          <Tabs defaultSelectedKey="catalogo" className="space-y-6">
+          <Tabs defaultSelectedKey="catalogo" className="gap-4">
             <Tabs.ListContainer>
               <Tabs.List className="grid w-full grid-cols-3">
                 <Tabs.Tab id="catalogo">
@@ -441,7 +544,7 @@ export default function BibliotecaPage() {
               </Tabs.List>
             </Tabs.ListContainer>
 
-            <Tabs.Panel id="catalogo">
+            <Tabs.Panel className="p-0" id="catalogo">
               <Card>
                 <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -594,9 +697,22 @@ export default function BibliotecaPage() {
                     )}
                   </div>
                 </Card.Header>
-                <Card.Content>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <div className="relative flex-1">
+                <Card.Content className="gap-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <TextField className="w-full max-w-full" name="email">
+                      <InputGroup variant="secondary">
+                        <InputGroup.Prefix>
+                          <Search className="size-4 text-muted" />
+                        </InputGroup.Prefix>
+                        <InputGroup.Input
+                          placeholder="Pesquisar por título ou autor..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </InputGroup>
+                    </TextField>
+
+                    {/* <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
                         placeholder="Pesquisar por título ou autor..."
@@ -605,10 +721,12 @@ export default function BibliotecaPage() {
                         className="pl-10"
                       />
                     </div>
+                     */}
                     <Select
                       value={filterGenero}
                       onChange={(value) => setFilterGenero(value as string)}
                       placeholder="Filtrar por gênero"
+                      variant="secondary"
                     >
                       <Select.Trigger className="w-full sm:w-48">
                         <Select.Value />
@@ -635,42 +753,56 @@ export default function BibliotecaPage() {
 
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredLivros.map((livro) => (
-                      <Card
-                        key={livro.id}
-                        className={`${!livro.disponivel ? "opacity-75" : ""}`}
-                      >
-                        <Card.Content className="p-6">
-                          <div className="flex gap-4">
+                      <Card variant="secondary" key={livro.id}>
+                        <Card.Content>
+                          <div className="flex flex-1 gap-4">
                             <Image
                               src={livro.capa || "/placeholder.svg"}
                               alt={livro.titulo}
                               width={80}
                               height={120}
-                              className="rounded-lg object-cover"
+                              className="h-30 w-20 shrink-0 self-start rounded-lg object-cover"
                             />
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-lg mb-1">
-                                {livro.titulo}
-                              </h3>
-                              <p className="text-gray-600 mb-2">
-                                {livro.autor}
-                              </p>
-                              <Chip className="mb-3">{livro.genero}</Chip>
-                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <div className="flex flex-1 flex-col">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h3 className="font-semibold text-lg">
+                                    {livro.titulo}
+                                  </h3>
+
+                                  <Typography
+                                    className="mb-2"
+                                    color="muted"
+                                    type="body-sm"
+                                  >
+                                    {livro.autor}
+                                  </Typography>
+                                </div>
+
                                 <Chip
                                   color={
-                                    livro.disponivel ? "default" : "danger"
+                                    livro.disponivel ? "success" : "danger"
                                   }
+                                  variant="soft"
+                                  size="sm"
                                 >
                                   {livro.disponivel
                                     ? "Disponível"
                                     : "Emprestado"}
                                 </Chip>
+                              </div>
+
+                              <Chip color="accent" variant="soft" size="sm">
+                                {livro.genero}
+                              </Chip>
+
+                              <div className="mt-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 {livro.disponivel && (
                                   <Button
                                     size="sm"
                                     onPress={() => abrirModalEmprestimo(livro)}
                                   >
+                                    <Hand />
                                     Emprestar
                                   </Button>
                                 )}
@@ -685,7 +817,7 @@ export default function BibliotecaPage() {
               </Card>
             </Tabs.Panel>
 
-            <Tabs.Panel id="emprestimos">
+            <Tabs.Panel className="p-0" id="emprestimos">
               <Card>
                 <Card.Header>
                   <Card.Title>
@@ -699,117 +831,37 @@ export default function BibliotecaPage() {
                       : "Livros que você emprestou"}
                   </Card.Description>
                 </Card.Header>
-                <Card.Content className="space-y-4">
-                  <Table>
-                    <Table.ScrollContainer>
-                      <Table.Content aria-label="Empréstimos ativos">
-                        <Table.Header>
-                          <Table.Column isRowHeader>Livro</Table.Column>
-                          <Table.Column className="hidden sm:table-cell">
-                            Colaborador
-                          </Table.Column>
-                          <Table.Column className="hidden md:table-cell">
-                            Empréstimo
-                          </Table.Column>
-                          <Table.Column>Devolução prevista</Table.Column>
-                          <Table.Column className="text-right">
-                            Ações
-                          </Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {emprestimosAtivos.length === 0 ? (
-                            <Table.Row>
-                              <Table.Cell
-                                colSpan={5}
-                                className="text-center py-8 text-muted"
-                              >
-                                {ehAdmin
-                                  ? "Nenhum empréstimo ativo"
-                                  : "Você não possui empréstimos ativos"}
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            emprestimosAtivos.map((emprestimo) => {
-                              const dias = diasAte(
-                                emprestimo.data_prevista_devolucao,
-                              );
-                              const atrasado = dias !== null && dias < 0;
-
-                              return (
-                                <Table.Row key={emprestimo.id}>
-                                  <Table.Cell className="font-medium">
-                                    {emprestimo.livro_titulo ??
-                                      getLivroTitulo(emprestimo.livro_id)}
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden sm:table-cell text-muted">
-                                    {emprestimo.colaborador_nome ??
-                                      getColaboradorNome(
-                                        emprestimo.colaborador_id,
-                                      )}
-                                  </Table.Cell>
-                                  <Table.Cell className="hidden md:table-cell text-muted">
-                                    {new Date(
-                                      emprestimo.data_emprestimo,
-                                    ).toLocaleDateString("pt-BR")}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <div className="flex items-center gap-2">
-                                      <span>
-                                        {new Date(
-                                          emprestimo.data_prevista_devolucao,
-                                        ).toLocaleDateString("pt-BR")}
-                                      </span>
-                                      {atrasado && (
-                                        <Chip size="sm" color="danger">
-                                          {inteiro(Math.abs(dias))} d de atraso
-                                        </Chip>
-                                      )}
-                                    </div>
-                                  </Table.Cell>
-                                  <Table.Cell className="text-right">
-                                    {(ehAdmin ||
-                                      emprestimo.colaborador_id ===
-                                        user?.id) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onPress={() =>
-                                          devolverLivro(
-                                            emprestimo.id,
-                                            emprestimo.livro_id,
-                                          )
-                                        }
-                                      >
-                                        Devolver
-                                      </Button>
-                                    )}
-                                  </Table.Cell>
-                                </Table.Row>
-                              );
-                            })
-                          )}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
-
-                  <Paginador
+                <Card.Content>
+                  <DataTable
+                    colunas={colunasAtivos}
+                    dados={emprestimosAtivos}
+                    rotulo="Empréstimos ativos"
+                    vazio={
+                      ehAdmin
+                        ? "Nenhum empréstimo ativo"
+                        : "Você não possui empréstimos ativos"
+                    }
+                    total={totalAtivos}
                     pagina={paginaAtivos}
                     totalPaginas={totalPaginasAtivos}
                     onMudarPagina={setPaginaAtivos}
-                    total={resumo.ativos}
                     itensPorPagina={itensPorPagina}
                     onMudarItensPorPagina={(itens) => {
                       setItensPorPagina(itens);
-                      setPaginaAtivos(1);
-                      setPaginaHistorico(1);
+                      reiniciarPaginas();
                     }}
+                    busca={buscaEmprestimos}
+                    onMudarBusca={(valor) => {
+                      setBuscaEmprestimos(valor);
+                      reiniciarPaginas();
+                    }}
+                    placeholderBusca="Pesquisar por livro ou colaborador..."
                   />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
 
-            <Tabs.Panel id="historico">
+            <Tabs.Panel className="p-0" id="historico">
               <Card>
                 <Card.Header>
                   <Card.Title>Histórico de Empréstimos</Card.Title>
@@ -817,97 +869,33 @@ export default function BibliotecaPage() {
                     Todos os empréstimos realizados
                   </Card.Description>
                 </Card.Header>
-                <Card.Content className="space-y-4">
-                  <Table>
-                    <Table.ScrollContainer>
-                      <Table.Content aria-label="Histórico de empréstimos">
-                        <Table.Header>
-                          <Table.Column isRowHeader>Livro</Table.Column>
-                          <Table.Column className="hidden sm:table-cell">
-                            Colaborador
-                          </Table.Column>
-                          <Table.Column className="hidden md:table-cell">
-                            Empréstimo
-                          </Table.Column>
-                          <Table.Column>Devolvido em</Table.Column>
-                          <Table.Column className="text-right">
-                            Situação
-                          </Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {historico.length === 0 ? (
-                            <Table.Row>
-                              <Table.Cell
-                                colSpan={5}
-                                className="text-center py-8 text-muted"
-                              >
-                                Nenhum empréstimo registrado
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            historico.map((emprestimo) => (
-                              <Table.Row key={emprestimo.id}>
-                                <Table.Cell className="font-medium">
-                                  {emprestimo.livro_titulo ??
-                                    getLivroTitulo(emprestimo.livro_id)}
-                                </Table.Cell>
-                                <Table.Cell className="hidden sm:table-cell text-muted">
-                                  {emprestimo.colaborador_nome ??
-                                    getColaboradorNome(
-                                      emprestimo.colaborador_id,
-                                    )}
-                                </Table.Cell>
-                                <Table.Cell className="hidden md:table-cell text-muted">
-                                  {new Date(
-                                    emprestimo.data_emprestimo,
-                                  ).toLocaleDateString("pt-BR")}
-                                </Table.Cell>
-                                <Table.Cell className="text-muted">
-                                  {emprestimo.data_real_devolucao
-                                    ? new Date(
-                                        emprestimo.data_real_devolucao,
-                                      ).toLocaleDateString("pt-BR")
-                                    : "-"}
-                                </Table.Cell>
-                                <Table.Cell className="text-right">
-                                  <Chip
-                                    color={
-                                      emprestimo.status === "emprestado"
-                                        ? "danger"
-                                        : "default"
-                                    }
-                                  >
-                                    {emprestimo.status === "emprestado"
-                                      ? "Emprestado"
-                                      : "Devolvido"}
-                                  </Chip>
-                                </Table.Cell>
-                              </Table.Row>
-                            ))
-                          )}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
-
-                  <Paginador
+                <Card.Content>
+                  <DataTable
+                    colunas={colunasHistorico}
+                    dados={historico}
+                    rotulo="Histórico de empréstimos"
+                    vazio="Nenhum empréstimo registrado"
+                    total={totalHistorico}
                     pagina={paginaHistorico}
                     totalPaginas={totalPaginasHistorico}
                     onMudarPagina={setPaginaHistorico}
-                    total={resumo.total}
                     itensPorPagina={itensPorPagina}
                     onMudarItensPorPagina={(itens) => {
                       setItensPorPagina(itens);
-                      setPaginaAtivos(1);
-                      setPaginaHistorico(1);
+                      reiniciarPaginas();
                     }}
+                    busca={buscaEmprestimos}
+                    onMudarBusca={(valor) => {
+                      setBuscaEmprestimos(valor);
+                      reiniciarPaginas();
+                    }}
+                    placeholderBusca="Pesquisar por livro ou colaborador..."
                   />
                 </Card.Content>
               </Card>
             </Tabs.Panel>
           </Tabs>
 
-          {/* Dialog de Empréstimo */}
           <Modal isOpen={isEmprestimoOpen} onOpenChange={fecharModalEmprestimo}>
             <Modal.Backdrop>
               <Modal.Container>
