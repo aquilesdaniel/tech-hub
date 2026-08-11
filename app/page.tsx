@@ -1,7 +1,7 @@
 "use client";
 
 import { SERIE } from "@/components/dashboard/viz";
-import { Navbar } from "@/components/navbar";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { Button, Card } from "@heroui/react";
@@ -76,30 +76,21 @@ export default function HomePage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background">
-        <Navbar />
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo={`Olá, ${user?.nome?.split(" ")[0] ?? ""}`}
+          descricao="Selecione uma opção abaixo para navegar até a tela da funcionalidade desejada."
+        />
 
-        <main className="container mx-auto flex flex-col gap-8 px-4 py-8 sm:py-12">
-          <header className="flex flex-col">
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
-              Olá, {user?.nome?.split(" ")[0]}
-            </h1>
-            <p className="mt-1 text-sm text-muted">
-              Selecione uma opção abaixo para navegar até a tela da
-              funcionalidade desejada.
-            </p>
-          </header>
-
-          <section
-            aria-label="Módulos do TechHub"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {modulos.map((modulo) => (
-              <CartaoModulo key={modulo.href} modulo={modulo} />
-            ))}
-          </section>
-        </main>
-      </div>
+        <section
+          aria-label="Módulos do TechHub"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {modulos.map((modulo) => (
+            <CartaoModulo key={modulo.href} modulo={modulo} />
+          ))}
+        </section>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }

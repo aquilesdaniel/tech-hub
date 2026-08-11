@@ -1,17 +1,10 @@
 "use client";
 
-import { Navbar } from "@/components/navbar";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { Button, Card, Chip, Separator, toast } from "@heroui/react";
-import {
-  ArrowLeft,
-  CalendarDays,
-  CheckCircle2,
-  CreditCard,
-  User,
-} from "lucide-react";
-import Link from "next/link";
+import { CalendarDays, CheckCircle2, CreditCard, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
@@ -120,201 +113,191 @@ export default function DetalhesPage({
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col gap-4 mb-8">
-            <Link href="/salgados" className="w-fit">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Detalhes da Dívida</h1>
-              <p>Visualize todas as informações desta dívida</p>
-            </div>
-          </div>
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo="Detalhes da Dívida"
+          descricao="Visualize todas as informações desta dívida"
+          voltarHref="/salgados"
+        />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="flex flex-col h-full">
-              <Card.Header>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
-                      <User className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <Card.Title>Devedor</Card.Title>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="flex flex-col h-full">
+            <Card.Header>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
+                    <User className="w-5 h-5 text-blue-600" />
                   </div>
-                  {divida.pago ? (
-                    <Chip color="success">Pago</Chip>
-                  ) : (
-                    <Chip color="danger">Pendente</Chip>
-                  )}
+                  <Card.Title>Devedor</Card.Title>
                 </div>
-              </Card.Header>
+                {divida.pago ? (
+                  <Chip color="success">Pago</Chip>
+                ) : (
+                  <Chip color="danger">Pendente</Chip>
+                )}
+              </div>
+            </Card.Header>
 
-              <Card.Content className="flex flex-col grow">
+            <Card.Content className="flex flex-col grow">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium">Nome</p>
+                  <p className="text-lg font-semibold">
+                    {divida.colaborador_nome}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Item</p>
+                  <p>{divida.item}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Motivo</p>
+                  <p>{divida.motivo}</p>
+                </div>
+              </div>
+
+              <Separator className="my-3" />
+
+              <div className="mt-auto flex justify-between items-end">
+                <div>
+                  <p className="text-sm font-medium">Data de Registro</p>
+                  <p className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-sm font-medium">Valor</p>
+                  <p className="text-xl font-bold">
+                    {Number(divida.valor).toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </p>
+                </div>
+              </div>
+            </Card.Content>
+          </Card>
+
+          <Card>
+            <Card.Header>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
+                  <CreditCard className="w-5 h-5 text-purple-600" />
+                </div>
+                <Card.Title>Emissor do Pagamento</Card.Title>
+              </div>
+            </Card.Header>
+            <Card.Content>
+              {colaboradorPagador ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium">Nome</p>
                     <p className="text-lg font-semibold">
-                      {divida.colaborador_nome}
+                      {colaboradorPagador.nome}
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Item</p>
-                    <p>{divida.item}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Motivo</p>
-                    <p>{divida.motivo}</p>
-                  </div>
-                </div>
-
-                <Separator className="my-3" />
-
-                <div className="mt-auto flex justify-between items-end">
-                  <div>
-                    <p className="text-sm font-medium">Data de Registro</p>
-                    <p className="flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4" />
-                      {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                    <p className="text-sm">
+                      {colaboradorPagador.cargo} •{" "}
+                      {colaboradorPagador.departamento}
                     </p>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-sm font-medium">Valor</p>
-                    <p className="text-xl font-bold">
-                      {Number(divida.valor).toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </Card.Content>
-            </Card>
+                  <Separator />
 
-            <Card>
-              <Card.Header>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
-                    <CreditCard className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <Card.Title>Emissor do Pagamento</Card.Title>
-                </div>
-              </Card.Header>
-              <Card.Content>
-                {colaboradorPagador ? (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-lg font-semibold">
-                        {colaboradorPagador.nome}
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-sm break-all">
+                        {colaboradorPagador.email}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        Documento Principal
                       </p>
                       <p className="text-sm">
-                        {colaboradorPagador.cargo} •{" "}
-                        {colaboradorPagador.departamento}
+                        {colaboradorPagador.document_mascarado ||
+                          "Não informado"}
                       </p>
                     </div>
+                  </div>
 
-                    <Separator />
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium">Email</p>
-                        <p className="text-sm break-all">
-                          {colaboradorPagador.email}
+                  {pagamento && (
+                    <>
+                      <Separator />
+                      <div className="p-4 rounded-lg space-y-2">
+                        <p className="text-sm font-medium mb-2">
+                          Detalhes Transacionais
                         </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">
-                          Documento Principal
-                        </p>
-                        <p className="text-sm">
-                          {colaboradorPagador.document_mascarado ||
-                            "Não informado"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {pagamento && (
-                      <>
-                        <Separator />
-                        <div className="p-4 rounded-lg space-y-2">
-                          <p className="text-sm font-medium mb-2">
-                            Detalhes Transacionais
-                          </p>
-                          <div className="flex justify-between text-sm items-center">
-                            <span>Status Gateway:</span>
-                            <span
-                              className={`font-semibold flex items-center gap-1 ${
-                                pagamento.status === "paid"
-                                  ? "text-green-600"
-                                  : pagamento.status === "pending"
-                                    ? "text-yellow-600"
-                                    : "text-red-600"
-                              }`}
-                            >
-                              {pagamento.status === "paid" && (
-                                <>
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  Pago
-                                </>
-                              )}
-                              {pagamento.status === "pending" && "Pendente"}
-                              {pagamento.status === "canceled" && "Cancelado"}
-                              {pagamento.status === "failed" && "Falhou"}
-                              {![
-                                "paid",
-                                "pending",
-                                "canceled",
-                                "failed",
-                              ].includes(pagamento.status) && pagamento.status}
-                            </span>
-                          </div>
-                          {pagamento.charge_id && (
-                            <div className="flex justify-between text-sm items-center">
-                              <span>Charge ID:</span>
-                              <span className="font-mono text-xs">
-                                {pagamento.charge_id}
-                              </span>
-                            </div>
-                          )}
-                          {pagamento.gateway_id && (
-                            <div className="flex justify-between text-sm items-center mt-2">
-                              <span>Gateway ID:</span>
-                              <span className="font-mono text-xs">
-                                {pagamento.gateway_id}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-sm mt-2">
-                            <span>Gerado em:</span>
-                            <span>
-                              {new Date(pagamento.created_at).toLocaleString(
-                                "pt-BR",
-                              )}
-                            </span>
-                          </div>
+                        <div className="flex justify-between text-sm items-center">
+                          <span>Status Gateway:</span>
+                          <span
+                            className={`font-semibold flex items-center gap-1 ${
+                              pagamento.status === "paid"
+                                ? "text-green-600"
+                                : pagamento.status === "pending"
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                            }`}
+                          >
+                            {pagamento.status === "paid" && (
+                              <>
+                                <CheckCircle2 className="w-4 h-4" />
+                                Pago
+                              </>
+                            )}
+                            {pagamento.status === "pending" && "Pendente"}
+                            {pagamento.status === "canceled" && "Cancelado"}
+                            {pagamento.status === "failed" && "Falhou"}
+                            {![
+                              "paid",
+                              "pending",
+                              "canceled",
+                              "failed",
+                            ].includes(pagamento.status) && pagamento.status}
+                          </span>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col h-full gap-1 items-center justify-center text-center">
-                    <p className="font-bold">Pagamento não registrado!</p>
+                        {pagamento.charge_id && (
+                          <div className="flex justify-between text-sm items-center">
+                            <span>Charge ID:</span>
+                            <span className="font-mono text-xs">
+                              {pagamento.charge_id}
+                            </span>
+                          </div>
+                        )}
+                        {pagamento.gateway_id && (
+                          <div className="flex justify-between text-sm items-center mt-2">
+                            <span>Gateway ID:</span>
+                            <span className="font-mono text-xs">
+                              {pagamento.gateway_id}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm mt-2">
+                          <span>Gerado em:</span>
+                          <span>
+                            {new Date(pagamento.created_at).toLocaleString(
+                              "pt-BR",
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col h-full gap-1 items-center justify-center text-center">
+                  <p className="font-bold">Pagamento não registrado!</p>
 
-                    <p className="text-sm">
-                      Esta dívida foi baixa manualmente pelo sistema
-                    </p>
-                  </div>
-                )}
-              </Card.Content>
-            </Card>
-          </div>
+                  <p className="text-sm">
+                    Esta dívida foi baixa manualmente pelo sistema
+                  </p>
+                </div>
+              )}
+            </Card.Content>
+          </Card>
         </div>
-      </div>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }

@@ -65,17 +65,19 @@ export default function LoginPage() {
           <Card.Header>
             <Card.Title>Fazer Login</Card.Title>
             <Card.Description>
-              Entre com suas credenciais da Senior para acessar o sistema
+              Entre com suas credenciais da PlatformX Sênior para acessar o
+              sistema
             </Card.Description>
           </Card.Header>
 
           <Card.Content>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="flex flex-col space-y-2">
-                <Label htmlFor="username">Usuário Senior</Label>
+                <Label htmlFor="username">Usuário Sênior</Label>
                 <Input
                   id="username"
                   type="text"
+                  variant="secondary"
                   placeholder="user@prismaproducao.com.br"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -88,6 +90,7 @@ export default function LoginPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    variant="secondary"
                     placeholder="Digite sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -115,31 +118,25 @@ export default function LoginPage() {
                 </Alert>
               )}
 
-              <Button
-                type="submit"
-                className="w-full h-11"
-                isDisabled={isLoading}
-              >
+              <Button type="submit" fullWidth size="lg" isDisabled={isLoading}>
                 {isLoading ? (
                   <div className="flex items-center gap-2">
-                    <Spinner className="text-black" />
+                    <Spinner className="text-white" />
                     Entrando...
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <LogIn className="w-4 h-4" />
+                    <LogIn />
                     Entrar
                   </div>
                 )}
               </Button>
             </form>
 
-            <div className="text-sm space-y-2 mt-6">
+            <div className="text-sm space-y-2 mt-3">
               <p>Sistema de Autenticação Sênior:</p>
 
               <Card variant="secondary">
-                <p className="text-white">Credenciais Senior Platform</p>
-                <p>Use suas credenciais da PlatformX Senior</p>
                 <p>
                   <strong>Exemplo:</strong> user@prismaproducao.com.br
                 </p>

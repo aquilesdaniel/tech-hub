@@ -4,7 +4,7 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
 import { inteiro, moeda, moedaCompacta } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
-import { Navbar } from "@/components/navbar";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
@@ -24,7 +24,6 @@ import {
 } from "@heroui/react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft,
   Calendar,
   Check,
   DollarSign,
@@ -36,13 +35,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
-// interface Colaborador {
-//   id: number;
-//   nome: string;
-//   email: string;
-//   departamento: string;
-// }
 
 interface Colaborador {
   id: number;
@@ -97,8 +89,6 @@ export default function SalgadosPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isCadastrarContaOpen, setIsCadastrarContaOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
-  const [isConfirmPaymentOpen, setIsConfirmPaymentOpen] = useState(false);
-  const [dividaParaPagar, setDividaParaPagar] = useState<Divida | null>(null);
   const [isSubmittingConta, setIsSubmittingConta] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
   const [isBuscandoCep, setIsBuscandoCep] = useState(false);
@@ -305,7 +295,6 @@ export default function SalgadosPage() {
     }
   };
 
-  // Autopreenche rua/bairro/cidade/estado a partir de um CEP válido (8 dígitos) usando o ViaCEP
   const buscarEnderecoPorCep = async (cepDigitado: string) => {
     const cepLimpo = cepDigitado.replace(/\D/g, "");
     if (cepLimpo.length !== 8) return;
@@ -445,16 +434,13 @@ export default function SalgadosPage() {
     </Select>
   );
 
-  // Função para calcular o valor total baseado na quantidade de centos
   const calcularValorTotal = (): number => {
     const quantidade = parseInt(newDivida.quantidadeCentos) || 1;
-    // Substitui vírgula por ponto para o JavaScript conseguir calcular
     const valorPorCento =
       parseFloat(String(newDivida.valorPorCento).replace(",", ".")) || 0;
     return quantidade * valorPorCento;
   };
 
-  // Atualizar o valor total quando quantidade ou valor por cento mudar
   useEffect(() => {
     if (newDivida.item === "1 cento" || newDivida.item === "2 centos") {
       const valorTotal = calcularValorTotal();
@@ -466,10 +452,8 @@ export default function SalgadosPage() {
   }, [newDivida.quantidadeCentos, newDivida.valorPorCento, newDivida.item]);
 
   const adicionarDivida = async () => {
-    // Vamos guardar o valor numérico que será enviado ao banco
     let valorFinalDoBanco = 0;
 
-    // Validação para centos
     if (newDivida.item === "1 cento" || newDivida.item === "2 centos") {
       const valorPorCentoFloat = parseFloat(
         String(newDivida.valorPorCento).replace(",", "."),
@@ -489,7 +473,6 @@ export default function SalgadosPage() {
       }
       valorFinalDoBanco = parseFloat(String(newDivida.valor).replace(",", "."));
     } else {
-      // Validação para salgado avulso
       valorFinalDoBanco = parseFloat(String(newDivida.valor).replace(",", "."));
       if (
         !newDivida.colaborador_id ||
@@ -557,7 +540,9 @@ export default function SalgadosPage() {
   };
 
   const handleCadastrarConta = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     if (
       !contaBancariaData.nomeColaborador ||
@@ -623,7 +608,9 @@ export default function SalgadosPage() {
   };
 
   const handleTransferirDinheiro = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     const valor = parseFloat(String(transferData.amount).replace(",", "."));
 
@@ -689,635 +676,521 @@ export default function SalgadosPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col gap-4 mb-8">
-            <Link href="/" className="w-fit">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Controle de Salgados</h1>
-              <p>Gerencie dívidas de salgados dos colaboradores</p>
-            </div>
-          </div>
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo="Controle de Salgados"
+          descricao="Gerencie dívidas de salgados dos colaboradores"
+          voltarHref="/"
+        />
 
-          <section
-            aria-label="Indicadores de salgados"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
-          >
-            <StatTile
-              rotulo="Em aberto"
-              valor={moedaCompacta(resumo?.kpis.valorEmAberto ?? 0)}
-              icone={Calendar}
-              deltaLegenda={`${inteiro(resumo?.kpis.dividasEmAberto ?? 0)} lançamento(s) aguardando pagamento`}
-            />
-            <StatTile
-              rotulo="Total quitado"
-              valor={moedaCompacta(resumo?.kpis.valorQuitado ?? 0)}
-              icone={Check}
-              deltaLegenda={`${inteiro(resumo?.kpis.dividasQuitadas ?? 0)} lançamento(s) já pagos`}
-            />
-            <StatTile
-              rotulo="Ticket médio"
-              valor={moeda(resumo?.kpis.ticketMedio ?? 0)}
-              icone={DollarSign}
-              deltaLegenda="valor médio por lançamento"
-            />
+        <section
+          aria-label="Indicadores de salgados"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <StatTile
+            rotulo="Em aberto"
+            valor={moedaCompacta(resumo?.kpis.valorEmAberto ?? 0)}
+            icone={Calendar}
+            deltaLegenda={`${inteiro(resumo?.kpis.dividasEmAberto ?? 0)} lançamento(s) aguardando pagamento`}
+          />
+          <StatTile
+            rotulo="Total quitado"
+            valor={moedaCompacta(resumo?.kpis.valorQuitado ?? 0)}
+            icone={Check}
+            deltaLegenda={`${inteiro(resumo?.kpis.dividasQuitadas ?? 0)} lançamento(s) já pagos`}
+          />
+          <StatTile
+            rotulo="Ticket médio"
+            valor={moeda(resumo?.kpis.ticketMedio ?? 0)}
+            icone={DollarSign}
+            deltaLegenda="valor médio por lançamento"
+          />
 
-            <StatTile
-              rotulo="Disponível para saque"
-              valor={moeda(saldoInfo.available_amount)}
-              icone={Wallet}
-              deltaLegenda={
-                saldoInfo.waiting_funds_amount > 0
-                  ? `${moeda(saldoInfo.waiting_funds_amount)} ainda a liberar`
-                  : "nada pendente de liberação"
-              }
-            />
-          </section>
+          <StatTile
+            rotulo="Disponível para saque"
+            valor={moeda(saldoInfo.available_amount)}
+            icone={Wallet}
+            deltaLegenda={
+              saldoInfo.waiting_funds_amount > 0
+                ? `${moeda(saldoInfo.waiting_funds_amount)} ainda a liberar`
+                : "nada pendente de liberação"
+            }
+          />
+        </section>
 
-          <Tabs defaultSelectedKey="pendentes" className="gap-4">
-            <Tabs.ListContainer>
-              <Tabs.List className="grid w-full grid-cols-2">
-                <Tabs.Tab id="pendentes">
-                  Pendentes
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="pagas">
-                  Pagas
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              </Tabs.List>
-            </Tabs.ListContainer>
+        <Tabs defaultSelectedKey="pendentes" className="gap-4">
+          <Tabs.ListContainer>
+            <Tabs.List className="grid w-full grid-cols-2">
+              <Tabs.Tab id="pendentes">
+                Pendentes
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="pagas">
+                Pagas
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer>
 
-            <Tabs.Panel className="p-0" id="pendentes">
-              <Card>
-                <Card.Header>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <Card.Title>Dívidas Pendentes</Card.Title>
-                      <Card.Description>
-                        Colaboradores com dívidas pendentes de salgados
-                      </Card.Description>
-                    </div>
-                    <div className="flex gap-4 items-center flex-wrap">
-                      {user?.tipo === "admin" && (
-                        <Modal
-                          isOpen={isCadastrarContaOpen}
-                          onOpenChange={setIsCadastrarContaOpen}
-                        >
-                          <Button variant="secondary">
-                            <IdCardIcon className="w-4 h-4" />
-                            {jaTemContaCadastrada
-                              ? "Editar conta bancária"
-                              : "Cadastrar conta bancária"}
-                          </Button>
-                          <Modal.Backdrop>
-                            <Modal.Container>
-                              <Modal.Dialog className="max-w-[50vw] max-h-[75vh] overflow-y-auto">
-                                <Modal.CloseTrigger />
-                                <Modal.Header>
-                                  <Modal.Heading>
-                                    {jaTemContaCadastrada
-                                      ? "Editar conta bancária"
-                                      : "Cadastrar conta bancária"}
-                                  </Modal.Heading>
-                                </Modal.Header>
-                                <Modal.Body>
-                                  <p className="text-sm text-muted-foreground">
-                                    Preencha os dados abaixo para{" "}
-                                    {jaTemContaCadastrada
-                                      ? "editar sua"
-                                      : "cadastrar sua"}{" "}
-                                    conta bancária.
-                                  </p>
-                                  <div className="grid grid-cols-2 gap-4 py-4">
-                                    <div className="col-span-2 text-sm font-semibold border-b pb-2">
-                                      Dados Pessoais
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_nome">
-                                        Nome Completo
-                                      </Label>
-                                      <Input
-                                        id="colab_nome"
-                                        placeholder="Nome do Colaborador"
-                                        value={
-                                          contaBancariaData.nomeColaborador
-                                        }
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            nomeColaborador: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_email">
-                                        E-mail
-                                      </Label>
-                                      <Input
-                                        id="colab_email"
-                                        type="email"
-                                        placeholder="seu@email.com"
-                                        value={
-                                          contaBancariaData.emailColaborador
-                                        }
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            emailColaborador: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_doc">
-                                        Documento (CPF)
-                                      </Label>
-                                      <Input
-                                        id="colab_doc"
-                                        placeholder="Apenas números"
-                                        value={
-                                          contaBancariaData.documentoColaborador
-                                        }
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            documentoColaborador:
-                                              e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_nasc">
-                                        Data de Nascimento
-                                      </Label>
-                                      <Input
-                                        id="colab_nasc"
-                                        type="date"
-                                        value={contaBancariaData.aniversario}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            aniversario: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_renda">
-                                        Renda Mensal (R$ INT)
-                                      </Label>
-                                      <Input
-                                        id="colab_renda"
-                                        placeholder="000"
-                                        value={contaBancariaData.rendaMensal}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            rendaMensal: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_ocup">
-                                        Ocupação
-                                      </Label>
-                                      <Input
-                                        id="colab_ocup"
-                                        placeholder="Programador, Designer..."
-                                        value={contaBancariaData.ocupacao}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            ocupacao: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="colab_telefone">
-                                        Telefone
-                                      </Label>
-                                      <div className="flex gap-2">
-                                        <Input
-                                          id="colab_telefone_ddd"
-                                          placeholder="DDD"
-                                          className="w-16"
-                                          maxLength={2}
-                                          value={contaBancariaData.telefoneDdd}
-                                          onChange={(e) =>
-                                            setContaBancariaData({
-                                              ...contaBancariaData,
-                                              telefoneDdd: e.target.value,
-                                            })
-                                          }
-                                        />
-                                        <Input
-                                          id="colab_telefone_numero"
-                                          placeholder="999990000"
-                                          className="flex-1"
-                                          maxLength={9}
-                                          value={
-                                            contaBancariaData.telefoneNumero
-                                          }
-                                          onChange={(e) =>
-                                            setContaBancariaData({
-                                              ...contaBancariaData,
-                                              telefoneNumero: e.target.value,
-                                            })
-                                          }
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
-                                      Endereço
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_cep">
-                                        CEP {isBuscandoCep && "(buscando...)"}
-                                      </Label>
-                                      <Input
-                                        id="endereco_cep"
-                                        placeholder="00000000"
-                                        maxLength={9}
-                                        value={contaBancariaData.cep}
-                                        onChange={(e) => {
-                                          const valor = e.target.value;
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            cep: valor,
-                                          });
-                                          if (
-                                            valor.replace(/\D/g, "").length ===
-                                            8
-                                          ) {
-                                            buscarEnderecoPorCep(valor);
-                                          }
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_rua">Rua</Label>
-                                      <Input
-                                        id="endereco_rua"
-                                        placeholder="Av. General Justo"
-                                        value={contaBancariaData.rua}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            rua: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_numero">
-                                        Número
-                                      </Label>
-                                      <Input
-                                        id="endereco_numero"
-                                        placeholder="375"
-                                        value={contaBancariaData.numero}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            numero: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_complemento">
-                                        Complemento
-                                      </Label>
-                                      <Input
-                                        id="endereco_complemento"
-                                        placeholder="Bloco A (opcional)"
-                                        value={contaBancariaData.complemento}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            complemento: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_bairro">
-                                        Bairro
-                                      </Label>
-                                      <Input
-                                        id="endereco_bairro"
-                                        placeholder="Centro"
-                                        value={contaBancariaData.bairro}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            bairro: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_cidade">
-                                        Cidade
-                                      </Label>
-                                      <Input
-                                        id="endereco_cidade"
-                                        placeholder="Rio de Janeiro"
-                                        value={contaBancariaData.cidade}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            cidade: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_estado">
-                                        Estado (UF)
-                                      </Label>
-                                      <Input
-                                        id="endereco_estado"
-                                        placeholder="RJ"
-                                        maxLength={2}
-                                        value={contaBancariaData.estado}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            estado:
-                                              e.target.value.toUpperCase(),
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="endereco_referencia">
-                                        Ponto de Referência
-                                      </Label>
-                                      <Input
-                                        id="endereco_referencia"
-                                        placeholder="Ao lado da banca de jornal (opcional)"
-                                        value={
-                                          contaBancariaData.pontoReferencia
-                                        }
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            pontoReferencia: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-
-                                    <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
-                                      Dados Bancários
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="titular_nome">
-                                        Nome do Titular
-                                      </Label>
-                                      <Input
-                                        id="titular_nome"
-                                        placeholder="Nome igual colab/outro"
-                                        value={contaBancariaData.nomeTitular}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            nomeTitular: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="titular_doc">
-                                        Doc do Titular
-                                      </Label>
-                                      <Input
-                                        id="titular_doc"
-                                        placeholder="Apenas números"
-                                        value={
-                                          contaBancariaData.documentoTitular
-                                        }
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            documentoTitular: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_banco">
-                                        Banco (Código)
-                                      </Label>
-                                      <Input
-                                        id="sacar_banco"
-                                        placeholder="Ex: 341 para Itaú..."
-                                        value={contaBancariaData.banco}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            banco: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_agencia">
-                                        Agência
-                                      </Label>
-                                      <Input
-                                        id="sacar_agencia"
-                                        placeholder="0001"
-                                        value={contaBancariaData.agencia}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            agencia: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_agencia_dv">
-                                        DV Agência
-                                      </Label>
-                                      <Input
-                                        id="sacar_agencia_dv"
-                                        placeholder="X"
-                                        value={contaBancariaData.agenciaDv}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            agenciaDv: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_conta">Conta</Label>
-                                      <Input
-                                        id="sacar_conta"
-                                        placeholder="12345"
-                                        value={contaBancariaData.conta}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            conta: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_conta_dv">
-                                        DV Conta
-                                      </Label>
-                                      <Input
-                                        id="sacar_conta_dv"
-                                        placeholder="6"
-                                        value={contaBancariaData.contaDv}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            contaDv: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="sacar_tipo_conta">
-                                        Tipo da Conta
-                                      </Label>
-                                      <select
-                                        id="sacar_tipo_conta"
-                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        value={contaBancariaData.tipoConta}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            tipoConta: e.target.value,
-                                          })
-                                        }
-                                      >
-                                        <option value="checking">
-                                          Corrente
-                                        </option>
-                                        <option value="savings">
-                                          Poupança
-                                        </option>
-                                      </select>
-                                    </div>
-                                    <div className="grid gap-2 col-span-2">
-                                      <Label htmlFor="sacar_obs">
-                                        Observações
-                                      </Label>
-                                      <TextArea
-                                        id="sacar_obs"
-                                        placeholder="Detalhes adicionais do saque..."
-                                        value={contaBancariaData.observacao}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            observacao: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-                                </Modal.Body>
-                                <Modal.Footer>
-                                  <Button
-                                    onPress={handleCadastrarConta}
-                                    isDisabled={isSubmittingConta}
-                                  >
-                                    {isSubmittingConta
-                                      ? "Enviando..."
-                                      : jaTemContaCadastrada
-                                        ? "Salvar Alterações"
-                                        : "Cadastrar Conta"}
-                                  </Button>
-                                </Modal.Footer>
-                              </Modal.Dialog>
-                            </Modal.Container>
-                          </Modal.Backdrop>
-                        </Modal>
-                      )}
-
+          <Tabs.Panel className="p-0" id="pendentes">
+            <Card>
+              <Card.Header>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <Card.Title>Dívidas Pendentes</Card.Title>
+                    <Card.Description>
+                      Colaboradores com dívidas pendentes de salgados
+                    </Card.Description>
+                  </div>
+                  <div className="flex gap-4 items-center flex-wrap">
+                    {user?.tipo === "admin" && (
                       <Modal
-                        isOpen={isTransferOpen}
-                        onOpenChange={setIsTransferOpen}
+                        isOpen={isCadastrarContaOpen}
+                        onOpenChange={setIsCadastrarContaOpen}
                       >
                         <Button variant="secondary">
-                          <HandCoins className="w-4 h-4" />
-                          Sacar dinheiro
+                          <IdCardIcon className="w-4 h-4" />
+                          {jaTemContaCadastrada
+                            ? "Editar conta bancária"
+                            : "Cadastrar conta bancária"}
                         </Button>
                         <Modal.Backdrop>
                           <Modal.Container>
-                            <Modal.Dialog className="sm:max-w-md">
+                            <Modal.Dialog className="max-w-[50vw] max-h-[75vh] overflow-y-auto">
                               <Modal.CloseTrigger />
                               <Modal.Header>
-                                <Modal.Heading>Sacar Dinheiro</Modal.Heading>
+                                <Modal.Heading>
+                                  {jaTemContaCadastrada
+                                    ? "Editar conta bancária"
+                                    : "Cadastrar conta bancária"}
+                                </Modal.Heading>
                               </Modal.Header>
                               <Modal.Body>
                                 <p className="text-sm text-muted-foreground">
-                                  Solicite uma transferência de valores via
-                                  Pagar.me.
+                                  Preencha os dados abaixo para{" "}
+                                  {jaTemContaCadastrada
+                                    ? "editar sua"
+                                    : "cadastrar sua"}{" "}
+                                  conta bancária.
                                 </p>
-                                <p className="text-sm">
-                                  Saldo disponível para saque:{" "}
-                                  <strong>
-                                    {saldoInfo.available_amount.toLocaleString(
-                                      "pt-BR",
-                                      { style: "currency", currency: "BRL" },
-                                    )}
-                                  </strong>
-                                </p>
-                                <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-2 gap-4 py-4">
+                                  <div className="col-span-2 text-sm font-semibold border-b pb-2">
+                                    Dados Pessoais
+                                  </div>
+
                                   <div className="grid gap-2">
-                                    <Label htmlFor="transfer_amount">
-                                      Valor a sacar (R$)
+                                    <Label htmlFor="colab_nome">
+                                      Nome Completo
                                     </Label>
                                     <Input
-                                      id="transfer_amount"
-                                      type="number"
-                                      max={saldoInfo.available_amount}
-                                      placeholder="Ex: 80.50 para R$ 80,50"
-                                      value={transferData.amount}
+                                      id="colab_nome"
+                                      placeholder="Nome do Colaborador"
+                                      value={contaBancariaData.nomeColaborador}
                                       onChange={(e) =>
-                                        setTransferData({
-                                          ...transferData,
-                                          amount: e.target.value,
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          nomeColaborador: e.target.value,
                                         })
                                       }
                                     />
                                   </div>
                                   <div className="grid gap-2">
-                                    <Label htmlFor="transfer_desc">
-                                      Observação
+                                    <Label htmlFor="colab_email">E-mail</Label>
+                                    <Input
+                                      id="colab_email"
+                                      type="email"
+                                      placeholder="seu@email.com"
+                                      value={contaBancariaData.emailColaborador}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          emailColaborador: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="colab_doc">
+                                      Documento (CPF)
+                                    </Label>
+                                    <Input
+                                      id="colab_doc"
+                                      placeholder="Apenas números"
+                                      value={
+                                        contaBancariaData.documentoColaborador
+                                      }
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          documentoColaborador: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="colab_nasc">
+                                      Data de Nascimento
+                                    </Label>
+                                    <Input
+                                      id="colab_nasc"
+                                      type="date"
+                                      value={contaBancariaData.aniversario}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          aniversario: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="colab_renda">
+                                      Renda Mensal (R$ INT)
+                                    </Label>
+                                    <Input
+                                      id="colab_renda"
+                                      placeholder="000"
+                                      value={contaBancariaData.rendaMensal}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          rendaMensal: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="colab_ocup">Ocupação</Label>
+                                    <Input
+                                      id="colab_ocup"
+                                      placeholder="Programador, Designer..."
+                                      value={contaBancariaData.ocupacao}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          ocupacao: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="colab_telefone">
+                                      Telefone
+                                    </Label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        id="colab_telefone_ddd"
+                                        placeholder="DDD"
+                                        className="w-16"
+                                        maxLength={2}
+                                        value={contaBancariaData.telefoneDdd}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            telefoneDdd: e.target.value,
+                                          })
+                                        }
+                                      />
+                                      <Input
+                                        id="colab_telefone_numero"
+                                        placeholder="999990000"
+                                        className="flex-1"
+                                        maxLength={9}
+                                        value={contaBancariaData.telefoneNumero}
+                                        onChange={(e) =>
+                                          setContaBancariaData({
+                                            ...contaBancariaData,
+                                            telefoneNumero: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
+                                    Endereço
+                                  </div>
+
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_cep">
+                                      CEP {isBuscandoCep && "(buscando...)"}
+                                    </Label>
+                                    <Input
+                                      id="endereco_cep"
+                                      placeholder="00000000"
+                                      maxLength={9}
+                                      value={contaBancariaData.cep}
+                                      onChange={(e) => {
+                                        const valor = e.target.value;
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          cep: valor,
+                                        });
+                                        if (
+                                          valor.replace(/\D/g, "").length === 8
+                                        ) {
+                                          buscarEnderecoPorCep(valor);
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_rua">Rua</Label>
+                                    <Input
+                                      id="endereco_rua"
+                                      placeholder="Av. General Justo"
+                                      value={contaBancariaData.rua}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          rua: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_numero">
+                                      Número
+                                    </Label>
+                                    <Input
+                                      id="endereco_numero"
+                                      placeholder="375"
+                                      value={contaBancariaData.numero}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          numero: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_complemento">
+                                      Complemento
+                                    </Label>
+                                    <Input
+                                      id="endereco_complemento"
+                                      placeholder="Bloco A (opcional)"
+                                      value={contaBancariaData.complemento}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          complemento: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_bairro">
+                                      Bairro
+                                    </Label>
+                                    <Input
+                                      id="endereco_bairro"
+                                      placeholder="Centro"
+                                      value={contaBancariaData.bairro}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          bairro: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_cidade">
+                                      Cidade
+                                    </Label>
+                                    <Input
+                                      id="endereco_cidade"
+                                      placeholder="Rio de Janeiro"
+                                      value={contaBancariaData.cidade}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          cidade: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_estado">
+                                      Estado (UF)
+                                    </Label>
+                                    <Input
+                                      id="endereco_estado"
+                                      placeholder="RJ"
+                                      maxLength={2}
+                                      value={contaBancariaData.estado}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          estado: e.target.value.toUpperCase(),
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="endereco_referencia">
+                                      Ponto de Referência
+                                    </Label>
+                                    <Input
+                                      id="endereco_referencia"
+                                      placeholder="Ao lado da banca de jornal (opcional)"
+                                      value={contaBancariaData.pontoReferencia}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          pontoReferencia: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+
+                                  <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
+                                    Dados Bancários
+                                  </div>
+
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="titular_nome">
+                                      Nome do Titular
+                                    </Label>
+                                    <Input
+                                      id="titular_nome"
+                                      placeholder="Nome igual colab/outro"
+                                      value={contaBancariaData.nomeTitular}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          nomeTitular: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="titular_doc">
+                                      Doc do Titular
+                                    </Label>
+                                    <Input
+                                      id="titular_doc"
+                                      placeholder="Apenas números"
+                                      value={contaBancariaData.documentoTitular}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          documentoTitular: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_banco">
+                                      Banco (Código)
+                                    </Label>
+                                    <Input
+                                      id="sacar_banco"
+                                      placeholder="Ex: 341 para Itaú..."
+                                      value={contaBancariaData.banco}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          banco: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_agencia">
+                                      Agência
+                                    </Label>
+                                    <Input
+                                      id="sacar_agencia"
+                                      placeholder="0001"
+                                      value={contaBancariaData.agencia}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          agencia: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_agencia_dv">
+                                      DV Agência
+                                    </Label>
+                                    <Input
+                                      id="sacar_agencia_dv"
+                                      placeholder="X"
+                                      value={contaBancariaData.agenciaDv}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          agenciaDv: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_conta">Conta</Label>
+                                    <Input
+                                      id="sacar_conta"
+                                      placeholder="12345"
+                                      value={contaBancariaData.conta}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          conta: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_conta_dv">
+                                      DV Conta
+                                    </Label>
+                                    <Input
+                                      id="sacar_conta_dv"
+                                      placeholder="6"
+                                      value={contaBancariaData.contaDv}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          contaDv: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="sacar_tipo_conta">
+                                      Tipo da Conta
+                                    </Label>
+                                    <select
+                                      id="sacar_tipo_conta"
+                                      className="flex h-10 w-full items-center justify-between rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                      value={contaBancariaData.tipoConta}
+                                      onChange={(e) =>
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          tipoConta: e.target.value,
+                                        })
+                                      }
+                                    >
+                                      <option value="checking">Corrente</option>
+                                      <option value="savings">Poupança</option>
+                                    </select>
+                                  </div>
+                                  <div className="grid gap-2 col-span-2">
+                                    <Label htmlFor="sacar_obs">
+                                      Observações
                                     </Label>
                                     <TextArea
-                                      id="transfer_desc"
-                                      placeholder="Ex: Salgado de novembro"
-                                      value={transferData.description}
+                                      id="sacar_obs"
+                                      placeholder="Detalhes adicionais do saque..."
+                                      value={contaBancariaData.observacao}
                                       onChange={(e) =>
-                                        setTransferData({
-                                          ...transferData,
-                                          description: e.target.value,
+                                        setContaBancariaData({
+                                          ...contaBancariaData,
+                                          observacao: e.target.value,
                                         })
                                       }
                                     />
@@ -1326,205 +1199,215 @@ export default function SalgadosPage() {
                               </Modal.Body>
                               <Modal.Footer>
                                 <Button
-                                  onPress={handleTransferirDinheiro}
-                                  isDisabled={
-                                    isSubmittingTransfer ||
-                                    saldoInfo.available_amount <= 0
-                                  }
+                                  onPress={handleCadastrarConta}
+                                  isDisabled={isSubmittingConta}
                                 >
-                                  {isSubmittingTransfer
+                                  {isSubmittingConta
                                     ? "Enviando..."
-                                    : "Confirmar Transferência"}
+                                    : jaTemContaCadastrada
+                                      ? "Salvar Alterações"
+                                      : "Cadastrar Conta"}
                                 </Button>
                               </Modal.Footer>
                             </Modal.Dialog>
                           </Modal.Container>
                         </Modal.Backdrop>
                       </Modal>
+                    )}
 
-                      <Modal
-                        isOpen={isAddDialogOpen}
-                        onOpenChange={setIsAddDialogOpen}
-                      >
-                        <Button>
-                          <Plus className="w-4 h-4" />
-                          Adicionar Dívida
-                        </Button>
-                        <Modal.Backdrop>
-                          <Modal.Container>
-                            <Modal.Dialog className="sm:max-w-md">
-                              <Modal.CloseTrigger />
-                              <Modal.Header>
-                                <Modal.Heading>
-                                  Nova Dívida de Salgado
-                                </Modal.Heading>
-                              </Modal.Header>
-                              <Modal.Body>
-                                <p className="text-sm text-muted-foreground">
-                                  Adicione uma nova dívida de salgado para um
-                                  colaborador.
-                                </p>
-                                <div className="grid gap-4 py-4">
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colaborador">
-                                      Colaborador
-                                    </Label>
-                                    <Select
-                                      value={newDivida.colaborador_id}
-                                      onChange={(value) =>
-                                        setNewDivida({
-                                          ...newDivida,
-                                          colaborador_id: value as string,
-                                        })
-                                      }
-                                      placeholder="Selecione um colaborador"
-                                    >
-                                      <Select.Trigger>
-                                        <Select.Value />
-                                        <Select.Indicator />
-                                      </Select.Trigger>
-                                      <Select.Popover>
-                                        <ListBox>
-                                          {colaboradores.map((colaborador) => (
-                                            <ListBox.Item
-                                              key={colaborador.id}
-                                              id={colaborador.id.toString()}
-                                              textValue={colaborador.nome}
-                                            >
-                                              {colaborador.nome}
-                                            </ListBox.Item>
-                                          ))}
-                                        </ListBox>
-                                      </Select.Popover>
-                                    </Select>
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="item">
-                                      Tipo de Salgado
-                                    </Label>
-                                    <Select
-                                      value={newDivida.item}
-                                      onChange={(value) =>
-                                        setNewDivida({
-                                          ...newDivida,
-                                          item: value as string,
-                                          valor: "",
-                                        })
-                                      }
-                                      placeholder="Selecione o tipo"
-                                    >
-                                      <Select.Trigger>
-                                        <Select.Value />
-                                        <Select.Indicator />
-                                      </Select.Trigger>
-                                      <Select.Popover>
-                                        <ListBox>
-                                          <ListBox.Item
-                                            id="salgado"
-                                            textValue="Salgado Avulso"
-                                          >
-                                            Salgado Avulso
-                                          </ListBox.Item>
-                                          <ListBox.Item
-                                            id="1 cento"
-                                            textValue="1 Cento de Salgados"
-                                          >
-                                            1 Cento de Salgados
-                                          </ListBox.Item>
-                                          <ListBox.Item
-                                            id="2 centos"
-                                            textValue="2 Centos de Salgados"
-                                          >
-                                            2 Centos de Salgados
-                                          </ListBox.Item>
-                                        </ListBox>
-                                      </Select.Popover>
-                                    </Select>
-                                  </div>
-                                  {(newDivida.item === "1 cento" ||
-                                    newDivida.item === "2 centos") && (
-                                    <>
-                                      <div className="grid gap-2">
-                                        <Label htmlFor="valorPorCento">
-                                          Valor por Cento (R$)
-                                        </Label>
-                                        <Input
-                                          id="valorPorCento"
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={newDivida.valorPorCento}
-                                          onChange={(e) => {
-                                            const valorAjustado =
-                                              e.target.value.replace(
-                                                /[^0-9,]/g,
-                                                "",
-                                              );
-                                            setNewDivida({
-                                              ...newDivida,
-                                              valorPorCento: valorAjustado,
-                                            });
-                                          }}
-                                          placeholder="0,00"
-                                        />
-                                      </div>
-                                      <div className="grid gap-2">
-                                        <Label htmlFor="quantidadeCentos">
-                                          Quantidade de Centos
-                                        </Label>
-                                        <Select
-                                          value={newDivida.quantidadeCentos}
-                                          onChange={(value) =>
-                                            setNewDivida({
-                                              ...newDivida,
-                                              quantidadeCentos: value as string,
-                                            })
-                                          }
-                                        >
-                                          <Select.Trigger>
-                                            <Select.Value />
-                                            <Select.Indicator />
-                                          </Select.Trigger>
-                                          <Select.Popover>
-                                            <ListBox>
-                                              <ListBox.Item
-                                                id="1"
-                                                textValue="1 Cento"
-                                              >
-                                                1 Cento
-                                              </ListBox.Item>
-                                              <ListBox.Item
-                                                id="2"
-                                                textValue="2 Centos"
-                                              >
-                                                2 Centos
-                                              </ListBox.Item>
-                                            </ListBox>
-                                          </Select.Popover>
-                                        </Select>
-                                      </div>
-                                      <div className="grid gap-2">
-                                        <Label>Valor Total</Label>
-                                        <div className="p-2 bg-gray-100 rounded border text-lg font-semibold">
-                                          {newDivida.valor
-                                            ? Number(
-                                                newDivida.valor,
-                                              ).toLocaleString("pt-BR", {
-                                                style: "currency",
-                                                currency: "BRL",
-                                              })
-                                            : "R$ 0,00"}
-                                        </div>
-                                      </div>
-                                    </>
+                    <Modal
+                      isOpen={isTransferOpen}
+                      onOpenChange={setIsTransferOpen}
+                    >
+                      <Button variant="secondary">
+                        <HandCoins className="w-4 h-4" />
+                        Sacar dinheiro
+                      </Button>
+                      <Modal.Backdrop>
+                        <Modal.Container>
+                          <Modal.Dialog className="sm:max-w-md">
+                            <Modal.CloseTrigger />
+                            <Modal.Header>
+                              <Modal.Heading>Sacar Dinheiro</Modal.Heading>
+                            </Modal.Header>
+                            <Modal.Body>
+                              <p className="text-sm text-muted-foreground">
+                                Solicite uma transferência de valores via
+                                Pagar.me.
+                              </p>
+                              <p className="text-sm">
+                                Saldo disponível para saque:{" "}
+                                <strong>
+                                  {saldoInfo.available_amount.toLocaleString(
+                                    "pt-BR",
+                                    { style: "currency", currency: "BRL" },
                                   )}
-                                  {newDivida.item === "salgado" && (
+                                </strong>
+                              </p>
+                              <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                  <Label htmlFor="transfer_amount">
+                                    Valor a sacar (R$)
+                                  </Label>
+                                  <Input
+                                    id="transfer_amount"
+                                    type="number"
+                                    max={saldoInfo.available_amount}
+                                    placeholder="Ex: 80.50 para R$ 80,50"
+                                    value={transferData.amount}
+                                    onChange={(e) =>
+                                      setTransferData({
+                                        ...transferData,
+                                        amount: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="transfer_desc">
+                                    Observação
+                                  </Label>
+                                  <TextArea
+                                    id="transfer_desc"
+                                    placeholder="Ex: Salgado de novembro"
+                                    value={transferData.description}
+                                    onChange={(e) =>
+                                      setTransferData({
+                                        ...transferData,
+                                        description: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </Modal.Body>
+                            <Modal.Footer>
+                              <Button
+                                onPress={handleTransferirDinheiro}
+                                isDisabled={
+                                  isSubmittingTransfer ||
+                                  saldoInfo.available_amount <= 0
+                                }
+                              >
+                                {isSubmittingTransfer
+                                  ? "Enviando..."
+                                  : "Confirmar Transferência"}
+                              </Button>
+                            </Modal.Footer>
+                          </Modal.Dialog>
+                        </Modal.Container>
+                      </Modal.Backdrop>
+                    </Modal>
+
+                    <Modal
+                      isOpen={isAddDialogOpen}
+                      onOpenChange={setIsAddDialogOpen}
+                    >
+                      <Button>
+                        <Plus className="w-4 h-4" />
+                        Adicionar Dívida
+                      </Button>
+                      <Modal.Backdrop>
+                        <Modal.Container>
+                          <Modal.Dialog className="sm:max-w-md">
+                            <Modal.CloseTrigger />
+                            <Modal.Header>
+                              <Modal.Heading>
+                                Nova Dívida de Salgado
+                              </Modal.Heading>
+                            </Modal.Header>
+                            <Modal.Body>
+                              <p className="text-sm text-muted-foreground">
+                                Adicione uma nova dívida de salgado para um
+                                colaborador.
+                              </p>
+                              <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                  <Label htmlFor="colaborador">
+                                    Colaborador
+                                  </Label>
+                                  <Select
+                                    value={newDivida.colaborador_id}
+                                    onChange={(value) =>
+                                      setNewDivida({
+                                        ...newDivida,
+                                        colaborador_id: value as string,
+                                      })
+                                    }
+                                    placeholder="Selecione um colaborador"
+                                  >
+                                    <Select.Trigger>
+                                      <Select.Value />
+                                      <Select.Indicator />
+                                    </Select.Trigger>
+                                    <Select.Popover>
+                                      <ListBox>
+                                        {colaboradores.map((colaborador) => (
+                                          <ListBox.Item
+                                            key={colaborador.id}
+                                            id={colaborador.id.toString()}
+                                            textValue={colaborador.nome}
+                                          >
+                                            {colaborador.nome}
+                                          </ListBox.Item>
+                                        ))}
+                                      </ListBox>
+                                    </Select.Popover>
+                                  </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="item">Tipo de Salgado</Label>
+                                  <Select
+                                    value={newDivida.item}
+                                    onChange={(value) =>
+                                      setNewDivida({
+                                        ...newDivida,
+                                        item: value as string,
+                                        valor: "",
+                                      })
+                                    }
+                                    placeholder="Selecione o tipo"
+                                  >
+                                    <Select.Trigger>
+                                      <Select.Value />
+                                      <Select.Indicator />
+                                    </Select.Trigger>
+                                    <Select.Popover>
+                                      <ListBox>
+                                        <ListBox.Item
+                                          id="salgado"
+                                          textValue="Salgado Avulso"
+                                        >
+                                          Salgado Avulso
+                                        </ListBox.Item>
+                                        <ListBox.Item
+                                          id="1 cento"
+                                          textValue="1 Cento de Salgados"
+                                        >
+                                          1 Cento de Salgados
+                                        </ListBox.Item>
+                                        <ListBox.Item
+                                          id="2 centos"
+                                          textValue="2 Centos de Salgados"
+                                        >
+                                          2 Centos de Salgados
+                                        </ListBox.Item>
+                                      </ListBox>
+                                    </Select.Popover>
+                                  </Select>
+                                </div>
+                                {(newDivida.item === "1 cento" ||
+                                  newDivida.item === "2 centos") && (
+                                  <>
                                     <div className="grid gap-2">
-                                      <Label htmlFor="valor">Valor (R$)</Label>
+                                      <Label htmlFor="valorPorCento">
+                                        Valor por Cento (R$)
+                                      </Label>
                                       <Input
-                                        id="valor"
+                                        id="valorPorCento"
                                         type="text"
                                         inputMode="decimal"
-                                        value={newDivida.valor}
+                                        value={newDivida.valorPorCento}
                                         onChange={(e) => {
                                           const valorAjustado =
                                             e.target.value.replace(
@@ -1533,107 +1416,178 @@ export default function SalgadosPage() {
                                             );
                                           setNewDivida({
                                             ...newDivida,
-                                            valor: valorAjustado,
+                                            valorPorCento: valorAjustado,
                                           });
                                         }}
                                         placeholder="0,00"
                                       />
                                     </div>
-                                  )}
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="quantidadeCentos">
+                                        Quantidade de Centos
+                                      </Label>
+                                      <Select
+                                        value={newDivida.quantidadeCentos}
+                                        onChange={(value) =>
+                                          setNewDivida({
+                                            ...newDivida,
+                                            quantidadeCentos: value as string,
+                                          })
+                                        }
+                                      >
+                                        <Select.Trigger>
+                                          <Select.Value />
+                                          <Select.Indicator />
+                                        </Select.Trigger>
+                                        <Select.Popover>
+                                          <ListBox>
+                                            <ListBox.Item
+                                              id="1"
+                                              textValue="1 Cento"
+                                            >
+                                              1 Cento
+                                            </ListBox.Item>
+                                            <ListBox.Item
+                                              id="2"
+                                              textValue="2 Centos"
+                                            >
+                                              2 Centos
+                                            </ListBox.Item>
+                                          </ListBox>
+                                        </Select.Popover>
+                                      </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label>Valor Total</Label>
+                                      <div className="p-2 bg-gray-100 rounded border text-lg font-semibold">
+                                        {newDivida.valor
+                                          ? Number(
+                                              newDivida.valor,
+                                            ).toLocaleString("pt-BR", {
+                                              style: "currency",
+                                              currency: "BRL",
+                                            })
+                                          : "R$ 0,00"}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                                {newDivida.item === "salgado" && (
                                   <div className="grid gap-2">
-                                    <Label htmlFor="motivo">
-                                      Motivo da Dívida
-                                    </Label>
-                                    <TextArea
-                                      id="motivo"
-                                      value={newDivida.motivo}
-                                      onChange={(e) =>
+                                    <Label htmlFor="valor">Valor (R$)</Label>
+                                    <Input
+                                      id="valor"
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={newDivida.valor}
+                                      onChange={(e) => {
+                                        const valorAjustado =
+                                          e.target.value.replace(
+                                            /[^0-9,]/g,
+                                            "",
+                                          );
                                         setNewDivida({
                                           ...newDivida,
-                                          motivo: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
+                                          valor: valorAjustado,
+                                        });
+                                      }}
+                                      placeholder="0,00"
                                     />
                                   </div>
+                                )}
+                                <div className="grid gap-2">
+                                  <Label htmlFor="motivo">
+                                    Motivo da Dívida
+                                  </Label>
+                                  <TextArea
+                                    id="motivo"
+                                    value={newDivida.motivo}
+                                    onChange={(e) =>
+                                      setNewDivida({
+                                        ...newDivida,
+                                        motivo: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
+                                  />
                                 </div>
-                              </Modal.Body>
-                              <Modal.Footer>
-                                <Button onPress={adicionarDivida}>
-                                  Adicionar Dívida
-                                </Button>
-                              </Modal.Footer>
-                            </Modal.Dialog>
-                          </Modal.Container>
-                        </Modal.Backdrop>
-                      </Modal>
-                    </div>
+                              </div>
+                            </Modal.Body>
+                            <Modal.Footer>
+                              <Button onPress={adicionarDivida}>
+                                Adicionar Dívida
+                              </Button>
+                            </Modal.Footer>
+                          </Modal.Dialog>
+                        </Modal.Container>
+                      </Modal.Backdrop>
+                    </Modal>
                   </div>
-                </Card.Header>
-                <Card.Content>
-                  <DataTable
-                    colunas={colunasPendentes}
-                    dados={dividas}
-                    rotulo="Dívidas pendentes"
-                    vazio="Nenhuma dívida encontrada"
-                    total={totalPendentes}
-                    pagina={currentPagePendentes}
-                    totalPaginas={totalPagesPendentes}
-                    onMudarPagina={setCurrentPagePendentes}
-                    itensPorPagina={itemsPerPage}
-                    onMudarItensPorPagina={(itens) => {
-                      setItemsPerPage(itens);
-                      reiniciarPaginas();
-                    }}
-                    busca={searchTerm}
-                    onMudarBusca={(valor) => {
-                      setSearchTerm(valor);
-                      reiniciarPaginas();
-                    }}
-                    placeholderBusca="Pesquisar por colaborador ou item..."
-                    filtros={filtroMotivo}
-                  />
-                </Card.Content>
-              </Card>
-            </Tabs.Panel>
+                </div>
+              </Card.Header>
+              <Card.Content>
+                <DataTable
+                  colunas={colunasPendentes}
+                  dados={dividas}
+                  rotulo="Dívidas pendentes"
+                  vazio="Nenhuma dívida encontrada"
+                  total={totalPendentes}
+                  pagina={currentPagePendentes}
+                  totalPaginas={totalPagesPendentes}
+                  onMudarPagina={setCurrentPagePendentes}
+                  itensPorPagina={itemsPerPage}
+                  onMudarItensPorPagina={(itens) => {
+                    setItemsPerPage(itens);
+                    reiniciarPaginas();
+                  }}
+                  busca={searchTerm}
+                  onMudarBusca={(valor) => {
+                    setSearchTerm(valor);
+                    reiniciarPaginas();
+                  }}
+                  placeholderBusca="Pesquisar por colaborador ou item..."
+                  filtros={filtroMotivo}
+                />
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
 
-            <Tabs.Panel className="p-0" id="pagas">
-              <Card>
-                <Card.Header>
-                  <Card.Title>Dívidas Pagas</Card.Title>
-                  <Card.Description>
-                    Histórico de salgados que já foram pagos
-                  </Card.Description>
-                </Card.Header>
-                <Card.Content>
-                  <DataTable
-                    colunas={colunasPagas}
-                    dados={salgadosPagos}
-                    rotulo="Dívidas pagas"
-                    vazio="Nenhum histórico encontrado"
-                    total={totalPagas}
-                    pagina={currentPagePagas}
-                    totalPaginas={totalPagesPagas}
-                    onMudarPagina={setCurrentPagePagas}
-                    itensPorPagina={itemsPerPage}
-                    onMudarItensPorPagina={(itens) => {
-                      setItemsPerPage(itens);
-                      reiniciarPaginas();
-                    }}
-                    busca={searchTerm}
-                    onMudarBusca={(valor) => {
-                      setSearchTerm(valor);
-                      reiniciarPaginas();
-                    }}
-                    placeholderBusca="Pesquisar por colaborador ou item..."
-                    filtros={filtroMotivo}
-                  />
-                </Card.Content>
-              </Card>
-            </Tabs.Panel>
-          </Tabs>
-        </div>
-      </div>
+          <Tabs.Panel className="p-0" id="pagas">
+            <Card>
+              <Card.Header>
+                <Card.Title>Dívidas Pagas</Card.Title>
+                <Card.Description>
+                  Histórico de salgados que já foram pagos
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <DataTable
+                  colunas={colunasPagas}
+                  dados={salgadosPagos}
+                  rotulo="Dívidas pagas"
+                  vazio="Nenhum histórico encontrado"
+                  total={totalPagas}
+                  pagina={currentPagePagas}
+                  totalPaginas={totalPagesPagas}
+                  onMudarPagina={setCurrentPagePagas}
+                  itensPorPagina={itemsPerPage}
+                  onMudarItensPorPagina={(itens) => {
+                    setItemsPerPage(itens);
+                    reiniciarPaginas();
+                  }}
+                  busca={searchTerm}
+                  onMudarBusca={(valor) => {
+                    setSearchTerm(valor);
+                    reiniciarPaginas();
+                  }}
+                  placeholderBusca="Pesquisar por colaborador ou item..."
+                  filtros={filtroMotivo}
+                />
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
+        </Tabs>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }

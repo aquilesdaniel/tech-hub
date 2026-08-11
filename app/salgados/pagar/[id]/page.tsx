@@ -1,13 +1,12 @@
 "use client";
 
-import { Navbar } from "@/components/navbar";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
 import confetti from "canvas-confetti";
 import {
-  ArrowLeft,
   Check,
   Copy,
   QrCode,
@@ -16,7 +15,6 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
@@ -104,9 +102,7 @@ export default function PaymentPage({
   const [areaInput, setAreaInput] = useState("");
   const [numeroInput, setNumeroInput] = useState("");
 
-  // Polling para checar status do pagamento a cada 10 segundos
   useEffect(() => {
-    // Se não há pagamento gerado, ou se ele já não for "pending" (já pago/cancelado), ou a dívida já estiver paga no BD, não prossegue
     if (
       !pagamentoGerado ||
       pagamentoGerado.status !== "pending" ||
@@ -122,7 +118,7 @@ export default function PaymentPage({
           if (data && data.status) {
             if (data.status !== pagamentoGerado.status) {
               setPagamentoGerado(data);
-              // Se o status mudou pra não ser "pending", ele sumirá. Se foi pago, lança os confetes.
+
               if (data.status === "paid") {
                 toast("Atualização de Pagamento!", {
                   description: "O pagamento foi efetuado com sucesso!",
@@ -138,7 +134,6 @@ export default function PaymentPage({
                   origin: { y: 0.6, x: 0.8 },
                 });
 
-                // Força a atualização do estado da divida
                 setDivida((prev) => (prev ? { ...prev, pago: true } : prev));
                 router.refresh();
               } else if (data.status === "canceled") {
@@ -152,15 +147,13 @@ export default function PaymentPage({
       }
     };
 
-    const interval = setInterval(checarStatus, 10000); // 10s
+    const interval = setInterval(checarStatus, 10000);
     return () => clearInterval(interval);
   }, [pagamentoGerado, id, router, divida?.pago]);
 
   useEffect(() => {
     if (!pagamentoGerado) return;
 
-    // Busca a referência de data: preferencialmente expires_at ou a data de última atualização (que renova o timer)
-    // somando as 24h caso não encontre o próprio expira.
     let expiraEm = 0;
     if (pagamentoGerado.expires_at) {
       expiraEm = new Date(pagamentoGerado.expires_at).getTime();
@@ -179,8 +172,6 @@ export default function PaymentPage({
         return;
       }
 
-      // Calcula as horas considerando tudo que resta, sem pegar o módulo de um dia.
-      // Isso conserta bugs de relógio que só olham até 24h e se quebram por fuso de servidor.
       const horas = Math.floor(diferenca / (1000 * 60 * 60));
       const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
       const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
@@ -190,7 +181,7 @@ export default function PaymentPage({
       );
     };
 
-    atualizarTemporizador(); // Chamada inicial
+    atualizarTemporizador();
     const intervalo = setInterval(atualizarTemporizador, 1000);
 
     return () => clearInterval(intervalo);
@@ -199,7 +190,6 @@ export default function PaymentPage({
   useEffect(() => {
     const carregarDados = async () => {
       try {
-        // 1. Busca a dívida
         const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
@@ -207,13 +197,12 @@ export default function PaymentPage({
         const dividaData = await responseDivida.json();
         setDivida(dividaData);
 
-        // 2. Busca pagamento existente (se houver)
         const responsePagamento = await fetch(
           `/api/salgados/pagamentos?divida_id=${id}`,
         );
         if (responsePagamento.ok) {
           const pagExistente = await responsePagamento.json();
-          setPagamentoGerado(pagExistente); // null se não tem, objeto se tem
+          setPagamentoGerado(pagExistente);
 
           if (pagExistente && pagExistente.colaborador_id) {
             const responseGerador = await fetch(
@@ -226,10 +215,8 @@ export default function PaymentPage({
           }
         }
 
-        // 3. Tenta buscar o ID do usuário direto do LocalStorage (garante o funcionamento no F5)
-        let userIdLocal = user?.id; // Tenta o contexto primeiro
+        let userIdLocal = user?.id;
         if (!userIdLocal) {
-          // Se o contexto ainda não tiver carregado (caso comum no F5), puxa do storage
           const savedUser = localStorage.getItem("user");
           if (savedUser) {
             const parsedUser = JSON.parse(savedUser);
@@ -237,7 +224,6 @@ export default function PaymentPage({
           }
         }
 
-        // 4. Se encontrou um ID de usuário, busca os dados completos no banco (Tabela Colaboradores)
         if (userIdLocal) {
           const responseColab = await fetch(
             `/api/colaboradores/${userIdLocal}`,
@@ -261,44 +247,10 @@ export default function PaymentPage({
     carregarDados();
   }, [id, router, user?.id]);
 
-  // const handleConfirmarPagamento = async () => {
-  //   if (!divida) return;
-  //   setIsProcessing(true);
-
-  //   try {
-  //     const response = await fetch(`/api/salgados/dividas/${divida.id}`, {
-  //       method: "PATCH",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ pago: true }),
-  //     });
-
-  //     if (response.ok) {
-  //       toast({
-  //         title: "Pagamento confirmado!",
-  //         description: "O salgado foi marcado como pago com sucesso.",
-  //       });
-  //       router.push("/salgados");
-  //     } else {
-  //       throw new Error("Falha na atualização");
-  //     }
-  //   } catch (error) {
-  //     console.error("Erro ao marcar como pago:", error);
-  //     toast({
-  //       title: "Erro",
-  //       description: "Não foi possível confirmar o pagamento.",
-  //       variant: "destructive",
-  //     });
-  //     setIsProcessing(false);
-  //   }
-  // };
-
   const handleGerarPagamento = async () => {
     if (!divida || !user) return;
     setIsProcessing(true);
 
-    // =======================================================================
-    // PASSO A: SE OS DADOS NÃO ESTIVEREM COMPLETOS, FAZ O PATCH PRIMEIRO!
-    // =======================================================================
     if (colaboradorCompleto && !possuiDadosCompletos) {
       const soDigitos = (str: string) => str.replace(/\D/g, "");
 
@@ -343,7 +295,6 @@ export default function PaymentPage({
         return;
       }
 
-      // Validação passou, manda pro Frontend!
       try {
         const responsePatch = await fetch(`/api/colaboradores/${user.id}`, {
           method: "PATCH",
@@ -356,33 +307,29 @@ export default function PaymentPage({
           }),
         });
 
-        if (!responsePatch.ok) throw new Error("Erro no Update de Colaborador");
+        if (!responsePatch.ok) {
+          throw new Error("Erro no Update de Colaborador");
+        }
 
         const colaboradorAtualizado = await responsePatch.json();
-        setColaboradorCompleto(colaboradorAtualizado); // Atualiza os dados locais
-
-        // Note: NÃO damos toast de sucesso aqui pra não entupir a tela de alertas chatos pro usuário,
-        // ele vai direto gerar a linha de baixo com sucesso sem nem perceber que fez duas ações.
+        setColaboradorCompleto(colaboradorAtualizado);
       } catch (error) {
         toast.danger("Erro de Cadastro", {
           description:
             "Não conseguimos salvar seus dados complementares. Tente novamente.",
         });
         setIsProcessing(false);
-        return; // Aborta geração do QR Code se salvamento parou na API!
+        return;
       }
     }
 
-    // =======================================================================
-    // PASSO B: CRIA A REQUISIÇÃO DO QR CODE
-    // =======================================================================
     try {
       const response = await fetch(`/api/salgados/pagamentos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           divida_id: divida.id,
-          colaborador_id: user.id, // Utilizando o contexto de usuário logado
+          colaborador_id: user.id,
         }),
       });
 
@@ -413,7 +360,6 @@ export default function PaymentPage({
   };
 
   const handleSalvarDados = async () => {
-    // Remove qualquer caractere que não seja número
     const soDigitos = (str: string) => str.replace(/\D/g, "");
 
     const cpfLimpo = soDigitos(documentoInput);
@@ -421,7 +367,6 @@ export default function PaymentPage({
     const dddLimpo = soDigitos(areaInput);
     const numeroLimpo = soDigitos(numeroInput);
 
-    // 1. Validação de preenchimento
     if (!cpfLimpo || !ddiLimpo || !dddLimpo || !numeroLimpo) {
       toast.danger("Atenção", {
         description: "Preencha todos os campos obrigatórios.",
@@ -429,7 +374,6 @@ export default function PaymentPage({
       return;
     }
 
-    // 2. Validação Especifica de CPF
     if (cpfLimpo.length !== 11) {
       toast.danger("CPF Inválido", {
         description: "O CPF deve conter exatamente 11 dígitos.",
@@ -437,19 +381,20 @@ export default function PaymentPage({
       return;
     }
 
-    // 3. Validação de DDI, DDD e Telefone
     if (ddiLimpo.length < 1 || ddiLimpo.length > 3) {
       toast.danger("DDI Inválido", {
         description: "Verifique o código do país (ex: 55).",
       });
       return;
     }
+
     if (dddLimpo.length !== 2) {
       toast.danger("DDD Inválido", {
         description: "O DDD deve conter exatamente 2 dígitos (ex: 11).",
       });
       return;
     }
+
     if (numeroLimpo.length < 8 || numeroLimpo.length > 9) {
       toast.danger("Número Inválido", {
         description: "O número deve conter de 8 a 9 dígitos.",
@@ -586,160 +531,191 @@ export default function PaymentPage({
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col gap-4 mb-8">
-            <Link href="/salgados" className="w-fit">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Confirmar Pagamento</h1>
-              <p>Verifique os detalhes da dívida antes de prosseguir</p>
-            </div>
-          </div>
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo="Confirmar Pagamento"
+          descricao="Verifique os detalhes da dívida antes de prosseguir"
+          voltarHref="/salgados"
+        />
 
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div
-              className={`flex flex-col gap-4 transition-all duration-300 w-full ${pagamentoGerado ? "lg:w-2/3" : ""}`}
-            >
-              <Card>
-                <Card.Header>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-orange-100 rounded-full">
-                        <Receipt className="w-5 h-5 text-orange-600" />
-                      </div>
-                      <Card.Title>Detalhes da Dívida</Card.Title>
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div
+            className={`flex flex-col gap-4 transition-all duration-300 w-full ${pagamentoGerado ? "lg:w-2/3" : ""}`}
+          >
+            <Card>
+              <Card.Header>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 bg-orange-100 rounded-full">
+                      <Receipt className="w-5 h-5 text-orange-600" />
                     </div>
-
-                    {pagamentoPago ? (
-                      <Chip variant="primary" color="success">
-                        Pago
-                      </Chip>
-                    ) : pagamentoCancelado ? (
-                      <Chip variant="primary" color="danger">
-                        Cancelado
-                      </Chip>
-                    ) : pagamentoExpirado ? (
-                      <Chip variant="primary" color="accent">
-                        Expirado
-                      </Chip>
-                    ) : (
-                      <Chip variant="primary" color="warning">
-                        Pendente
-                      </Chip>
-                    )}
+                    <Card.Title>Detalhes da Dívida</Card.Title>
                   </div>
-                </Card.Header>
 
-                <Card.Content>
+                  {pagamentoPago ? (
+                    <Chip variant="primary" color="success">
+                      Pago
+                    </Chip>
+                  ) : pagamentoCancelado ? (
+                    <Chip variant="primary" color="danger">
+                      Cancelado
+                    </Chip>
+                  ) : pagamentoExpirado ? (
+                    <Chip variant="primary" color="accent">
+                      Expirado
+                    </Chip>
+                  ) : (
+                    <Chip variant="primary" color="warning">
+                      Pendente
+                    </Chip>
+                  )}
+                </div>
+              </Card.Header>
+
+              <Card.Content>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Devedor</p>
+                    <p className="text-lg font-semibold">
+                      {divida.colaborador_nome}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Motivo</p>
+                    <p className="font-medium">{divida.motivo}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Item</p>
+                    <p className="font-medium">{divida.item}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Data de Entrada
+                    </p>
+                    <p className="font-medium">
+                      {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator className="my-3" />
+
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold">Valor Total:</span>
+                  <span className="text-lg font-bold">
+                    R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              </Card.Content>
+            </Card>
+
+            <Card>
+              <Card.Header>
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`flex items-center justify-center w-10 h-10 rounded-full ${pagamentoGerado ? "bg-purple-100" : "bg-blue-100"}`}
+                  >
+                    <UserRound
+                      className={`w-5 h-5 ${pagamentoGerado ? "text-purple-600" : "text-blue-600"}`}
+                    />
+                  </div>
+                  <Card.Title>
+                    {pagamentoGerado
+                      ? "Minhas informações"
+                      : "Responsável pela Baixa"}
+                  </Card.Title>
+                </div>
+              </Card.Header>
+
+              <Card.Content>
+                {pagamentoGerado && colaboradorGerador ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Devedor
-                      </p>
-                      <p className="text-lg font-semibold">
-                        {divida.colaborador_nome}
+                      <p className="text-sm font-medium text-gray-500">Nome</p>
+                      <p className="font-medium wrap-break-word">
+                        {colaboradorGerador.nome}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">
-                        Motivo
+                        Departamento
                       </p>
-                      <p className="font-medium">{divida.motivo}</p>
+                      <p className="font-medium wrap-break-word">
+                        {colaboradorGerador.departamento || "Não informado"}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Item</p>
-                      <p className="font-medium">{divida.item}</p>
+                      <p className="text-sm font-medium text-gray-500">Cargo</p>
+                      <p className="font-medium wrap-break-word">
+                        {colaboradorGerador.cargo || "Não informado"}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Data de Entrada
+                      <p className="text-sm font-medium text-gray-500">Email</p>
+                      <p className="font-medium wrap-break-word">
+                        {colaboradorGerador.email}
                       </p>
-                      <p className="font-medium">
-                        {new Date(divida.data_inicio).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </p>
+                    </div>
+                    <div className="col-span-1 md:col-span-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 pb-1">
+                            CPF
+                          </p>
+                          <p className="font-medium">
+                            {colaboradorGerador.document_mascarado ||
+                              "Não informado"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 pb-1">
+                            Número de Contato
+                          </p>
+                          <p className="font-medium">
+                            {colaboradorGerador.country_code
+                              ? `+${colaboradorGerador.country_code} (${colaboradorGerador.area_code}) ${colaboradorGerador.number}`
+                              : "Não informado"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <Separator className="my-3" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold">Valor Total:</span>
-                    <span className="text-lg font-bold">
-                      R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
-                    </span>
-                  </div>
-                </Card.Content>
-              </Card>
+                ) : user ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Nome</p>
+                      <p className="font-medium wrap-break-word">{user.nome}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Departamento
+                      </p>
+                      <p className="font-medium wrap-break-word">
+                        {user.departamento || "Não informado"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Cargo</p>
+                      <p className="font-medium wrap-break-word">
+                        {user.cargo || "Não informado"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Email</p>
+                      <p className="font-medium wrap-break-word">
+                        {user.email}
+                      </p>
+                    </div>
 
-              <Card>
-                <Card.Header>
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`flex items-center justify-center w-10 h-10 rounded-full ${pagamentoGerado ? "bg-purple-100" : "bg-blue-100"}`}
-                    >
-                      <UserRound
-                        className={`w-5 h-5 ${pagamentoGerado ? "text-purple-600" : "text-blue-600"}`}
-                      />
-                    </div>
-                    <Card.Title>
-                      {pagamentoGerado
-                        ? "Minhas informações"
-                        : "Responsável pela Baixa"}
-                    </Card.Title>
-                  </div>
-                </Card.Header>
-
-                <Card.Content>
-                  {pagamentoGerado && colaboradorGerador ? (
-                    // MOSTRAMOS O GERADOR DO PAGAMENTO AQUI
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Nome
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {colaboradorGerador.nome}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Departamento
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {colaboradorGerador.departamento || "Não informado"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Cargo
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {colaboradorGerador.cargo || "Não informado"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Email
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {colaboradorGerador.email}
-                        </p>
-                      </div>
-                      <div className="col-span-1 md:col-span-2">
+                    <div className="col-span-1 md:col-span-2">
+                      {possuiDadosCompletos ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p className="text-sm font-medium text-gray-500 pb-1">
                               CPF
                             </p>
                             <p className="font-medium">
-                              {colaboradorGerador.document_mascarado ||
-                                "Não informado"}
+                              {colaboradorCompleto?.document_mascarado}
                             </p>
                           </div>
                           <div>
@@ -747,322 +723,244 @@ export default function PaymentPage({
                               Número de Contato
                             </p>
                             <p className="font-medium">
-                              {colaboradorGerador.country_code
-                                ? `+${colaboradorGerador.country_code} (${colaboradorGerador.area_code}) ${colaboradorGerador.number}`
-                                : "Não informado"}
+                              +{colaboradorCompleto?.country_code} (
+                              {colaboradorCompleto?.area_code}){" "}
+                              {colaboradorCompleto?.number}
                             </p>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  ) : user ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Nome
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {user.nome}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Departamento
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {user.departamento || "Não informado"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Cargo
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {user.cargo || "Não informado"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Email
-                        </p>
-                        <p className="font-medium wrap-break-word">
-                          {user.email}
-                        </p>
-                      </div>
-
-                      {/* --- Divisor para os dados extras --- */}
-                      <div className="col-span-1 md:col-span-2">
-                        {possuiDadosCompletos ? (
-                          //  Dados estao OK! Mostra Apenas View!
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500 pb-1">
-                                CPF
-                              </p>
-                              <p className="font-medium">
-                                {colaboradorCompleto?.document_mascarado}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500 pb-1">
-                                Número de Contato
-                              </p>
-                              <p className="font-medium">
-                                +{colaboradorCompleto?.country_code} (
-                                {colaboradorCompleto?.area_code}){" "}
-                                {colaboradorCompleto?.number}
-                              </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="col-span-1 md:col-span-2">
+                            <div className="flex items-center w-full gap-1 text-sm px-2 py-1 bg-yellow-100 text-yellow-800 rounded-md font-semibold ">
+                              <TriangleAlert className="w-4 h-4" />
+                              <span>
+                                Complete seus dados pessoais para gerar o qr
+                                code de pagamento
+                              </span>
                             </div>
                           </div>
-                        ) : (
-                          // Faltam preenchimentos! Oculta a View e puxa os Inputs!
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="col-span-1 md:col-span-2">
-                              <div className="flex items-center w-full gap-1 text-sm px-2 py-1 bg-yellow-100 text-yellow-800 rounded-md font-semibold ">
-                                <TriangleAlert className="w-4 h-4" />
-                                <span>
-                                  Complete seus dados pessoais para gerar o qr
-                                  code de pagamento
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500 pb-1">
-                                CPF (Apenas Números)
-                              </p>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 pb-1">
+                              CPF (Apenas Números)
+                            </p>
+                            <Input
+                              placeholder="00011122233"
+                              value={documentoInput}
+                              onChange={(e) =>
+                                setDocumentoInput(e.target.value)
+                              }
+                              maxLength={11}
+                            />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 pb-1">
+                              Telefone Completo
+                            </p>
+
+                            <div className="flex gap-2">
                               <Input
-                                placeholder="00011122233"
-                                value={documentoInput}
+                                placeholder="DDI"
+                                className="w-14 px-2"
+                                value={countryInput}
                                 onChange={(e) =>
-                                  setDocumentoInput(e.target.value)
+                                  setCountryInput(e.target.value)
                                 }
-                                maxLength={11}
+                                maxLength={3}
+                              />
+                              <Input
+                                placeholder="DDD"
+                                className="w-14 px-2"
+                                value={areaInput}
+                                onChange={(e) => setAreaInput(e.target.value)}
+                                maxLength={2}
+                              />
+                              <Input
+                                placeholder="999990000"
+                                className="flex-1"
+                                value={numeroInput}
+                                onChange={(e) => setNumeroInput(e.target.value)}
+                                maxLength={9}
                               />
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500 pb-1">
-                                Telefone Completo
-                              </p>
-                              {/* Separa os 3 blocos como solictado */}
-                              <div className="flex gap-2">
-                                <Input
-                                  placeholder="DDI"
-                                  className="w-14 px-2"
-                                  value={countryInput}
-                                  onChange={(e) =>
-                                    setCountryInput(e.target.value)
-                                  }
-                                  maxLength={3}
-                                />
-                                <Input
-                                  placeholder="DDD"
-                                  className="w-14 px-2"
-                                  value={areaInput}
-                                  onChange={(e) => setAreaInput(e.target.value)}
-                                  maxLength={2}
-                                />
-                                <Input
-                                  placeholder="999990000"
-                                  className="flex-1"
-                                  value={numeroInput}
-                                  onChange={(e) =>
-                                    setNumeroInput(e.target.value)
-                                  }
-                                  maxLength={9}
-                                />
-                              </div>
-                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">
-                      Carregando informações do usuário logado...
-                    </p>
-                  )}
-                </Card.Content>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    Carregando informações do usuário logado...
+                  </p>
+                )}
+              </Card.Content>
 
-                {!pagamentoPago &&
-                  ((colaboradorCompleto !== null && !possuiDadosCompletos) ||
-                    (possuiDadosCompletos && podeGerarNovoPagamento)) && (
-                    <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
-                      <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
-                        {colaboradorCompleto !== null &&
-                          !possuiDadosCompletos && (
-                            <Button
-                              onPress={handleSalvarDados}
-                              isDisabled={isProcessing}
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              Atualizar Dados
-                            </Button>
-                          )}
-
-                        {possuiDadosCompletos && podeGerarNovoPagamento && (
+              {!pagamentoPago &&
+                ((colaboradorCompleto !== null && !possuiDadosCompletos) ||
+                  (possuiDadosCompletos && podeGerarNovoPagamento)) && (
+                  <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
+                    <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
+                      {colaboradorCompleto !== null &&
+                        !possuiDadosCompletos && (
                           <Button
-                            onPress={handleGerarPagamento}
+                            onPress={handleSalvarDados}
                             isDisabled={isProcessing}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
                           >
-                            <Check className="w-4 h-4" />
-                            {isProcessing
-                              ? "Gerando..."
-                              : "Gerar Pagamento PIX"}
+                            Atualizar Dados
                           </Button>
                         )}
-                      </div>
-                    </Card.Footer>
-                  )}
-              </Card>
-            </div>
 
-            {pagamentoPago && (
-              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-green-200">
-                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                  <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
-                    <Check className="w-8 h-8 text-white" />
+                      {possuiDadosCompletos && podeGerarNovoPagamento && (
+                        <Button
+                          onPress={handleGerarPagamento}
+                          isDisabled={isProcessing}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <Check className="w-4 h-4" />
+                          {isProcessing ? "Gerando..." : "Gerar Pagamento PIX"}
+                        </Button>
+                      )}
+                    </div>
+                  </Card.Footer>
+                )}
+            </Card>
+          </div>
+
+          {pagamentoPago && (
+            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-green-200">
+              <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
+                <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
+                  <Check className="w-8 h-8 text-white" />
+                </div>
+
+                <Card.Title className="text-2xl text-center">
+                  Pago com Sucesso!
+                </Card.Title>
+
+                <p className="text-center">
+                  Seu pagamento foi confirmado pelo sistema.
+                </p>
+              </Card.Header>
+            </Card>
+          )}
+
+          {pagamentoCancelado && (
+            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-red-200">
+              <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
+                <div className="flex items-center justify-center w-16 h-16 bg-red-500 rounded-full">
+                  <X className="w-8 h-8 text-white" />
+                </div>
+
+                <Card.Title className="text-2xl text-center">
+                  Pagamento Cancelado
+                </Card.Title>
+
+                <p className="text-center">
+                  Este código Pix foi cancelado, mas você pode gerar um novo
+                  pagamento para quitar esta dívida.
+                </p>
+              </Card.Header>
+            </Card>
+          )}
+
+          {pagamentoExpirado && (
+            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-blue-200">
+              <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
+                <div className="flex items-center justify-center w-16 h-16 bg-blue-500 rounded-full">
+                  <TriangleAlert className="w-8 h-8 text-white" />
+                </div>
+
+                <Card.Title className="text-2xl text-center">
+                  Pix Expirado
+                </Card.Title>
+
+                <p className="text-center">
+                  O tempo para pagamento deste código Pix se esgotou, mas você
+                  pode gerar um novo QR code para quitar esta dívida.
+                </p>
+              </Card.Header>
+            </Card>
+          )}
+
+          {pagamentoGerado && pagamentoPendenteAtivo && (
+            <Card className="w-full lg:w-1/3 flex flex-col">
+              <Card.Header>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
+                    <QrCode className="w-5 h-5 text-green-600" />
+                  </div>
+                  <Card.Title>Pague via PIX</Card.Title>
+                </div>
+              </Card.Header>
+
+              <Card.Content className="flex flex-col flex-1">
+                <div className="flex flex-col items-center justify-center flex-1">
+                  <div className="flex items-center justify-center gap-1 pb-4">
+                    <span className="text-sm">Valor:</span>
+                    <span className="font-bold">
+                      R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
+                    </span>
                   </div>
 
-                  <Card.Title className="text-2xl text-center">
-                    Pago com Sucesso!
-                  </Card.Title>
-
-                  <p className="text-center">
-                    Seu pagamento foi confirmado pelo sistema.
-                  </p>
-                </Card.Header>
-              </Card>
-            )}
-
-            {pagamentoCancelado && (
-              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-red-200">
-                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                  <div className="flex items-center justify-center w-16 h-16 bg-red-500 rounded-full">
-                    <X className="w-8 h-8 text-white" />
+                  <div className="flex justify-center items-center">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pagamentoGerado.qr_code)}`}
+                      alt="QR Code Pix"
+                      className="w-56 h-56 object-contain"
+                    />
                   </div>
 
-                  <Card.Title className="text-2xl text-center">
-                    Pagamento Cancelado
-                  </Card.Title>
-
-                  <p className="text-center">
-                    Este código Pix foi cancelado, mas você pode gerar um novo
-                    pagamento para quitar esta dívida.
-                  </p>
-                </Card.Header>
-              </Card>
-            )}
-
-            {pagamentoExpirado && (
-              <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-blue-200">
-                <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                  <div className="flex items-center justify-center w-16 h-16 bg-blue-500 rounded-full">
-                    <TriangleAlert className="w-8 h-8 text-white" />
+                  <div className="flex items-center justify-center gap-1 my-4">
+                    <span className="text-sm font-medium">Expira em: </span>
+                    <span className="font-bold tracking-wider">
+                      {tempoRestante}
+                    </span>
                   </div>
+                </div>
 
-                  <Card.Title className="text-2xl text-center">
-                    Pix Expirado
-                  </Card.Title>
+                <div className="flex flex-col w-full mt-auto pt-4">
+                  <p className="text-sm font-medium mb-2">Copia e Cola</p>
 
-                  <p className="text-center">
-                    O tempo para pagamento deste código Pix se esgotou, mas você
-                    pode gerar um novo QR code para quitar esta dívida.
-                  </p>
-
-                  {/* <Button
-                    onPress={handleGerarPagamento}
-                    isDisabled={
-                      isProcessing ||
-                      (colaboradorCompleto !== null && !possuiDadosCompletos)
-                    }
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {isProcessing ? "Gerando..." : "Gerar Novo QR Code"}
-                  </Button> */}
-                </Card.Header>
-              </Card>
-            )}
-
-            {pagamentoGerado && pagamentoPendenteAtivo && (
-              <Card className="w-full lg:w-1/3 flex flex-col">
-                <Card.Header>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
-                      <QrCode className="w-5 h-5 text-green-600" />
-                    </div>
-                    <Card.Title>Pague via PIX</Card.Title>
-                  </div>
-                </Card.Header>
-
-                <Card.Content className="flex flex-col flex-1">
-                  <div className="flex flex-col items-center justify-center flex-1">
-                    <div className="flex items-center justify-center gap-1 pb-4">
-                      <span className="text-sm">Valor:</span>
-                      <span className="font-bold">
-                        R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-center items-center">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pagamentoGerado.qr_code)}`}
-                        alt="QR Code Pix"
-                        className="w-56 h-56 object-contain"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-center gap-1 my-4">
-                      <span className="text-sm font-medium">Expira em: </span>
-                      <span className="font-bold tracking-wider">
-                        {tempoRestante}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col w-full mt-auto pt-4">
-                    <p className="text-sm font-medium mb-2">Copia e Cola</p>
-
-                    <div className="flex gap-4 items-center justify-between">
-                      <p className="font-mono text-sm truncate select-all">
-                        {pagamentoGerado.qr_code}
-                      </p>
-
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onPress={handleCopiarCopiar}
-                      >
-                        <Copy className="w-4 h-4" />
-                        Copiar
-                      </Button>
-                    </div>
-
-                    {process.env.NODE_ENV !== "production" && (
-                      <Button
-                        className="mt-2 font-semibold"
-                        variant="outline"
-                        onPress={handleSimularPagamento}
-                      >
-                        Simular Pagamento (Dev)
-                      </Button>
-                    )}
+                  <div className="flex gap-4 items-center justify-between">
+                    <p className="font-mono text-sm truncate select-all">
+                      {pagamentoGerado.qr_code}
+                    </p>
 
                     <Button
-                      className="mt-6"
-                      variant="danger"
-                      isDisabled={isProcessing}
-                      onPress={handleCancelarPagamento}
+                      variant="secondary"
+                      size="sm"
+                      onPress={handleCopiarCopiar}
                     >
-                      {isProcessing ? "Cancelando..." : "Cancelar pagamento"}
+                      <Copy className="w-4 h-4" />
+                      Copiar
                     </Button>
                   </div>
-                </Card.Content>
-              </Card>
-            )}
-          </div>
+
+                  {process.env.NODE_ENV !== "production" && (
+                    <Button
+                      className="mt-2 font-semibold"
+                      variant="outline"
+                      onPress={handleSimularPagamento}
+                    >
+                      Simular Pagamento (Dev)
+                    </Button>
+                  )}
+
+                  <Button
+                    className="mt-6"
+                    variant="danger"
+                    isDisabled={isProcessing}
+                    onPress={handleCancelarPagamento}
+                  >
+                    {isProcessing ? "Cancelando..." : "Cancelar pagamento"}
+                  </Button>
+                </div>
+              </Card.Content>
+            </Card>
+          )}
         </div>
-      </div>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }

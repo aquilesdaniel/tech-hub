@@ -3,7 +3,7 @@
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
-import { Navbar } from "@/components/navbar";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
@@ -24,7 +24,6 @@ import {
 } from "@heroui/react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft,
   BookOpen,
   Hand,
   Library,
@@ -34,7 +33,6 @@ import {
   Users,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface Livro {
@@ -82,7 +80,6 @@ export default function BibliotecaPage() {
   const [totalHistorico, setTotalHistorico] = useState(0);
   const [buscaEmprestimos, setBuscaEmprestimos] = useState("");
   const [itensPorPagina, setItensPorPagina] = useState(10);
-
   const [resumo, setResumo] = useState({
     total: 0,
     ativos: 0,
@@ -233,7 +230,6 @@ export default function BibliotecaPage() {
         dataPrevista.getDate() + Number.parseInt(newEmprestimo.dias),
       );
 
-      // Criar empréstimo
       await fetch("/api/biblioteca/emprestimos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -246,7 +242,6 @@ export default function BibliotecaPage() {
         }),
       });
 
-      // Atualizar disponibilidade do livro
       await fetch(`/api/biblioteca/livros/${selectedLivro.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -268,7 +263,6 @@ export default function BibliotecaPage() {
 
   const devolverLivro = async (emprestimoId: number, livroId: number) => {
     try {
-      // Atualizar empréstimo
       await fetch(`/api/biblioteca/emprestimos/${emprestimoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -278,7 +272,6 @@ export default function BibliotecaPage() {
         }),
       });
 
-      // Atualizar disponibilidade do livro
       await fetch(`/api/biblioteca/livros/${livroId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -300,7 +293,7 @@ export default function BibliotecaPage() {
   const abrirModalEmprestimo = (livro: Livro) => {
     setSelectedLivro(livro);
     setIsEmprestimoOpen(true);
-    // Definir colaborador padrão imediatamente
+
     if (user) {
       setNewEmprestimo({
         colaboradorId: user.id.toString(),
@@ -339,7 +332,6 @@ export default function BibliotecaPage() {
         setNewLivro({
           ...newLivro,
           capa: data.capa,
-          // Preencher automaticamente campos se encontrados
           titulo: data.titulo || newLivro.titulo,
           autor: data.autor || newLivro.autor,
           isbn: data.isbn || newLivro.isbn,
@@ -359,12 +351,8 @@ export default function BibliotecaPage() {
     }
   };
 
-  // ------------------------------------------------- indicadores do topo
-  // Acervo é sempre da empresa; os empréstimos vêm somados no escopo de quem
-  // olha, então nenhum indicador depende da página carregada.
   const ehAdmin = user?.tipo === "admin";
 
-  /** A busca dos empréstimos vale para as duas abas. */
   const reiniciarPaginas = () => {
     setPaginaAtivos(1);
     setPaginaHistorico(1);
@@ -472,533 +460,503 @@ export default function BibliotecaPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col gap-4 mb-8">
-            <Link href="/" className="w-fit">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Biblioteca</h1>
-              <p>Gerencie empréstimos e catálogo de livros</p>
-            </div>
-          </div>
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo="Biblioteca"
+          descricao="Gerencie empréstimos e catálogo de livros"
+          voltarHref="/"
+        />
 
-          <section
-            aria-label="Indicadores da biblioteca"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"
-          >
-            <StatTile
-              rotulo="Acervo"
-              valor={inteiro(livros.length)}
-              icone={BookOpen}
-              deltaLegenda={`${inteiro(livrosDisponiveis)} título(s) na estante agora`}
-            />
-            <StatTile
-              rotulo="Disponibilidade"
-              valor={percentual(taxaDisponibilidade, 0)}
-              icone={Library}
-              deltaLegenda={
-                livros.length > 0
-                  ? `${inteiro(livrosDisponiveis)} de ${inteiro(livros.length)} livros`
-                  : "nenhum livro cadastrado"
-              }
-            />
-            <StatTile
-              rotulo={ehAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
-              valor={inteiro(resumo.ativos)}
-              icone={Users}
-              deltaLegenda={
-                resumo.atrasados > 0
-                  ? `${inteiro(resumo.atrasados)} em atraso`
-                  : "nenhum em atraso"
-              }
-            />
-            <StatTile
-              rotulo={ehAdmin ? "Empréstimos no histórico" : "Seu histórico"}
-              valor={inteiro(resumo.total)}
-              icone={RotateCcw}
-              deltaLegenda={`${inteiro(resumo.devolvidos)} já devolvido(s)`}
-            />
-          </section>
+        <section
+          aria-label="Indicadores da biblioteca"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <StatTile
+            rotulo="Acervo"
+            valor={inteiro(livros.length)}
+            icone={BookOpen}
+            deltaLegenda={`${inteiro(livrosDisponiveis)} título(s) na estante agora`}
+          />
+          <StatTile
+            rotulo="Disponibilidade"
+            valor={percentual(taxaDisponibilidade, 0)}
+            icone={Library}
+            deltaLegenda={
+              livros.length > 0
+                ? `${inteiro(livrosDisponiveis)} de ${inteiro(livros.length)} livros`
+                : "nenhum livro cadastrado"
+            }
+          />
+          <StatTile
+            rotulo={ehAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
+            valor={inteiro(resumo.ativos)}
+            icone={Users}
+            deltaLegenda={
+              resumo.atrasados > 0
+                ? `${inteiro(resumo.atrasados)} em atraso`
+                : "nenhum em atraso"
+            }
+          />
+          <StatTile
+            rotulo={ehAdmin ? "Empréstimos no histórico" : "Seu histórico"}
+            valor={inteiro(resumo.total)}
+            icone={RotateCcw}
+            deltaLegenda={`${inteiro(resumo.devolvidos)} já devolvido(s)`}
+          />
+        </section>
 
-          <Tabs defaultSelectedKey="catalogo" className="gap-4">
-            <Tabs.ListContainer>
-              <Tabs.List className="grid w-full grid-cols-3">
-                <Tabs.Tab id="catalogo">
-                  Catálogo
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="emprestimos">
-                  Empréstimos Ativos
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="historico">
-                  Histórico
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              </Tabs.List>
-            </Tabs.ListContainer>
+        <Tabs defaultSelectedKey="catalogo" className="gap-4">
+          <Tabs.ListContainer>
+            <Tabs.List className="grid w-full grid-cols-3">
+              <Tabs.Tab id="catalogo">
+                Catálogo
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="emprestimos">
+                Empréstimos Ativos
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="historico">
+                Histórico
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer>
 
-            <Tabs.Panel className="p-0" id="catalogo">
-              <Card>
-                <Card.Header>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <Card.Title>Catálogo de Livros</Card.Title>
-                      <Card.Description>
-                        Todos os livros disponíveis na biblioteca
-                      </Card.Description>
-                    </div>
-                    {user?.tipo === "admin" && (
-                      <Modal
-                        isOpen={isAddLivroOpen}
-                        onOpenChange={setIsAddLivroOpen}
-                      >
-                        <Button>
-                          <Plus className="w-4 h-4" />
-                          Novo Livro
-                        </Button>
-                        <Modal.Backdrop>
-                          <Modal.Container>
-                            <Modal.Dialog>
-                              <Modal.CloseTrigger />
-                              <Modal.Header>
-                                <Modal.Heading>
-                                  Adicionar Novo Livro
-                                </Modal.Heading>
-                              </Modal.Header>
-                              <Modal.Body>
-                                <p className="text-sm text-gray-600">
-                                  Adicione um novo livro ao catálogo da
-                                  biblioteca
-                                </p>
-                                <div className="grid gap-4 py-4">
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="titulo">Título</Label>
-                                    <Input
-                                      id="titulo"
-                                      value={newLivro.titulo}
-                                      onChange={(e) =>
-                                        setNewLivro({
-                                          ...newLivro,
-                                          titulo: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Título do livro"
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="autor">Autor</Label>
-                                    <Input
-                                      id="autor"
-                                      value={newLivro.autor}
-                                      onChange={(e) =>
-                                        setNewLivro({
-                                          ...newLivro,
-                                          autor: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Nome do autor"
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="genero">Gênero</Label>
-                                    <Input
-                                      id="genero"
-                                      value={newLivro.genero}
-                                      onChange={(e) =>
-                                        setNewLivro({
-                                          ...newLivro,
-                                          genero: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Gênero do livro"
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="isbn">
-                                      ISBN (opcional)
-                                    </Label>
-                                    <Input
-                                      id="isbn"
-                                      value={newLivro.isbn}
-                                      onChange={(e) =>
-                                        setNewLivro({
-                                          ...newLivro,
-                                          isbn: e.target.value,
-                                        })
-                                      }
-                                      placeholder="ISBN do livro"
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label>Capa do Livro</Label>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        onPress={buscarCapa}
-                                        isDisabled={
-                                          !newLivro.titulo || capaLoading
-                                        }
-                                        className="flex-1"
-                                      >
-                                        {capaLoading
-                                          ? "Buscando..."
-                                          : "Buscar Capa Automaticamente"}
-                                      </Button>
-                                    </div>
-                                    {newLivro.capa && (
-                                      <div className="flex gap-4 mt-2">
-                                        <Image
-                                          src={newLivro.capa}
-                                          alt="Prévia da capa"
-                                          width={80}
-                                          height={120}
-                                          className="rounded-lg object-cover border"
-                                        />
-                                        <div className="flex-1">
-                                          <p className="text-sm text-gray-600 mb-2">
-                                            Prévia da capa encontrada
-                                          </p>
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onPress={() =>
-                                              setNewLivro({
-                                                ...newLivro,
-                                                capa: "",
-                                              })
-                                            }
-                                          >
-                                            Remover Capa
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </Modal.Body>
-                              <Modal.Footer>
-                                <Button onPress={adicionarLivro}>
-                                  Adicionar Livro
-                                </Button>
-                              </Modal.Footer>
-                            </Modal.Dialog>
-                          </Modal.Container>
-                        </Modal.Backdrop>
-                      </Modal>
-                    )}
+          <Tabs.Panel className="p-0" id="catalogo">
+            <Card>
+              <Card.Header>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <Card.Title>Catálogo de Livros</Card.Title>
+                    <Card.Description>
+                      Todos os livros disponíveis na biblioteca
+                    </Card.Description>
                   </div>
-                </Card.Header>
-                <Card.Content className="gap-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <TextField className="w-full max-w-full" name="email">
-                      <InputGroup variant="secondary">
-                        <InputGroup.Prefix>
-                          <Search className="size-4 text-muted" />
-                        </InputGroup.Prefix>
-                        <InputGroup.Input
-                          placeholder="Pesquisar por título ou autor..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                      </InputGroup>
-                    </TextField>
-
-                    {/* <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
+                  {user?.tipo === "admin" && (
+                    <Modal
+                      isOpen={isAddLivroOpen}
+                      onOpenChange={setIsAddLivroOpen}
+                    >
+                      <Button>
+                        <Plus className="w-4 h-4" />
+                        Novo Livro
+                      </Button>
+                      <Modal.Backdrop>
+                        <Modal.Container>
+                          <Modal.Dialog>
+                            <Modal.CloseTrigger />
+                            <Modal.Header>
+                              <Modal.Heading>
+                                Adicionar Novo Livro
+                              </Modal.Heading>
+                            </Modal.Header>
+                            <Modal.Body>
+                              <p className="text-sm text-gray-600">
+                                Adicione um novo livro ao catálogo da biblioteca
+                              </p>
+                              <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                  <Label htmlFor="titulo">Título</Label>
+                                  <Input
+                                    id="titulo"
+                                    value={newLivro.titulo}
+                                    onChange={(e) =>
+                                      setNewLivro({
+                                        ...newLivro,
+                                        titulo: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Título do livro"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="autor">Autor</Label>
+                                  <Input
+                                    id="autor"
+                                    value={newLivro.autor}
+                                    onChange={(e) =>
+                                      setNewLivro({
+                                        ...newLivro,
+                                        autor: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Nome do autor"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="genero">Gênero</Label>
+                                  <Input
+                                    id="genero"
+                                    value={newLivro.genero}
+                                    onChange={(e) =>
+                                      setNewLivro({
+                                        ...newLivro,
+                                        genero: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Gênero do livro"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="isbn">ISBN (opcional)</Label>
+                                  <Input
+                                    id="isbn"
+                                    value={newLivro.isbn}
+                                    onChange={(e) =>
+                                      setNewLivro({
+                                        ...newLivro,
+                                        isbn: e.target.value,
+                                      })
+                                    }
+                                    placeholder="ISBN do livro"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label>Capa do Livro</Label>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onPress={buscarCapa}
+                                      isDisabled={
+                                        !newLivro.titulo || capaLoading
+                                      }
+                                      className="flex-1"
+                                    >
+                                      {capaLoading
+                                        ? "Buscando..."
+                                        : "Buscar Capa Automaticamente"}
+                                    </Button>
+                                  </div>
+                                  {newLivro.capa && (
+                                    <div className="flex gap-4 mt-2">
+                                      <Image
+                                        src={newLivro.capa}
+                                        alt="Prévia da capa"
+                                        width={80}
+                                        height={120}
+                                        className="rounded-lg object-cover border"
+                                      />
+                                      <div className="flex-1">
+                                        <p className="text-sm text-gray-600 mb-2">
+                                          Prévia da capa encontrada
+                                        </p>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onPress={() =>
+                                            setNewLivro({
+                                              ...newLivro,
+                                              capa: "",
+                                            })
+                                          }
+                                        >
+                                          Remover Capa
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </Modal.Body>
+                            <Modal.Footer>
+                              <Button onPress={adicionarLivro}>
+                                Adicionar Livro
+                              </Button>
+                            </Modal.Footer>
+                          </Modal.Dialog>
+                        </Modal.Container>
+                      </Modal.Backdrop>
+                    </Modal>
+                  )}
+                </div>
+              </Card.Header>
+              <Card.Content className="gap-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <TextField className="w-full max-w-full" name="email">
+                    <InputGroup variant="secondary">
+                      <InputGroup.Prefix>
+                        <Search className="size-4 text-muted" />
+                      </InputGroup.Prefix>
+                      <InputGroup.Input
                         placeholder="Pesquisar por título ou autor..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
                       />
-                    </div>
-                     */}
-                    <Select
-                      value={filterGenero}
-                      onChange={(value) => setFilterGenero(value as string)}
-                      placeholder="Filtrar por gênero"
-                      variant="secondary"
-                    >
-                      <Select.Trigger className="w-full sm:w-48">
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="todos" textValue="Todos os gêneros">
-                            Todos os gêneros
+                    </InputGroup>
+                  </TextField>
+
+                  <Select
+                    value={filterGenero}
+                    onChange={(value) => setFilterGenero(value as string)}
+                    placeholder="Filtrar por gênero"
+                    variant="secondary"
+                  >
+                    <Select.Trigger className="w-full sm:w-48">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="todos" textValue="Todos os gêneros">
+                          Todos os gêneros
+                        </ListBox.Item>
+                        {generosUnicos.map((genero) => (
+                          <ListBox.Item
+                            key={genero}
+                            id={genero}
+                            textValue={genero}
+                          >
+                            {genero}
                           </ListBox.Item>
-                          {generosUnicos.map((genero) => (
-                            <ListBox.Item
-                              key={genero}
-                              id={genero}
-                              textValue={genero}
-                            >
-                              {genero}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
 
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredLivros.map((livro) => (
-                      <Card variant="secondary" key={livro.id}>
-                        <Card.Content>
-                          <div className="flex flex-1 gap-4">
-                            <Image
-                              src={livro.capa || "/placeholder.svg"}
-                              alt={livro.titulo}
-                              width={80}
-                              height={120}
-                              className="h-30 w-20 shrink-0 self-start rounded-lg object-cover"
-                            />
-                            <div className="flex flex-1 flex-col">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <h3 className="font-semibold text-lg">
-                                    {livro.titulo}
-                                  </h3>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredLivros.map((livro) => (
+                    <Card variant="secondary" key={livro.id}>
+                      <Card.Content>
+                        <div className="flex flex-1 gap-4">
+                          <Image
+                            src={livro.capa || "/placeholder.svg"}
+                            alt={livro.titulo}
+                            width={80}
+                            height={120}
+                            className="h-30 w-20 shrink-0 self-start rounded-lg object-cover"
+                          />
+                          <div className="flex flex-1 flex-col">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-semibold text-lg">
+                                  {livro.titulo}
+                                </h3>
 
-                                  <Typography
-                                    className="mb-2"
-                                    color="muted"
-                                    type="body-sm"
-                                  >
-                                    {livro.autor}
-                                  </Typography>
-                                </div>
-
-                                <Chip
-                                  color={
-                                    livro.disponivel ? "success" : "danger"
-                                  }
-                                  variant="soft"
-                                  size="sm"
+                                <Typography
+                                  className="mb-2"
+                                  color="muted"
+                                  type="body-sm"
                                 >
-                                  {livro.disponivel
-                                    ? "Disponível"
-                                    : "Emprestado"}
-                                </Chip>
+                                  {livro.autor}
+                                </Typography>
                               </div>
 
-                              <Chip color="accent" variant="soft" size="sm">
-                                {livro.genero}
+                              <Chip
+                                color={livro.disponivel ? "success" : "danger"}
+                                variant="soft"
+                                size="sm"
+                              >
+                                {livro.disponivel ? "Disponível" : "Emprestado"}
                               </Chip>
+                            </div>
 
-                              <div className="mt-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                {livro.disponivel && (
-                                  <Button
-                                    size="sm"
-                                    onPress={() => abrirModalEmprestimo(livro)}
-                                  >
-                                    <Hand />
-                                    Emprestar
-                                  </Button>
-                                )}
-                              </div>
+                            <Chip color="accent" variant="soft" size="sm">
+                              {livro.genero}
+                            </Chip>
+
+                            <div className="mt-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                              {livro.disponivel && (
+                                <Button
+                                  size="sm"
+                                  onPress={() => abrirModalEmprestimo(livro)}
+                                >
+                                  <Hand />
+                                  Emprestar
+                                </Button>
+                              )}
                             </div>
                           </div>
-                        </Card.Content>
-                      </Card>
-                    ))}
-                  </div>
-                </Card.Content>
-              </Card>
-            </Tabs.Panel>
+                        </div>
+                      </Card.Content>
+                    </Card>
+                  ))}
+                </div>
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
 
-            <Tabs.Panel className="p-0" id="emprestimos">
-              <Card>
-                <Card.Header>
-                  <Card.Title>
-                    {user?.tipo === "admin"
-                      ? "Empréstimos Ativos"
-                      : "Seus Empréstimos Ativos"}
-                  </Card.Title>
-                  <Card.Description>
-                    {user?.tipo === "admin"
-                      ? "Livros atualmente emprestados"
-                      : "Livros que você emprestou"}
-                  </Card.Description>
-                </Card.Header>
-                <Card.Content>
-                  <DataTable
-                    colunas={colunasAtivos}
-                    dados={emprestimosAtivos}
-                    rotulo="Empréstimos ativos"
-                    vazio={
-                      ehAdmin
-                        ? "Nenhum empréstimo ativo"
-                        : "Você não possui empréstimos ativos"
-                    }
-                    total={totalAtivos}
-                    pagina={paginaAtivos}
-                    totalPaginas={totalPaginasAtivos}
-                    onMudarPagina={setPaginaAtivos}
-                    itensPorPagina={itensPorPagina}
-                    onMudarItensPorPagina={(itens) => {
-                      setItensPorPagina(itens);
-                      reiniciarPaginas();
-                    }}
-                    busca={buscaEmprestimos}
-                    onMudarBusca={(valor) => {
-                      setBuscaEmprestimos(valor);
-                      reiniciarPaginas();
-                    }}
-                    placeholderBusca="Pesquisar por livro ou colaborador..."
-                  />
-                </Card.Content>
-              </Card>
-            </Tabs.Panel>
+          <Tabs.Panel className="p-0" id="emprestimos">
+            <Card>
+              <Card.Header>
+                <Card.Title>
+                  {user?.tipo === "admin"
+                    ? "Empréstimos Ativos"
+                    : "Seus Empréstimos Ativos"}
+                </Card.Title>
+                <Card.Description>
+                  {user?.tipo === "admin"
+                    ? "Livros atualmente emprestados"
+                    : "Livros que você emprestou"}
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <DataTable
+                  colunas={colunasAtivos}
+                  dados={emprestimosAtivos}
+                  rotulo="Empréstimos ativos"
+                  vazio={
+                    ehAdmin
+                      ? "Nenhum empréstimo ativo"
+                      : "Você não possui empréstimos ativos"
+                  }
+                  total={totalAtivos}
+                  pagina={paginaAtivos}
+                  totalPaginas={totalPaginasAtivos}
+                  onMudarPagina={setPaginaAtivos}
+                  itensPorPagina={itensPorPagina}
+                  onMudarItensPorPagina={(itens) => {
+                    setItensPorPagina(itens);
+                    reiniciarPaginas();
+                  }}
+                  busca={buscaEmprestimos}
+                  onMudarBusca={(valor) => {
+                    setBuscaEmprestimos(valor);
+                    reiniciarPaginas();
+                  }}
+                  placeholderBusca="Pesquisar por livro ou colaborador..."
+                />
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
 
-            <Tabs.Panel className="p-0" id="historico">
-              <Card>
-                <Card.Header>
-                  <Card.Title>Histórico de Empréstimos</Card.Title>
-                  <Card.Description>
-                    Todos os empréstimos realizados
-                  </Card.Description>
-                </Card.Header>
-                <Card.Content>
-                  <DataTable
-                    colunas={colunasHistorico}
-                    dados={historico}
-                    rotulo="Histórico de empréstimos"
-                    vazio="Nenhum empréstimo registrado"
-                    total={totalHistorico}
-                    pagina={paginaHistorico}
-                    totalPaginas={totalPaginasHistorico}
-                    onMudarPagina={setPaginaHistorico}
-                    itensPorPagina={itensPorPagina}
-                    onMudarItensPorPagina={(itens) => {
-                      setItensPorPagina(itens);
-                      reiniciarPaginas();
-                    }}
-                    busca={buscaEmprestimos}
-                    onMudarBusca={(valor) => {
-                      setBuscaEmprestimos(valor);
-                      reiniciarPaginas();
-                    }}
-                    placeholderBusca="Pesquisar por livro ou colaborador..."
-                  />
-                </Card.Content>
-              </Card>
-            </Tabs.Panel>
-          </Tabs>
+          <Tabs.Panel className="p-0" id="historico">
+            <Card>
+              <Card.Header>
+                <Card.Title>Histórico de Empréstimos</Card.Title>
+                <Card.Description>
+                  Todos os empréstimos realizados
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <DataTable
+                  colunas={colunasHistorico}
+                  dados={historico}
+                  rotulo="Histórico de empréstimos"
+                  vazio="Nenhum empréstimo registrado"
+                  total={totalHistorico}
+                  pagina={paginaHistorico}
+                  totalPaginas={totalPaginasHistorico}
+                  onMudarPagina={setPaginaHistorico}
+                  itensPorPagina={itensPorPagina}
+                  onMudarItensPorPagina={(itens) => {
+                    setItensPorPagina(itens);
+                    reiniciarPaginas();
+                  }}
+                  busca={buscaEmprestimos}
+                  onMudarBusca={(valor) => {
+                    setBuscaEmprestimos(valor);
+                    reiniciarPaginas();
+                  }}
+                  placeholderBusca="Pesquisar por livro ou colaborador..."
+                />
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
+        </Tabs>
 
-          <Modal isOpen={isEmprestimoOpen} onOpenChange={fecharModalEmprestimo}>
-            <Modal.Backdrop>
-              <Modal.Container>
-                <Modal.Dialog>
-                  <Modal.CloseTrigger />
-                  <Modal.Header>
-                    <Modal.Heading>Emprestar Livro</Modal.Heading>
-                  </Modal.Header>
-                  <Modal.Body>
-                    <p className="text-sm text-gray-600">
-                      {selectedLivro &&
-                        `Emprestar "${selectedLivro.titulo}" para um colaborador`}
-                    </p>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="colaborador-emprestimo">
-                          Colaborador
-                        </Label>
-                        <Select
-                          value={newEmprestimo.colaboradorId}
-                          onChange={(value) =>
-                            setNewEmprestimo({
-                              ...newEmprestimo,
-                              colaboradorId: value as string,
-                            })
-                          }
-                          placeholder="Selecione um colaborador"
-                          isDisabled={user?.tipo !== "admin"}
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {(user?.tipo === "admin"
-                                ? colaboradores
-                                : colaboradores.filter((c) => c.id === user?.id)
-                              ).map((colaborador) => (
-                                <ListBox.Item
-                                  key={colaborador.id}
-                                  id={colaborador.id.toString()}
-                                  textValue={`${colaborador.nome} - ${colaborador.departamento}`}
-                                >
-                                  {colaborador.nome} -{" "}
-                                  {colaborador.departamento}
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                        {user?.tipo !== "admin" && (
-                          <p className="text-sm text-gray-500">
-                            Você pode emprestar livros apenas para si mesmo
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="dias">Período (dias)</Label>
-                        <Select
-                          value={newEmprestimo.dias}
-                          onChange={(value) =>
-                            setNewEmprestimo({
-                              ...newEmprestimo,
-                              dias: value as string,
-                            })
-                          }
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              <ListBox.Item id="7" textValue="7 dias">
-                                7 dias
+        <Modal isOpen={isEmprestimoOpen} onOpenChange={fecharModalEmprestimo}>
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog>
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>Emprestar Livro</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>
+                  <p className="text-sm text-gray-600">
+                    {selectedLivro &&
+                      `Emprestar "${selectedLivro.titulo}" para um colaborador`}
+                  </p>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="colaborador-emprestimo">
+                        Colaborador
+                      </Label>
+                      <Select
+                        value={newEmprestimo.colaboradorId}
+                        onChange={(value) =>
+                          setNewEmprestimo({
+                            ...newEmprestimo,
+                            colaboradorId: value as string,
+                          })
+                        }
+                        placeholder="Selecione um colaborador"
+                        isDisabled={user?.tipo !== "admin"}
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {(user?.tipo === "admin"
+                              ? colaboradores
+                              : colaboradores.filter((c) => c.id === user?.id)
+                            ).map((colaborador) => (
+                              <ListBox.Item
+                                key={colaborador.id}
+                                id={colaborador.id.toString()}
+                                textValue={`${colaborador.nome} - ${colaborador.departamento}`}
+                              >
+                                {colaborador.nome} - {colaborador.departamento}
                               </ListBox.Item>
-                              <ListBox.Item id="14" textValue="14 dias">
-                                14 dias
-                              </ListBox.Item>
-                              <ListBox.Item id="21" textValue="21 dias">
-                                21 dias
-                              </ListBox.Item>
-                              <ListBox.Item id="30" textValue="30 dias">
-                                30 dias
-                              </ListBox.Item>
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </div>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      {user?.tipo !== "admin" && (
+                        <p className="text-sm text-gray-500">
+                          Você pode emprestar livros apenas para si mesmo
+                        </p>
+                      )}
                     </div>
-                  </Modal.Body>
-                  <Modal.Footer>
-                    <Button onPress={emprestarLivro}>
-                      Confirmar Empréstimo
-                    </Button>
-                  </Modal.Footer>
-                </Modal.Dialog>
-              </Modal.Container>
-            </Modal.Backdrop>
-          </Modal>
-        </div>
-      </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="dias">Período (dias)</Label>
+                      <Select
+                        value={newEmprestimo.dias}
+                        onChange={(value) =>
+                          setNewEmprestimo({
+                            ...newEmprestimo,
+                            dias: value as string,
+                          })
+                        }
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="7" textValue="7 dias">
+                              7 dias
+                            </ListBox.Item>
+                            <ListBox.Item id="14" textValue="14 dias">
+                              14 dias
+                            </ListBox.Item>
+                            <ListBox.Item id="21" textValue="21 dias">
+                              21 dias
+                            </ListBox.Item>
+                            <ListBox.Item id="30" textValue="30 dias">
+                              30 dias
+                            </ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </div>
+                  </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button onPress={emprestarLivro}>Confirmar Empréstimo</Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }
