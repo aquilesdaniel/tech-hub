@@ -105,7 +105,9 @@ export default function DetalhesPage({
     );
   }
 
-  if (!divida) return null;
+  if (!divida) {
+    return null;
+  }
 
   return (
     <ProtectedRoute>
@@ -196,7 +198,7 @@ export default function DetalhesPage({
 
                   <Separator />
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm font-medium">Email</p>
                       <p className="text-sm break-all">

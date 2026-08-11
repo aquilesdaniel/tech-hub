@@ -40,31 +40,30 @@ export function FiltroDashboard({
   onAtualizar,
 }: Props) {
   return (
-    <Card className="flex flex-row items-center">
-      <div className="flex flex-col gap-1.5">
-        <ToggleButtonGroup
-          size="sm"
-          selectionMode="single"
-          disallowEmptySelection
-          selectedKeys={[String(meses)]}
-          onSelectionChange={(chaves) => {
-            const escolhida = Array.from(chaves)[0];
-            if (escolhida != null) {
-              onMesesChange(Number(escolhida));
-            }
-          }}
-          aria-labelledby="rotulo-periodo"
-        >
-          {PERIODOS.map((periodo) => (
-            <ToggleButton key={periodo.id} id={periodo.id}>
-              {periodo.rotulo}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </div>
+    <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <ToggleButtonGroup
+        size="sm"
+        className="max-sm:w-full max-sm:*:flex-1"
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[String(meses)]}
+        onSelectionChange={(chaves) => {
+          const escolhida = Array.from(chaves)[0];
+          if (escolhida != null) {
+            onMesesChange(Number(escolhida));
+          }
+        }}
+        aria-labelledby="rotulo-periodo"
+      >
+        {PERIODOS.map((periodo) => (
+          <ToggleButton key={periodo.id} id={periodo.id}>
+            {periodo.rotulo}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
 
       {mostrarSetor && (
-        <div className="flex min-w-52 flex-col gap-1.5">
+        <div className="w-full sm:w-52">
           <Select
             selectedKey={setorId}
             onSelectionChange={(chave) => onSetorChange(String(chave))}
@@ -100,7 +99,7 @@ export function FiltroDashboard({
         variant="secondary"
         onPress={onAtualizar}
         isPending={revalidando}
-        className="ml-auto"
+        className="max-sm:w-full sm:ml-auto"
       >
         <RotateCw
           aria-hidden

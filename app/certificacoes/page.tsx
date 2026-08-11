@@ -1,8 +1,10 @@
 "use client";
 
+import { useConfirmacao } from "@/components/confirmacao";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
+import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
@@ -12,9 +14,7 @@ import {
   Card,
   Chip,
   Input,
-  Label,
   ListBox,
-  Modal,
   Select,
   TextArea,
   toast,
@@ -69,6 +69,7 @@ const paraCampoData = (valor?: string | null) =>
 export default function CertificacoesPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const confirmar = useConfirmacao();
   const [certificacoes, setCertificacoes] = useState<Certificacao[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -114,6 +115,10 @@ export default function CertificacoesPage() {
   ];
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     fetchData();
   }, [user, pagina, itensPorPagina, buscaAplicada, filterTipo]);
 
@@ -271,7 +276,14 @@ export default function CertificacoesPage() {
   };
 
   const removerCertificacao = async (id: number) => {
-    if (!confirm("Tem certeza que deseja remover esta certificação?")) return;
+    const confirmado = await confirmar({
+      titulo: "Remover certificação",
+      descricao:
+        "Tem certeza que deseja remover esta certificação? Essa ação não pode ser desfeita.",
+      rotuloConfirmar: "Remover",
+      destrutivo: true,
+    });
+    if (!confirmado) return;
 
     try {
       const response = await fetch(`/api/certificacoes/${id}`, {
@@ -540,213 +552,191 @@ export default function CertificacoesPage() {
                     : "Suas certificações"}
                 </Card.Description>
               </div>
-              <Modal
+              <ModalForm
                 isOpen={isAddDialogOpen}
                 onOpenChange={(aberto) => {
                   setIsAddDialogOpen(aberto);
                   if (!aberto) limparFormularioNovaCertificacao();
                 }}
+                titulo="Adicionar Nova Certificação"
+                descricao="Registre uma nova certificação"
+                gatilho={
+                  <Button>
+                    <Plus />
+                    Nova Certificação
+                  </Button>
+                }
+                rotuloConfirmar="Adicionar Certificação"
+                onConfirmar={adicionarCertificacao}
               >
-                <Button>
-                  <Plus />
-                  Nova Certificação
-                </Button>
-                <Modal.Backdrop>
-                  <Modal.Container>
-                    <Modal.Dialog className="max-w-2xl">
-                      <Modal.CloseTrigger />
-                      <Modal.Header>
-                        <Modal.Heading>
-                          Adicionar Nova Certificação
-                        </Modal.Heading>
-                      </Modal.Header>
-                      <Modal.Body>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Registre uma nova certificação
-                        </p>
-                        <div className="grid gap-4 py-4">
-                          {user?.tipo === "admin" && (
-                            <div className="grid gap-2">
-                              <Label htmlFor="colaborador">Colaborador</Label>
-                              <Select
-                                aria-label="Colaborador"
-                                value={newCertificacao.colaborador_id || null}
-                                onChange={(chave) =>
-                                  setNewCertificacao({
-                                    ...newCertificacao,
-                                    colaborador_id: chave ? String(chave) : "",
-                                  })
-                                }
-                                variant="secondary"
-                                placeholder="Selecione um colaborador"
-                              >
-                                <Select.Trigger>
-                                  <Select.Value />
-                                  <Select.Indicator />
-                                </Select.Trigger>
-                                <Select.Popover>
-                                  <ListBox>
-                                    {colaboradores.map((colaborador) => (
-                                      <ListBox.Item
-                                        key={colaborador.id}
-                                        id={colaborador.id.toString()}
-                                        textValue={colaborador.nome}
-                                      >
-                                        {colaborador.nome}
-                                      </ListBox.Item>
-                                    ))}
-                                  </ListBox>
-                                </Select.Popover>
-                              </Select>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor="nome">Nome da Certificação</Label>
-                              <Input
-                                id="nome"
-                                value={newCertificacao.nome}
-                                onChange={(e) =>
-                                  setNewCertificacao({
-                                    ...newCertificacao,
-                                    nome: e.target.value,
-                                  })
-                                }
-                                variant="secondary"
-                                placeholder="Ex: AWS Solutions Architect"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="tipo">Tipo</Label>
-                              <Select
-                                aria-label="Tipo"
-                                value={newCertificacao.tipo || null}
-                                onChange={(chave) =>
-                                  setNewCertificacao({
-                                    ...newCertificacao,
-                                    tipo: chave ? String(chave) : "",
-                                  })
-                                }
-                                variant="secondary"
-                                placeholder="Selecione o tipo"
-                              >
-                                <Select.Trigger>
-                                  <Select.Value />
-                                  <Select.Indicator />
-                                </Select.Trigger>
-                                <Select.Popover>
-                                  <ListBox>
-                                    {tiposCertificacao.map((tipo) => (
-                                      <ListBox.Item
-                                        key={tipo}
-                                        id={tipo}
-                                        textValue={tipo}
-                                      >
-                                        {tipo}
-                                      </ListBox.Item>
-                                    ))}
-                                  </ListBox>
-                                </Select.Popover>
-                              </Select>
-                            </div>
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="instituicao">Instituição</Label>
-                            <Input
-                              id="instituicao"
-                              value={newCertificacao.instituicao}
-                              onChange={(e) =>
-                                setNewCertificacao({
-                                  ...newCertificacao,
-                                  instituicao: e.target.value,
-                                })
-                              }
-                              variant="secondary"
-                              placeholder="Ex: Amazon Web Services"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor="data_obtencao">
-                                Data de Obtenção
-                              </Label>
-                              <Input
-                                id="data_obtencao"
-                                type="date"
-                                value={newCertificacao.data_obtencao}
-                                onChange={(e) =>
-                                  setNewCertificacao({
-                                    ...newCertificacao,
-                                    data_obtencao: e.target.value,
-                                  })
-                                }
-                                variant="secondary"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="data_vencimento">
-                                Data de Vencimento (Opcional)
-                              </Label>
-                              <Input
-                                id="data_vencimento"
-                                type="date"
-                                value={newCertificacao.data_vencimento}
-                                onChange={(e) =>
-                                  setNewCertificacao({
-                                    ...newCertificacao,
-                                    data_vencimento: e.target.value,
-                                  })
-                                }
-                                variant="secondary"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="url_credencial">
-                              URL da Credencial (Opcional)
-                            </Label>
-                            <Input
-                              id="url_credencial"
-                              type="url"
-                              value={newCertificacao.url_credencial}
-                              onChange={(e) =>
-                                setNewCertificacao({
-                                  ...newCertificacao,
-                                  url_credencial: e.target.value,
-                                })
-                              }
-                              variant="secondary"
-                              placeholder="https://..."
-                            />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="observacoes">
-                              Observações (Opcional)
-                            </Label>
-                            <TextArea
-                              id="observacoes"
-                              value={newCertificacao.observacoes}
-                              onChange={(e) =>
-                                setNewCertificacao({
-                                  ...newCertificacao,
-                                  observacoes: e.target.value,
-                                })
-                              }
-                              variant="secondary"
-                              placeholder="Informações adicionais..."
-                            />
-                          </div>
-                        </div>
-                      </Modal.Body>
-                      <Modal.Footer>
-                        <Button onPress={adicionarCertificacao}>
-                          Adicionar Certificação
-                        </Button>
-                      </Modal.Footer>
-                    </Modal.Dialog>
-                  </Modal.Container>
-                </Modal.Backdrop>
-              </Modal>
+                {user?.tipo === "admin" && (
+                  <CampoModal rotulo="Colaborador" htmlFor="colaborador">
+                    <Select
+                      aria-label="Colaborador"
+                      value={newCertificacao.colaborador_id || null}
+                      onChange={(chave) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          colaborador_id: chave ? String(chave) : "",
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Selecione um colaborador"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {colaboradores.map((colaborador) => (
+                            <ListBox.Item
+                              key={colaborador.id}
+                              id={colaborador.id.toString()}
+                              textValue={colaborador.nome}
+                            >
+                              {colaborador.nome}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </CampoModal>
+                )}
+
+                <LinhaCampos>
+                  <CampoModal rotulo="Nome da Certificação" htmlFor="nome">
+                    <Input
+                      id="nome"
+                      value={newCertificacao.nome}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          nome: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Ex: AWS Solutions Architect"
+                    />
+                  </CampoModal>
+
+                  <CampoModal rotulo="Tipo" htmlFor="tipo">
+                    <Select
+                      aria-label="Tipo"
+                      value={newCertificacao.tipo || null}
+                      onChange={(chave) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          tipo: chave ? String(chave) : "",
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Selecione o tipo"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {tiposCertificacao.map((tipo) => (
+                            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+                              {tipo}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </CampoModal>
+                </LinhaCampos>
+
+                <CampoModal rotulo="Instituição" htmlFor="instituicao">
+                  <Input
+                    id="instituicao"
+                    value={newCertificacao.instituicao}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        instituicao: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="Ex: Amazon Web Services"
+                  />
+                </CampoModal>
+
+                <LinhaCampos>
+                  <CampoModal rotulo="Data de Obtenção" htmlFor="data_obtencao">
+                    <Input
+                      id="data_obtencao"
+                      type="date"
+                      value={newCertificacao.data_obtencao}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          data_obtencao: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                    />
+                  </CampoModal>
+
+                  <CampoModal
+                    rotulo="Data de Vencimento (Opcional)"
+                    htmlFor="data_vencimento"
+                  >
+                    <Input
+                      id="data_vencimento"
+                      type="date"
+                      value={newCertificacao.data_vencimento}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          data_vencimento: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                    />
+                  </CampoModal>
+                </LinhaCampos>
+
+                <CampoModal
+                  rotulo="URL da Credencial (Opcional)"
+                  htmlFor="url_credencial"
+                >
+                  <Input
+                    id="url_credencial"
+                    type="url"
+                    value={newCertificacao.url_credencial}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        url_credencial: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="https://..."
+                  />
+                </CampoModal>
+
+                <CampoModal
+                  rotulo="Observações (Opcional)"
+                  htmlFor="observacoes"
+                >
+                  <TextArea
+                    id="observacoes"
+                    value={newCertificacao.observacoes}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        observacoes: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="Informações adicionais..."
+                  />
+                </CampoModal>
+              </ModalForm>
             </div>
           </Card.Header>
           <Card.Content>
@@ -775,177 +765,150 @@ export default function CertificacoesPage() {
           </Card.Content>
         </Card>
 
-        <Modal
+        <ModalForm
           isOpen={isEditDialogOpen}
           onOpenChange={(aberto) => {
             if (aberto) setIsEditDialogOpen(true);
             else fecharDialogEdicao();
           }}
+          titulo="Editar Certificação"
+          descricao="Atualize as informações da certificação"
+          rotuloConfirmar="Atualizar Certificação"
+          onConfirmar={editarCertificacao}
         >
-          <Modal.Backdrop>
-            <Modal.Container>
-              <Modal.Dialog className="max-w-2xl">
-                <Modal.CloseTrigger />
-                <Modal.Header>
-                  <Modal.Heading>Editar Certificação</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Atualize as informações da certificação
-                  </p>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit_nome">Nome da Certificação</Label>
-                        <Input
-                          id="edit_nome"
-                          value={editandoCertificacao.nome}
-                          onChange={(e) =>
-                            setEditandoCertificacao({
-                              ...editandoCertificacao,
-                              nome: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Ex: AWS Solutions Architect"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit_tipo">Tipo</Label>
-                        <Select
-                          aria-label="Tipo"
-                          value={editandoCertificacao.tipo || null}
-                          onChange={(chave) =>
-                            setEditandoCertificacao({
-                              ...editandoCertificacao,
-                              tipo: chave ? String(chave) : "",
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Selecione o tipo"
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {tiposCertificacao.map((tipo) => (
-                                <ListBox.Item
-                                  key={tipo}
-                                  id={tipo}
-                                  textValue={tipo}
-                                >
-                                  {tipo}
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit_instituicao">Instituição</Label>
-                      <Input
-                        id="edit_instituicao"
-                        value={editandoCertificacao.instituicao}
-                        onChange={(e) =>
-                          setEditandoCertificacao({
-                            ...editandoCertificacao,
-                            instituicao: e.target.value,
-                          })
-                        }
-                        variant="secondary"
-                        placeholder="Ex: Amazon Web Services"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit_data_obtencao">
-                          Data de Obtenção
-                        </Label>
-                        <Input
-                          id="edit_data_obtencao"
-                          type="date"
-                          value={editandoCertificacao.data_obtencao}
-                          onChange={(e) =>
-                            setEditandoCertificacao({
-                              ...editandoCertificacao,
-                              data_obtencao: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit_data_vencimento">
-                          Data de Vencimento (Opcional)
-                        </Label>
-                        <Input
-                          id="edit_data_vencimento"
-                          type="date"
-                          value={editandoCertificacao.data_vencimento}
-                          onChange={(e) =>
-                            setEditandoCertificacao({
-                              ...editandoCertificacao,
-                              data_vencimento: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit_url_credencial">
-                        URL da Credencial (Opcional)
-                      </Label>
-                      <Input
-                        id="edit_url_credencial"
-                        type="url"
-                        value={editandoCertificacao.url_credencial}
-                        onChange={(e) =>
-                          setEditandoCertificacao({
-                            ...editandoCertificacao,
-                            url_credencial: e.target.value,
-                          })
-                        }
-                        variant="secondary"
-                        placeholder="https://..."
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit_observacoes">
-                        Observações (Opcional)
-                      </Label>
-                      <TextArea
-                        id="edit_observacoes"
-                        value={editandoCertificacao.observacoes}
-                        onChange={(e) =>
-                          setEditandoCertificacao({
-                            ...editandoCertificacao,
-                            observacoes: e.target.value,
-                          })
-                        }
-                        variant="secondary"
-                        placeholder="Informações adicionais..."
-                      />
-                    </div>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button
-                    onPress={() => {
-                      editarCertificacao();
-                    }}
-                    type="button"
-                  >
-                    Atualizar Certificação
-                  </Button>
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+          <LinhaCampos>
+            <CampoModal rotulo="Nome da Certificação" htmlFor="edit_nome">
+              <Input
+                id="edit_nome"
+                value={editandoCertificacao.nome}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    nome: e.target.value,
+                  })
+                }
+                variant="secondary"
+                placeholder="Ex: AWS Solutions Architect"
+              />
+            </CampoModal>
+
+            <CampoModal rotulo="Tipo" htmlFor="edit_tipo">
+              <Select
+                aria-label="Tipo"
+                value={editandoCertificacao.tipo || null}
+                onChange={(chave) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    tipo: chave ? String(chave) : "",
+                  })
+                }
+                variant="secondary"
+                placeholder="Selecione o tipo"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {tiposCertificacao.map((tipo) => (
+                      <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+                        {tipo}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </CampoModal>
+          </LinhaCampos>
+
+          <CampoModal rotulo="Instituição" htmlFor="edit_instituicao">
+            <Input
+              id="edit_instituicao"
+              value={editandoCertificacao.instituicao}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  instituicao: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="Ex: Amazon Web Services"
+            />
+          </CampoModal>
+
+          <LinhaCampos>
+            <CampoModal rotulo="Data de Obtenção" htmlFor="edit_data_obtencao">
+              <Input
+                id="edit_data_obtencao"
+                type="date"
+                value={editandoCertificacao.data_obtencao}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    data_obtencao: e.target.value,
+                  })
+                }
+                variant="secondary"
+              />
+            </CampoModal>
+
+            <CampoModal
+              rotulo="Data de Vencimento (Opcional)"
+              htmlFor="edit_data_vencimento"
+            >
+              <Input
+                id="edit_data_vencimento"
+                type="date"
+                value={editandoCertificacao.data_vencimento}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    data_vencimento: e.target.value,
+                  })
+                }
+                variant="secondary"
+              />
+            </CampoModal>
+          </LinhaCampos>
+
+          <CampoModal
+            rotulo="URL da Credencial (Opcional)"
+            htmlFor="edit_url_credencial"
+          >
+            <Input
+              id="edit_url_credencial"
+              type="url"
+              value={editandoCertificacao.url_credencial}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  url_credencial: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="https://..."
+            />
+          </CampoModal>
+
+          <CampoModal
+            rotulo="Observações (Opcional)"
+            htmlFor="edit_observacoes"
+          >
+            <TextArea
+              id="edit_observacoes"
+              value={editandoCertificacao.observacoes}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  observacoes: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="Informações adicionais..."
+            />
+          </CampoModal>
+        </ModalForm>
       </LayoutPagina>
     </ProtectedRoute>
   );

@@ -2,10 +2,6 @@
 
 import type { LucideIcon } from "lucide-react";
 
-/**
- * Ícone em destaque com fundo tingido pela própria cor, como nos cartões da
- * home. As cores vêm dos tokens de tema (--viz-*), então acompanham claro/escuro.
- */
 export function IconeDestaque({
   icone: Icone,
   cor,

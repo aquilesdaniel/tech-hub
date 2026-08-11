@@ -4,6 +4,7 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
 import { inteiro, moeda, moedaCompacta } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
+import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
@@ -13,9 +14,7 @@ import {
   Card,
   Chip,
   Input,
-  Label,
   ListBox,
-  Modal,
   Select,
   Tabs,
   TextArea,
@@ -109,6 +108,10 @@ export default function SalgadosPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     fetchData();
   }, [
     user,
@@ -522,7 +525,7 @@ export default function SalgadosPage() {
 
         <Tabs defaultSelectedKey="pendentes" className="gap-4">
           <Tabs.ListContainer>
-            <Tabs.List className="grid w-full grid-cols-2">
+            <Tabs.List className="grid w-full grid-cols-1 sm:grid-cols-2">
               <Tabs.Tab id="pendentes">
                 Pendentes
                 <Tabs.Indicator />
@@ -545,318 +548,271 @@ export default function SalgadosPage() {
                     </Card.Description>
                   </div>
                   <div className="flex gap-4 items-center flex-wrap">
-                    <Modal
+                    <ModalForm
                       isOpen={isTransferOpen}
                       onOpenChange={setIsTransferOpen}
+                      titulo="Sacar Dinheiro"
+                      descricao="Solicite uma transferência dos valores disponíveis."
+                      gatilho={
+                        <Button variant="secondary">
+                          <Banknote />
+                          Sacar dinheiro
+                        </Button>
+                      }
+                      rotuloConfirmar="Confirmar Transferência"
+                      rotuloEnviando="Enviando..."
+                      onConfirmar={handleTransferirDinheiro}
+                      isEnviando={isSubmittingTransfer}
+                      isConfirmarDesabilitado={saldoInfo.available_amount <= 0}
                     >
-                      <Button variant="secondary">
-                        <Banknote />
-                        Sacar dinheiro
-                      </Button>
-                      <Modal.Backdrop>
-                        <Modal.Container>
-                          <Modal.Dialog className="sm:max-w-md">
-                            <Modal.CloseTrigger />
-                            <Modal.Header>
-                              <Modal.Heading>Sacar Dinheiro</Modal.Heading>
-                            </Modal.Header>
-                            <Modal.Body>
-                              <p className="text-sm text-muted-foreground">
-                                Solicite uma transferência dos valores
-                                disponíveis.
-                              </p>
-                              <p className="text-sm">
-                                Saldo disponível para saque:{" "}
-                                <strong>
-                                  {saldoInfo.available_amount.toLocaleString(
-                                    "pt-BR",
-                                    { style: "currency", currency: "BRL" },
-                                  )}
-                                </strong>
-                              </p>
-                              <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                  <Label htmlFor="transfer_amount">
-                                    Valor a sacar (R$)
-                                  </Label>
-                                  <Input
-                                    id="transfer_amount"
-                                    type="number"
-                                    max={saldoInfo.available_amount}
-                                    value={transferData.amount}
-                                    onChange={(e) =>
-                                      setTransferData({
-                                        ...transferData,
-                                        amount: e.target.value,
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Ex: 80.50 para R$ 80,50"
-                                  />
-                                </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="transfer_desc">
-                                    Observação
-                                  </Label>
-                                  <TextArea
-                                    id="transfer_desc"
-                                    value={transferData.description}
-                                    onChange={(e) =>
-                                      setTransferData({
-                                        ...transferData,
-                                        description: e.target.value,
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Ex: Salgado de novembro"
-                                  />
-                                </div>
-                              </div>
-                            </Modal.Body>
-                            <Modal.Footer>
-                              <Button
-                                onPress={handleTransferirDinheiro}
-                                isDisabled={
-                                  isSubmittingTransfer ||
-                                  saldoInfo.available_amount <= 0
-                                }
-                              >
-                                {isSubmittingTransfer
-                                  ? "Enviando..."
-                                  : "Confirmar Transferência"}
-                              </Button>
-                            </Modal.Footer>
-                          </Modal.Dialog>
-                        </Modal.Container>
-                      </Modal.Backdrop>
-                    </Modal>
+                      <p className="text-sm">
+                        Saldo disponível para saque:{" "}
+                        <strong>
+                          {saldoInfo.available_amount.toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          })}
+                        </strong>
+                      </p>
 
-                    <Modal
+                      <CampoModal
+                        rotulo="Valor a sacar (R$)"
+                        htmlFor="transfer_amount"
+                      >
+                        <Input
+                          id="transfer_amount"
+                          type="number"
+                          max={saldoInfo.available_amount}
+                          value={transferData.amount}
+                          onChange={(e) =>
+                            setTransferData({
+                              ...transferData,
+                              amount: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Ex: 80.50 para R$ 80,50"
+                        />
+                      </CampoModal>
+
+                      <CampoModal rotulo="Observação" htmlFor="transfer_desc">
+                        <TextArea
+                          id="transfer_desc"
+                          value={transferData.description}
+                          onChange={(e) =>
+                            setTransferData({
+                              ...transferData,
+                              description: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Ex: Salgado de novembro"
+                        />
+                      </CampoModal>
+                    </ModalForm>
+
+                    <ModalForm
                       isOpen={isAddDialogOpen}
                       onOpenChange={setIsAddDialogOpen}
+                      titulo="Nova Dívida de Salgado"
+                      descricao="Adicione uma nova dívida de salgado para um colaborador."
+                      gatilho={
+                        <Button>
+                          <Plus />
+                          Adicionar Dívida
+                        </Button>
+                      }
+                      rotuloConfirmar="Adicionar Dívida"
+                      onConfirmar={adicionarDivida}
                     >
-                      <Button>
-                        <Plus />
-                        Adicionar Dívida
-                      </Button>
-                      <Modal.Backdrop>
-                        <Modal.Container>
-                          <Modal.Dialog className="sm:max-w-md">
-                            <Modal.CloseTrigger />
-                            <Modal.Header>
-                              <Modal.Heading>
-                                Nova Dívida de Salgado
-                              </Modal.Heading>
-                            </Modal.Header>
-                            <Modal.Body>
-                              <p className="text-sm text-muted-foreground">
-                                Adicione uma nova dívida de salgado para um
-                                colaborador.
-                              </p>
-                              <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                  <Label htmlFor="colaborador">
-                                    Colaborador
-                                  </Label>
-                                  <Select
-                                    value={newDivida.colaborador_id}
-                                    onChange={(value) =>
-                                      setNewDivida({
-                                        ...newDivida,
-                                        colaborador_id: value as string,
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Selecione um colaborador"
-                                  >
-                                    <Select.Trigger>
-                                      <Select.Value />
-                                      <Select.Indicator />
-                                    </Select.Trigger>
-                                    <Select.Popover>
-                                      <ListBox>
-                                        {colaboradores.map((colaborador) => (
-                                          <ListBox.Item
-                                            key={colaborador.id}
-                                            id={colaborador.id.toString()}
-                                            textValue={colaborador.nome}
-                                          >
-                                            {colaborador.nome}
-                                          </ListBox.Item>
-                                        ))}
-                                      </ListBox>
-                                    </Select.Popover>
-                                  </Select>
-                                </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="item">Tipo de Salgado</Label>
-                                  <Select
-                                    value={newDivida.item}
-                                    onChange={(value) =>
-                                      setNewDivida({
-                                        ...newDivida,
-                                        item: value as string,
-                                        valor: "",
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Selecione o tipo"
-                                  >
-                                    <Select.Trigger>
-                                      <Select.Value />
-                                      <Select.Indicator />
-                                    </Select.Trigger>
-                                    <Select.Popover>
-                                      <ListBox>
-                                        <ListBox.Item
-                                          id="salgado"
-                                          textValue="Salgado Avulso"
-                                        >
-                                          Salgado Avulso
-                                        </ListBox.Item>
-                                        <ListBox.Item
-                                          id="1 cento"
-                                          textValue="1 Cento de Salgados"
-                                        >
-                                          1 Cento de Salgados
-                                        </ListBox.Item>
-                                        <ListBox.Item
-                                          id="2 centos"
-                                          textValue="2 Centos de Salgados"
-                                        >
-                                          2 Centos de Salgados
-                                        </ListBox.Item>
-                                      </ListBox>
-                                    </Select.Popover>
-                                  </Select>
-                                </div>
-                                {(newDivida.item === "1 cento" ||
-                                  newDivida.item === "2 centos") && (
-                                  <>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="valorPorCento">
-                                        Valor por Cento (R$)
-                                      </Label>
-                                      <Input
-                                        id="valorPorCento"
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={newDivida.valorPorCento}
-                                        onChange={(e) => {
-                                          const valorAjustado =
-                                            e.target.value.replace(
-                                              /[^0-9,]/g,
-                                              "",
-                                            );
-                                          setNewDivida({
-                                            ...newDivida,
-                                            valorPorCento: valorAjustado,
-                                          });
-                                        }}
-                                        placeholder="0,00"
-                                      />
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label htmlFor="quantidadeCentos">
-                                        Quantidade de Centos
-                                      </Label>
-                                      <Select
-                                        value={newDivida.quantidadeCentos}
-                                        onChange={(value) =>
-                                          setNewDivida({
-                                            ...newDivida,
-                                            quantidadeCentos: value as string,
-                                          })
-                                        }
-                                      >
-                                        <Select.Trigger>
-                                          <Select.Value />
-                                          <Select.Indicator />
-                                        </Select.Trigger>
-                                        <Select.Popover>
-                                          <ListBox>
-                                            <ListBox.Item
-                                              id="1"
-                                              textValue="1 Cento"
-                                            >
-                                              1 Cento
-                                            </ListBox.Item>
-                                            <ListBox.Item
-                                              id="2"
-                                              textValue="2 Centos"
-                                            >
-                                              2 Centos
-                                            </ListBox.Item>
-                                          </ListBox>
-                                        </Select.Popover>
-                                      </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                      <Label>Valor Total</Label>
-                                      <div className="p-2 bg-gray-100 rounded border text-lg font-semibold">
-                                        {newDivida.valor
-                                          ? Number(
-                                              newDivida.valor,
-                                            ).toLocaleString("pt-BR", {
-                                              style: "currency",
-                                              currency: "BRL",
-                                            })
-                                          : "R$ 0,00"}
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                                {newDivida.item === "salgado" && (
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="valor">Valor (R$)</Label>
-                                    <Input
-                                      id="valor"
-                                      type="text"
-                                      inputMode="decimal"
-                                      value={newDivida.valor}
-                                      onChange={(e) => {
-                                        const valorAjustado =
-                                          e.target.value.replace(
-                                            /[^0-9,]/g,
-                                            "",
-                                          );
-                                        setNewDivida({
-                                          ...newDivida,
-                                          valor: valorAjustado,
-                                        });
-                                      }}
-                                      placeholder="0,00"
-                                    />
-                                  </div>
-                                )}
-                                <div className="grid gap-2">
-                                  <Label htmlFor="motivo">
-                                    Motivo da Dívida
-                                  </Label>
-                                  <TextArea
-                                    id="motivo"
-                                    value={newDivida.motivo}
-                                    onChange={(e) =>
-                                      setNewDivida({
-                                        ...newDivida,
-                                        motivo: e.target.value,
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
-                                  />
-                                </div>
-                              </div>
-                            </Modal.Body>
-                            <Modal.Footer>
-                              <Button onPress={adicionarDivida}>
-                                Adicionar Dívida
-                              </Button>
-                            </Modal.Footer>
-                          </Modal.Dialog>
-                        </Modal.Container>
-                      </Modal.Backdrop>
-                    </Modal>
+                      <CampoModal rotulo="Colaborador" htmlFor="colaborador">
+                        <Select
+                          value={newDivida.colaborador_id}
+                          onChange={(value) =>
+                            setNewDivida({
+                              ...newDivida,
+                              colaborador_id: value as string,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Selecione um colaborador"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {colaboradores.map((colaborador) => (
+                                <ListBox.Item
+                                  key={colaborador.id}
+                                  id={colaborador.id.toString()}
+                                  textValue={colaborador.nome}
+                                >
+                                  {colaborador.nome}
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </CampoModal>
+
+                      <CampoModal rotulo="Tipo de Salgado" htmlFor="item">
+                        <Select
+                          value={newDivida.item}
+                          onChange={(value) =>
+                            setNewDivida({
+                              ...newDivida,
+                              item: value as string,
+                              valor: "",
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Selecione o tipo"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item
+                                id="salgado"
+                                textValue="Salgado Avulso"
+                              >
+                                Salgado Avulso
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="1 cento"
+                                textValue="1 Cento de Salgados"
+                              >
+                                1 Cento de Salgados
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="2 centos"
+                                textValue="2 Centos de Salgados"
+                              >
+                                2 Centos de Salgados
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </CampoModal>
+
+                      {(newDivida.item === "1 cento" ||
+                        newDivida.item === "2 centos") && (
+                        <>
+                          <LinhaCampos>
+                            <CampoModal
+                              rotulo="Valor por Cento (R$)"
+                              htmlFor="valorPorCento"
+                            >
+                              <Input
+                                id="valorPorCento"
+                                type="text"
+                                inputMode="decimal"
+                                value={newDivida.valorPorCento}
+                                onChange={(e) => {
+                                  const valorAjustado = e.target.value.replace(
+                                    /[^0-9,]/g,
+                                    "",
+                                  );
+                                  setNewDivida({
+                                    ...newDivida,
+                                    valorPorCento: valorAjustado,
+                                  });
+                                }}
+                                variant="secondary"
+                                placeholder="0,00"
+                              />
+                            </CampoModal>
+
+                            <CampoModal
+                              rotulo="Quantidade de Centos"
+                              htmlFor="quantidadeCentos"
+                            >
+                              <Select
+                                value={newDivida.quantidadeCentos}
+                                onChange={(value) =>
+                                  setNewDivida({
+                                    ...newDivida,
+                                    quantidadeCentos: value as string,
+                                  })
+                                }
+                                variant="secondary"
+                              >
+                                <Select.Trigger>
+                                  <Select.Value />
+                                  <Select.Indicator />
+                                </Select.Trigger>
+                                <Select.Popover>
+                                  <ListBox>
+                                    <ListBox.Item id="1" textValue="1 Cento">
+                                      1 Cento
+                                    </ListBox.Item>
+                                    <ListBox.Item id="2" textValue="2 Centos">
+                                      2 Centos
+                                    </ListBox.Item>
+                                  </ListBox>
+                                </Select.Popover>
+                              </Select>
+                            </CampoModal>
+                          </LinhaCampos>
+
+                          <CampoModal rotulo="Valor Total">
+                            <div className="rounded border border-border bg-default p-2 text-lg font-semibold text-foreground">
+                              {newDivida.valor
+                                ? Number(newDivida.valor).toLocaleString(
+                                    "pt-BR",
+                                    {
+                                      style: "currency",
+                                      currency: "BRL",
+                                    },
+                                  )
+                                : "R$ 0,00"}
+                            </div>
+                          </CampoModal>
+                        </>
+                      )}
+
+                      {newDivida.item === "salgado" && (
+                        <CampoModal rotulo="Valor (R$)" htmlFor="valor">
+                          <Input
+                            id="valor"
+                            type="text"
+                            inputMode="decimal"
+                            value={newDivida.valor}
+                            onChange={(e) => {
+                              const valorAjustado = e.target.value.replace(
+                                /[^0-9,]/g,
+                                "",
+                              );
+                              setNewDivida({
+                                ...newDivida,
+                                valor: valorAjustado,
+                              });
+                            }}
+                            variant="secondary"
+                            placeholder="0,00"
+                          />
+                        </CampoModal>
+                      )}
+
+                      <CampoModal rotulo="Motivo da Dívida" htmlFor="motivo">
+                        <TextArea
+                          id="motivo"
+                          value={newDivida.motivo}
+                          onChange={(e) =>
+                            setNewDivida({
+                              ...newDivida,
+                              motivo: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
+                        />
+                      </CampoModal>
+                    </ModalForm>
                   </div>
                 </div>
               </Card.Header>

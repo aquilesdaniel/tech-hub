@@ -2,7 +2,9 @@
 
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { useConfirmacao } from "@/components/confirmacao";
 import { DataTable } from "@/components/data-table";
+import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
@@ -12,9 +14,7 @@ import {
   Card,
   Chip,
   Input,
-  Label,
   ListBox,
-  Modal,
   Select,
   Tabs,
   toast,
@@ -69,6 +69,7 @@ interface ColaboradorAdmin {
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const confirmar = useConfirmacao();
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [setores, setSetores] = useState<Setor[]>([]);
 
@@ -141,6 +142,10 @@ export default function AdminPage() {
   const [editSetor, setEditSetor] = useState({ nome: "", descricao: "" });
 
   useEffect(() => {
+    if (!user?.email) {
+      return;
+    }
+
     fetchData();
   }, [
     user?.email,
@@ -704,8 +709,13 @@ export default function AdminPage() {
   };
 
   const removerSetor = async (setor: Setor) => {
-    if (!confirm(`Tem certeza que deseja excluir o setor "${setor.nome}"?`))
-      return;
+    const confirmado = await confirmar({
+      titulo: "Excluir setor",
+      descricao: `Tem certeza que deseja excluir o setor "${setor.nome}"? Essa ação não pode ser desfeita.`,
+      rotuloConfirmar: "Excluir",
+      destrutivo: true,
+    });
+    if (!confirmado) return;
 
     try {
       const response = await fetch(`/api/admin/setores/${setor.id}`, {
@@ -830,12 +840,13 @@ export default function AdminPage() {
   };
 
   const removerAdminTemporario = async (colaborador: ColaboradorAdmin) => {
-    if (
-      !confirm(
-        `Tem certeza que deseja remover os privilégios de admin de ${colaborador.nome}?`,
-      )
-    )
-      return;
+    const confirmado = await confirmar({
+      titulo: "Remover acesso de admin",
+      descricao: `Tem certeza que deseja remover os privilégios de admin de ${colaborador.nome}?`,
+      rotuloConfirmar: "Remover acesso",
+      destrutivo: true,
+    });
+    if (!confirmado) return;
 
     try {
       const response = await fetch(
@@ -936,7 +947,7 @@ export default function AdminPage() {
 
         <Tabs defaultSelectedKey="colaboradores" className="gap-4">
           <Tabs.ListContainer>
-            <Tabs.List className="grid w-full grid-cols-3">
+            <Tabs.List className="grid w-full grid-cols-1 sm:grid-cols-3">
               <Tabs.Tab id="colaboradores">
                 Colaboradores
                 <Tabs.Indicator />
@@ -952,7 +963,7 @@ export default function AdminPage() {
             </Tabs.List>
           </Tabs.ListContainer>
 
-          <Tabs.Panel id="colaboradores" className="p-0">
+          <Tabs.Panel className="p-0" id="colaboradores">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -962,7 +973,7 @@ export default function AdminPage() {
                       Cadastre e gerencie todos os colaboradores da empresa
                     </Card.Description>
                   </div>
-                  <Modal
+                  <ModalForm
                     isOpen={isAddColaboradorOpen}
                     onOpenChange={(aberto) => {
                       setIsAddColaboradorOpen(aberto);
@@ -975,177 +986,160 @@ export default function AdminPage() {
                           setor_id: "",
                         });
                     }}
+                    titulo="Adicionar Novo Colaborador"
+                    descricao="Cadastre um novo colaborador na empresa"
+                    gatilho={
+                      <Button>
+                        <UserPlus />
+                        Novo Colaborador
+                      </Button>
+                    }
+                    rotuloConfirmar="Cadastrar Colaborador"
+                    onConfirmar={adicionarColaborador}
                   >
-                    <Button>
-                      <UserPlus />
-                      Novo Colaborador
-                    </Button>
-                    <Modal.Backdrop>
-                      <Modal.Container>
-                        <Modal.Dialog className="max-w-md">
-                          <Modal.CloseTrigger />
-                          <Modal.Header>
-                            <Modal.Heading>
-                              Adicionar Novo Colaborador
-                            </Modal.Heading>
-                          </Modal.Header>
-                          <Modal.Body>
-                            <p className="text-sm text-muted mb-4">
-                              Cadastre um novo colaborador na empresa
-                            </p>
-                            <div className="grid gap-4">
-                              <div className="grid gap-2">
-                                <Label htmlFor="nome">Nome Completo</Label>
-                                <Input
-                                  id="nome"
-                                  value={newColaborador.nome}
-                                  onChange={(e) =>
-                                    setNewColaborador({
-                                      ...newColaborador,
-                                      nome: e.target.value,
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Nome do colaborador"
-                                />
-                              </div>
-                              <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                  id="email"
-                                  type="email"
-                                  value={newColaborador.email}
-                                  onChange={(e) =>
-                                    setNewColaborador({
-                                      ...newColaborador,
-                                      email: e.target.value,
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="email@empresa.com"
-                                />
-                              </div>
-                              <div className="grid gap-2">
-                                <Label htmlFor="departamento">
-                                  Departamento
-                                </Label>
-                                <Select
-                                  aria-label="Departamento"
-                                  value={newColaborador.departamento || null}
-                                  onChange={(chave) =>
-                                    setNewColaborador({
-                                      ...newColaborador,
-                                      departamento: chave ? String(chave) : "",
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Selecione o departamento"
-                                >
-                                  <Select.Trigger>
-                                    <Select.Value />
-                                    <Select.Indicator />
-                                  </Select.Trigger>
-                                  <Select.Popover>
-                                    <ListBox>
-                                      <ListBox.Item id="TI" textValue="TI">
-                                        TI
-                                      </ListBox.Item>
-                                      <ListBox.Item id="RH" textValue="RH">
-                                        RH
-                                      </ListBox.Item>
-                                      <ListBox.Item
-                                        id="Vendas"
-                                        textValue="Vendas"
-                                      >
-                                        Vendas
-                                      </ListBox.Item>
-                                      <ListBox.Item
-                                        id="Marketing"
-                                        textValue="Marketing"
-                                      >
-                                        Marketing
-                                      </ListBox.Item>
-                                      <ListBox.Item
-                                        id="Financeiro"
-                                        textValue="Financeiro"
-                                      >
-                                        Financeiro
-                                      </ListBox.Item>
-                                      <ListBox.Item
-                                        id="Operações"
-                                        textValue="Operações"
-                                      >
-                                        Operações
-                                      </ListBox.Item>
-                                      <ListBox.Item
-                                        id="Jurídico"
-                                        textValue="Jurídico"
-                                      >
-                                        Jurídico
-                                      </ListBox.Item>
-                                    </ListBox>
-                                  </Select.Popover>
-                                </Select>
-                              </div>
-                              <div className="grid gap-2">
-                                <Label htmlFor="cargo">Cargo</Label>
-                                <Input
-                                  id="cargo"
-                                  value={newColaborador.cargo}
-                                  onChange={(e) =>
-                                    setNewColaborador({
-                                      ...newColaborador,
-                                      cargo: e.target.value,
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Ex: Analista, Gerente, Coordenador..."
-                                />
-                              </div>
-                              <div className="grid gap-2">
-                                <Label htmlFor="setor">Setor</Label>
-                                <Select
-                                  aria-label="Setor"
-                                  value={newColaborador.setor_id || null}
-                                  onChange={(chave) =>
-                                    setNewColaborador({
-                                      ...newColaborador,
-                                      setor_id: chave ? String(chave) : "",
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Selecione o setor"
-                                >
-                                  <Select.Trigger>
-                                    <Select.Value />
-                                    <Select.Indicator />
-                                  </Select.Trigger>
-                                  <Select.Popover>
-                                    <ListBox>
-                                      {setores.map((setor) => (
-                                        <ListBox.Item
-                                          key={setor.id}
-                                          id={setor.id.toString()}
-                                          textValue={setor.nome}
-                                        >
-                                          {setor.nome}
-                                        </ListBox.Item>
-                                      ))}
-                                    </ListBox>
-                                  </Select.Popover>
-                                </Select>
-                              </div>
-                            </div>
-                          </Modal.Body>
-                          <Modal.Footer>
-                            <Button onPress={adicionarColaborador}>
-                              Cadastrar Colaborador
-                            </Button>
-                          </Modal.Footer>
-                        </Modal.Dialog>
-                      </Modal.Container>
-                    </Modal.Backdrop>
-                  </Modal>
+                    <LinhaCampos>
+                      <CampoModal rotulo="Nome Completo" htmlFor="nome">
+                        <Input
+                          id="nome"
+                          value={newColaborador.nome}
+                          onChange={(e) =>
+                            setNewColaborador({
+                              ...newColaborador,
+                              nome: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Nome do colaborador"
+                        />
+                      </CampoModal>
+
+                      <CampoModal rotulo="Email" htmlFor="email">
+                        <Input
+                          id="email"
+                          type="email"
+                          value={newColaborador.email}
+                          onChange={(e) =>
+                            setNewColaborador({
+                              ...newColaborador,
+                              email: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="email@empresa.com"
+                        />
+                      </CampoModal>
+                    </LinhaCampos>
+
+                    <LinhaCampos>
+                      <CampoModal
+                        rotulo="Departamento"
+                        htmlFor="departamento"
+                      >
+                        <Select
+                          aria-label="Departamento"
+                          value={newColaborador.departamento || null}
+                          onChange={(chave) =>
+                            setNewColaborador({
+                              ...newColaborador,
+                              departamento: chave ? String(chave) : "",
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Selecione o departamento"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="TI" textValue="TI">
+                                TI
+                              </ListBox.Item>
+                              <ListBox.Item id="RH" textValue="RH">
+                                RH
+                              </ListBox.Item>
+                              <ListBox.Item id="Vendas" textValue="Vendas">
+                                Vendas
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="Marketing"
+                                textValue="Marketing"
+                              >
+                                Marketing
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="Financeiro"
+                                textValue="Financeiro"
+                              >
+                                Financeiro
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="Operações"
+                                textValue="Operações"
+                              >
+                                Operações
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="Jurídico"
+                                textValue="Jurídico"
+                              >
+                                Jurídico
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </CampoModal>
+
+                      <CampoModal rotulo="Cargo" htmlFor="cargo">
+                        <Input
+                          id="cargo"
+                          value={newColaborador.cargo}
+                          onChange={(e) =>
+                            setNewColaborador({
+                              ...newColaborador,
+                              cargo: e.target.value,
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Ex: Analista, Gerente, Coordenador..."
+                        />
+                      </CampoModal>
+                    </LinhaCampos>
+
+                    <CampoModal rotulo="Setor" htmlFor="setor">
+                      <Select
+                        aria-label="Setor"
+                        value={newColaborador.setor_id || null}
+                        onChange={(chave) =>
+                          setNewColaborador({
+                            ...newColaborador,
+                            setor_id: chave ? String(chave) : "",
+                          })
+                        }
+                        variant="secondary"
+                        placeholder="Selecione o setor"
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {setores.map((setor) => (
+                              <ListBox.Item
+                                key={setor.id}
+                                id={setor.id.toString()}
+                                textValue={setor.nome}
+                              >
+                                {setor.nome}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </CampoModal>
+                  </ModalForm>
                 </div>
               </Card.Header>
               <Card.Content>
@@ -1175,7 +1169,7 @@ export default function AdminPage() {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel id="setores" className="p-0">
+          <Tabs.Panel className="p-0" id="setores">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1185,74 +1179,53 @@ export default function AdminPage() {
                       Visualize e organize os setores da empresa
                     </Card.Description>
                   </div>
-                  <Modal
+                  <ModalForm
                     isOpen={isAddSetorOpen}
                     onOpenChange={(aberto) => {
                       setIsAddSetorOpen(aberto);
                       if (!aberto) setNewSetor({ nome: "", descricao: "" });
                     }}
+                    titulo="Adicionar Novo Setor"
+                    descricao="Crie um novo setor para organizar os colaboradores"
+                    gatilho={
+                      <Button>
+                        <Plus />
+                        Novo Setor
+                      </Button>
+                    }
+                    rotuloConfirmar="Criar Setor"
+                    onConfirmar={adicionarSetor}
                   >
-                    <Button>
-                      <Plus />
-                      Novo Setor
-                    </Button>
-                    <Modal.Backdrop>
-                      <Modal.Container>
-                        <Modal.Dialog>
-                          <Modal.CloseTrigger />
-                          <Modal.Header>
-                            <Modal.Heading>Adicionar Novo Setor</Modal.Heading>
-                          </Modal.Header>
-                          <Modal.Body>
-                            <p className="text-sm text-muted mb-4">
-                              Crie um novo setor para organizar os colaboradores
-                            </p>
-                            <div className="grid gap-4">
-                              <div className="grid gap-2">
-                                <Label htmlFor="nome-setor">
-                                  Nome do Setor
-                                </Label>
-                                <Input
-                                  id="nome-setor"
-                                  value={newSetor.nome}
-                                  onChange={(e) =>
-                                    setNewSetor({
-                                      ...newSetor,
-                                      nome: e.target.value,
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Ex: Desenvolvimento, Suporte..."
-                                />
-                              </div>
-                              <div className="grid gap-2">
-                                <Label htmlFor="descricao-setor">
-                                  Descrição
-                                </Label>
-                                <Input
-                                  id="descricao-setor"
-                                  value={newSetor.descricao}
-                                  onChange={(e) =>
-                                    setNewSetor({
-                                      ...newSetor,
-                                      descricao: e.target.value,
-                                    })
-                                  }
-                                  variant="secondary"
-                                  placeholder="Breve descrição do setor"
-                                />
-                              </div>
-                            </div>
-                          </Modal.Body>
-                          <Modal.Footer>
-                            <Button onPress={adicionarSetor}>
-                              Criar Setor
-                            </Button>
-                          </Modal.Footer>
-                        </Modal.Dialog>
-                      </Modal.Container>
-                    </Modal.Backdrop>
-                  </Modal>
+                    <CampoModal rotulo="Nome do Setor" htmlFor="nome-setor">
+                      <Input
+                        id="nome-setor"
+                        value={newSetor.nome}
+                        onChange={(e) =>
+                          setNewSetor({
+                            ...newSetor,
+                            nome: e.target.value,
+                          })
+                        }
+                        variant="secondary"
+                        placeholder="Ex: Desenvolvimento, Suporte..."
+                      />
+                    </CampoModal>
+
+                    <CampoModal rotulo="Descrição" htmlFor="descricao-setor">
+                      <Input
+                        id="descricao-setor"
+                        value={newSetor.descricao}
+                        onChange={(e) =>
+                          setNewSetor({
+                            ...newSetor,
+                            descricao: e.target.value,
+                          })
+                        }
+                        variant="secondary"
+                        placeholder="Breve descrição do setor"
+                      />
+                    </CampoModal>
+                  </ModalForm>
                 </div>
               </Card.Header>
 
@@ -1282,7 +1255,7 @@ export default function AdminPage() {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel id="usuarios-admin" className="p-0">
+          <Tabs.Panel className="p-0" id="usuarios-admin">
             {isAdminPermanente ? (
               <Card>
                 <Card.Header>
@@ -1293,7 +1266,7 @@ export default function AdminPage() {
                         Administradores permanentes e temporários do sistema
                       </Card.Description>
                     </div>
-                    <Modal
+                    <ModalForm
                       isOpen={isAddAdminTempOpen}
                       onOpenChange={(aberto) => {
                         setIsAddAdminTempOpen(aberto);
@@ -1304,150 +1277,128 @@ export default function AdminPage() {
                             tipo_acesso: "temporario",
                           });
                       }}
+                      titulo="Definir Admin"
+                      descricao="Conceda privilégios administrativos a um colaborador, com ou sem prazo"
+                      gatilho={
+                        <Button>
+                          <UserPlus />
+                          Definir Admin
+                        </Button>
+                      }
+                      rotuloConfirmar="Definir Admin"
+                      onConfirmar={definirAdminTemporario}
                     >
-                      <Button>
-                        <UserPlus />
-                        Definir Admin
-                      </Button>
-                      <Modal.Backdrop>
-                        <Modal.Container>
-                          <Modal.Dialog>
-                            <Modal.CloseTrigger />
-                            <Modal.Header>
-                              <Modal.Heading>Definir Admin</Modal.Heading>
-                            </Modal.Header>
-                            <Modal.Body>
-                              <p className="text-sm text-muted mb-4">
-                                Conceda privilégios administrativos a um
-                                colaborador, com ou sem prazo
-                              </p>
-                              <div className="grid gap-4">
-                                <div className="grid gap-2">
-                                  <Label htmlFor="colaborador-admin">
-                                    Colaborador
-                                  </Label>
-                                  <Select
-                                    aria-label="Colaborador"
-                                    value={adminTempData.colaborador_id || null}
-                                    onChange={(chave) =>
-                                      setAdminTempData({
-                                        ...adminTempData,
-                                        colaborador_id: chave
-                                          ? String(chave)
-                                          : "",
-                                      })
-                                    }
-                                    variant="secondary"
-                                    placeholder="Selecione um colaborador"
-                                  >
-                                    <Select.Trigger>
-                                      <Select.Value />
-                                      <Select.Indicator />
-                                    </Select.Trigger>
-                                    <Select.Popover>
-                                      <ListBox>
-                                        {candidatosAdminDisponiveis.map(
-                                          (colaborador) => (
-                                            <ListBox.Item
-                                              key={colaborador.id}
-                                              id={colaborador.id.toString()}
-                                              textValue={`${colaborador.nome} (${colaborador.email})`}
-                                            >
-                                              {colaborador.nome} (
-                                              {colaborador.email})
-                                            </ListBox.Item>
-                                          ),
-                                        )}
-                                      </ListBox>
-                                    </Select.Popover>
-                                  </Select>
-                                  {candidatosAdminDisponiveis.length === 0 && (
-                                    <p className="text-sm text-muted">
-                                      Nenhum colaborador disponível para receber
-                                      acesso de admin.
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="tipo-acesso-admin">
-                                    Tipo de acesso
-                                  </Label>
-                                  <Select
-                                    aria-label="Tipo de acesso"
-                                    value={adminTempData.tipo_acesso}
-                                    onChange={(chave) =>
-                                      setAdminTempData({
-                                        ...adminTempData,
-                                        tipo_acesso:
-                                          chave === "permanente"
-                                            ? "permanente"
-                                            : "temporario",
-                                        admin_ate:
-                                          chave === "permanente"
-                                            ? ""
-                                            : adminTempData.admin_ate,
-                                      })
-                                    }
-                                    variant="secondary"
-                                  >
-                                    <Select.Trigger>
-                                      <Select.Value />
-                                      <Select.Indicator />
-                                    </Select.Trigger>
-                                    <Select.Popover>
-                                      <ListBox>
-                                        <ListBox.Item
-                                          id="temporario"
-                                          textValue="Temporário (com prazo)"
-                                        >
-                                          Temporário (com prazo)
-                                        </ListBox.Item>
-                                        <ListBox.Item
-                                          id="permanente"
-                                          textValue="Permanente (sem prazo)"
-                                        >
-                                          Permanente (sem prazo)
-                                        </ListBox.Item>
-                                      </ListBox>
-                                    </Select.Popover>
-                                  </Select>
-                                </div>
-                                {adminTempData.tipo_acesso === "temporario" ? (
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="admin-ate">Admin até</Label>
-                                    <Input
-                                      id="admin-ate"
-                                      type="date"
-                                      value={adminTempData.admin_ate}
-                                      onChange={(e) =>
-                                        setAdminTempData({
-                                          ...adminTempData,
-                                          admin_ate: e.target.value,
-                                        })
-                                      }
-                                      min={
-                                        new Date().toISOString().split("T")[0]
-                                      }
-                                      variant="secondary"
-                                    />
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted">
-                                    Admin permanente não expira e só pode ser
-                                    revogado manualmente nesta tela.
-                                  </p>
-                                )}
-                              </div>
-                            </Modal.Body>
-                            <Modal.Footer>
-                              <Button onPress={definirAdminTemporario}>
-                                Definir Admin
-                              </Button>
-                            </Modal.Footer>
-                          </Modal.Dialog>
-                        </Modal.Container>
-                      </Modal.Backdrop>
-                    </Modal>
+                      <CampoModal
+                        rotulo="Colaborador"
+                        htmlFor="colaborador-admin"
+                      >
+                        <Select
+                          aria-label="Colaborador"
+                          value={adminTempData.colaborador_id || null}
+                          onChange={(chave) =>
+                            setAdminTempData({
+                              ...adminTempData,
+                              colaborador_id: chave ? String(chave) : "",
+                            })
+                          }
+                          variant="secondary"
+                          placeholder="Selecione um colaborador"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {candidatosAdminDisponiveis.map((colaborador) => (
+                                <ListBox.Item
+                                  key={colaborador.id}
+                                  id={colaborador.id.toString()}
+                                  textValue={`${colaborador.nome} (${colaborador.email})`}
+                                >
+                                  {colaborador.nome} ({colaborador.email})
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+
+                        {candidatosAdminDisponiveis.length === 0 && (
+                          <p className="text-sm text-muted">
+                            Nenhum colaborador disponível para receber acesso de
+                            admin.
+                          </p>
+                        )}
+                      </CampoModal>
+
+                      <CampoModal
+                        rotulo="Tipo de acesso"
+                        htmlFor="tipo-acesso-admin"
+                      >
+                        <Select
+                          aria-label="Tipo de acesso"
+                          value={adminTempData.tipo_acesso}
+                          onChange={(chave) =>
+                            setAdminTempData({
+                              ...adminTempData,
+                              tipo_acesso:
+                                chave === "permanente"
+                                  ? "permanente"
+                                  : "temporario",
+                              admin_ate:
+                                chave === "permanente"
+                                  ? ""
+                                  : adminTempData.admin_ate,
+                            })
+                          }
+                          variant="secondary"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item
+                                id="temporario"
+                                textValue="Temporário (com prazo)"
+                              >
+                                Temporário (com prazo)
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="permanente"
+                                textValue="Permanente (sem prazo)"
+                              >
+                                Permanente (sem prazo)
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </CampoModal>
+
+                      {adminTempData.tipo_acesso === "temporario" ? (
+                        <CampoModal rotulo="Admin até" htmlFor="admin-ate">
+                          <Input
+                            id="admin-ate"
+                            type="date"
+                            value={adminTempData.admin_ate}
+                            onChange={(e) =>
+                              setAdminTempData({
+                                ...adminTempData,
+                                admin_ate: e.target.value,
+                              })
+                            }
+                            min={new Date().toISOString().split("T")[0]}
+                            variant="secondary"
+                          />
+                        </CampoModal>
+                      ) : (
+                        <p className="text-sm text-muted">
+                          Admin permanente não expira e só pode ser revogado
+                          manualmente nesta tela.
+                        </p>
+                      )}
+                    </ModalForm>
                   </div>
                 </Card.Header>
                 <Card.Content>
@@ -1491,105 +1442,87 @@ export default function AdminPage() {
           </Tabs.Panel>
         </Tabs>
 
-        <Modal
+        <ModalForm
           isOpen={isEditAdminOpen}
           onOpenChange={(aberto) => {
             if (aberto) setIsEditAdminOpen(true);
             else fecharEdicaoAdmin();
           }}
+          titulo="Editar Acesso de Admin"
+          descricao={
+            adminEmEdicao
+              ? `Ajuste o acesso de ${adminEmEdicao.nome}`
+              : "Ajuste o acesso do administrador"
+          }
+          rotuloConfirmar="Salvar Alterações"
+          onConfirmar={editarAdmin}
         >
-          <Modal.Backdrop>
-            <Modal.Container>
-              <Modal.Dialog>
-                <Modal.CloseTrigger />
-                <Modal.Header>
-                  <Modal.Heading>Editar Acesso de Admin</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-muted mb-4">
-                    {adminEmEdicao
-                      ? `Ajuste o acesso de ${adminEmEdicao.nome}`
-                      : "Ajuste o acesso do administrador"}
-                  </p>
-                  <div className="grid gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-tipo-acesso-admin">
-                        Tipo de acesso
-                      </Label>
-                      <Select
-                        aria-label="Tipo de acesso"
-                        value={editAdminData.tipo_acesso}
-                        onChange={(chave) =>
-                          setEditAdminData({
-                            ...editAdminData,
-                            tipo_acesso:
-                              chave === "permanente"
-                                ? "permanente"
-                                : "temporario",
-                            admin_ate:
-                              chave === "permanente"
-                                ? ""
-                                : editAdminData.admin_ate,
-                          })
-                        }
-                        variant="secondary"
-                      >
-                        <Select.Trigger>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item
-                              id="temporario"
-                              textValue="Temporário (com prazo)"
-                            >
-                              Temporário (com prazo)
-                            </ListBox.Item>
-                            <ListBox.Item
-                              id="permanente"
-                              textValue="Permanente (sem prazo)"
-                            >
-                              Permanente (sem prazo)
-                            </ListBox.Item>
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                    </div>
-                    {editAdminData.tipo_acesso === "temporario" ? (
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-admin-ate">Admin até</Label>
-                        <Input
-                          id="edit-admin-ate"
-                          type="date"
-                          value={editAdminData.admin_ate}
-                          onChange={(e) =>
-                            setEditAdminData({
-                              ...editAdminData,
-                              admin_ate: e.target.value,
-                            })
-                          }
-                          min={new Date().toISOString().split("T")[0]}
-                          variant="secondary"
-                        />
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted">
-                        Admin permanente não expira e só pode ser revogado
-                        manualmente nesta tela.
-                      </p>
-                    )}
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button onPress={editarAdmin}>Salvar Alterações</Button>
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+          <CampoModal
+            rotulo="Tipo de acesso"
+            htmlFor="edit-tipo-acesso-admin"
+          >
+            <Select
+              aria-label="Tipo de acesso"
+              value={editAdminData.tipo_acesso}
+              onChange={(chave) =>
+                setEditAdminData({
+                  ...editAdminData,
+                  tipo_acesso:
+                    chave === "permanente" ? "permanente" : "temporario",
+                  admin_ate:
+                    chave === "permanente" ? "" : editAdminData.admin_ate,
+                })
+              }
+              variant="secondary"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item
+                    id="temporario"
+                    textValue="Temporário (com prazo)"
+                  >
+                    Temporário (com prazo)
+                  </ListBox.Item>
+                  <ListBox.Item
+                    id="permanente"
+                    textValue="Permanente (sem prazo)"
+                  >
+                    Permanente (sem prazo)
+                  </ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </CampoModal>
 
-        <Modal
+          {editAdminData.tipo_acesso === "temporario" ? (
+            <CampoModal rotulo="Admin até" htmlFor="edit-admin-ate">
+              <Input
+                id="edit-admin-ate"
+                type="date"
+                value={editAdminData.admin_ate}
+                onChange={(e) =>
+                  setEditAdminData({
+                    ...editAdminData,
+                    admin_ate: e.target.value,
+                  })
+                }
+                min={new Date().toISOString().split("T")[0]}
+                variant="secondary"
+              />
+            </CampoModal>
+          ) : (
+            <p className="text-sm text-muted">
+              Admin permanente não expira e só pode ser revogado manualmente
+              nesta tela.
+            </p>
+          )}
+        </ModalForm>
+
+        <ModalForm
           isOpen={isEditSetorOpen}
           onOpenChange={(aberto) => {
             setIsEditSetorOpen(aberto);
@@ -1598,223 +1531,187 @@ export default function AdminPage() {
               setEditSetor({ nome: "", descricao: "" });
             }
           }}
+          titulo="Editar Setor"
+          descricao="Atualize o nome e a descrição do setor"
+          rotuloConfirmar="Salvar Alterações"
+          onConfirmar={editarSetor}
         >
-          <Modal.Backdrop>
-            <Modal.Container>
-              <Modal.Dialog>
-                <Modal.CloseTrigger />
-                <Modal.Header>
-                  <Modal.Heading>Editar Setor</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-muted mb-4">
-                    Atualize o nome e a descrição do setor
-                  </p>
-                  <div className="grid gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-nome-setor">Nome do Setor</Label>
-                      <Input
-                        id="edit-nome-setor"
-                        value={editSetor.nome}
-                        onChange={(e) =>
-                          setEditSetor({ ...editSetor, nome: e.target.value })
-                        }
-                        variant="secondary"
-                        placeholder="Ex: Desenvolvimento, Suporte..."
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-descricao-setor">Descrição</Label>
-                      <Input
-                        id="edit-descricao-setor"
-                        value={editSetor.descricao}
-                        onChange={(e) =>
-                          setEditSetor({
-                            ...editSetor,
-                            descricao: e.target.value,
-                          })
-                        }
-                        variant="secondary"
-                        placeholder="Breve descrição do setor"
-                      />
-                    </div>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button onPress={editarSetor}>Salvar Alterações</Button>
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+          <CampoModal rotulo="Nome do Setor" htmlFor="edit-nome-setor">
+            <Input
+              id="edit-nome-setor"
+              value={editSetor.nome}
+              onChange={(e) =>
+                setEditSetor({ ...editSetor, nome: e.target.value })
+              }
+              variant="secondary"
+              placeholder="Ex: Desenvolvimento, Suporte..."
+            />
+          </CampoModal>
 
-        <Modal
+          <CampoModal rotulo="Descrição" htmlFor="edit-descricao-setor">
+            <Input
+              id="edit-descricao-setor"
+              value={editSetor.descricao}
+              onChange={(e) =>
+                setEditSetor({
+                  ...editSetor,
+                  descricao: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="Breve descrição do setor"
+            />
+          </CampoModal>
+        </ModalForm>
+
+        <ModalForm
           isOpen={isEditColaboradorOpen}
           onOpenChange={(aberto) => {
             setIsEditColaboradorOpen(aberto);
             if (!aberto) setSelectedColaborador(null);
           }}
+          titulo="Editar Colaborador"
+          descricao="Atualize os dados do colaborador"
+          rotuloConfirmar="Salvar Alterações"
+          onConfirmar={editarColaborador}
         >
-          <Modal.Backdrop>
-            <Modal.Container>
-              <Modal.Dialog className="max-w-md">
-                <Modal.CloseTrigger />
-                <Modal.Header>
-                  <Modal.Heading>Editar Colaborador</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-muted mb-4">
-                    Atualize os dados do colaborador
-                  </p>
-                  {selectedColaborador && (
-                    <div className="grid gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-nome">Nome Completo</Label>
-                        <Input
-                          id="edit-nome"
-                          value={selectedColaborador.nome}
-                          onChange={(e) =>
-                            setSelectedColaborador({
-                              ...selectedColaborador,
-                              nome: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-email">Email</Label>
-                        <Input
-                          id="edit-email"
-                          type="email"
-                          value={selectedColaborador.email}
-                          onChange={(e) =>
-                            setSelectedColaborador({
-                              ...selectedColaborador,
-                              email: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-departamento">Departamento</Label>
-                        <Select
-                          aria-label="Departamento"
-                          value={selectedColaborador.departamento || null}
-                          onChange={(chave) =>
-                            setSelectedColaborador({
-                              ...selectedColaborador,
-                              departamento: chave ? String(chave) : "",
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Selecione o departamento"
+          {selectedColaborador && (
+            <>
+              <LinhaCampos>
+                <CampoModal rotulo="Nome Completo" htmlFor="edit-nome">
+                  <Input
+                    id="edit-nome"
+                    value={selectedColaborador.nome}
+                    onChange={(e) =>
+                      setSelectedColaborador({
+                        ...selectedColaborador,
+                        nome: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                  />
+                </CampoModal>
+
+                <CampoModal rotulo="Email" htmlFor="edit-email">
+                  <Input
+                    id="edit-email"
+                    type="email"
+                    value={selectedColaborador.email}
+                    onChange={(e) =>
+                      setSelectedColaborador({
+                        ...selectedColaborador,
+                        email: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                  />
+                </CampoModal>
+              </LinhaCampos>
+
+              <LinhaCampos>
+                <CampoModal
+                  rotulo="Departamento"
+                  htmlFor="edit-departamento"
+                >
+                  <Select
+                    aria-label="Departamento"
+                    value={selectedColaborador.departamento || null}
+                    onChange={(chave) =>
+                      setSelectedColaborador({
+                        ...selectedColaborador,
+                        departamento: chave ? String(chave) : "",
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="Selecione o departamento"
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="TI" textValue="TI">
+                          TI
+                        </ListBox.Item>
+                        <ListBox.Item id="RH" textValue="RH">
+                          RH
+                        </ListBox.Item>
+                        <ListBox.Item id="Vendas" textValue="Vendas">
+                          Vendas
+                        </ListBox.Item>
+                        <ListBox.Item id="Marketing" textValue="Marketing">
+                          Marketing
+                        </ListBox.Item>
+                        <ListBox.Item id="Financeiro" textValue="Financeiro">
+                          Financeiro
+                        </ListBox.Item>
+                        <ListBox.Item id="Operações" textValue="Operações">
+                          Operações
+                        </ListBox.Item>
+                        <ListBox.Item id="Jurídico" textValue="Jurídico">
+                          Jurídico
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </CampoModal>
+
+                <CampoModal rotulo="Cargo" htmlFor="edit-cargo">
+                  <Input
+                    id="edit-cargo"
+                    value={selectedColaborador.cargo || ""}
+                    onChange={(e) =>
+                      setSelectedColaborador({
+                        ...selectedColaborador,
+                        cargo: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                  />
+                </CampoModal>
+              </LinhaCampos>
+
+              <CampoModal rotulo="Setor" htmlFor="edit-setor">
+                <Select
+                  value={selectedColaborador.setor_id?.toString() || "0"}
+                  onChange={(value) =>
+                    setSelectedColaborador({
+                      ...selectedColaborador,
+                      setor_id:
+                        value && value !== "0"
+                          ? Number.parseInt(value as string)
+                          : undefined,
+                    })
+                  }
+                  variant="secondary"
+                  placeholder="Selecione o setor"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="0" textValue="Nenhum">
+                        Nenhum
+                      </ListBox.Item>
+                      {setores.map((setor) => (
+                        <ListBox.Item
+                          key={setor.id}
+                          id={setor.id.toString()}
+                          textValue={setor.nome}
                         >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              <ListBox.Item id="TI" textValue="TI">
-                                TI
-                              </ListBox.Item>
-                              <ListBox.Item id="RH" textValue="RH">
-                                RH
-                              </ListBox.Item>
-                              <ListBox.Item id="Vendas" textValue="Vendas">
-                                Vendas
-                              </ListBox.Item>
-                              <ListBox.Item
-                                id="Marketing"
-                                textValue="Marketing"
-                              >
-                                Marketing
-                              </ListBox.Item>
-                              <ListBox.Item
-                                id="Financeiro"
-                                textValue="Financeiro"
-                              >
-                                Financeiro
-                              </ListBox.Item>
-                              <ListBox.Item
-                                id="Operações"
-                                textValue="Operações"
-                              >
-                                Operações
-                              </ListBox.Item>
-                              <ListBox.Item id="Jurídico" textValue="Jurídico">
-                                Jurídico
-                              </ListBox.Item>
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-cargo">Cargo</Label>
-                        <Input
-                          id="edit-cargo"
-                          value={selectedColaborador.cargo || ""}
-                          onChange={(e) =>
-                            setSelectedColaborador({
-                              ...selectedColaborador,
-                              cargo: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-setor">Setor</Label>
-                        <Select
-                          value={
-                            selectedColaborador.setor_id?.toString() || "0"
-                          }
-                          onChange={(value) =>
-                            setSelectedColaborador({
-                              ...selectedColaborador,
-                              setor_id:
-                                value && value !== "0"
-                                  ? Number.parseInt(value as string)
-                                  : undefined,
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Selecione o setor"
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              <ListBox.Item id="0" textValue="Nenhum">
-                                Nenhum
-                              </ListBox.Item>
-                              {setores.map((setor) => (
-                                <ListBox.Item
-                                  key={setor.id}
-                                  id={setor.id.toString()}
-                                  textValue={setor.nome}
-                                >
-                                  {setor.nome}
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button onPress={editarColaborador}>Salvar Alterações</Button>
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+                          {setor.nome}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </CampoModal>
+            </>
+          )}
+        </ModalForm>
       </LayoutPagina>
     </ProtectedRoute>
   );
