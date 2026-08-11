@@ -5,7 +5,6 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // Validação básica
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email e senha são obrigatórios" },
@@ -13,7 +12,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Buscar usuário pelo email
     const user = await prisma.colaboradores.findUnique({
       where: { email },
       select: {
@@ -34,8 +32,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Para fins de demonstração, aceitar senha '123456' para todos os usuários
-    // Em produção, usar bcrypt.compare(password, user.senha)
     const isPasswordValid = password === "123456";
 
     if (!isPasswordValid) {
@@ -45,7 +41,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Remover senha do objeto de resposta
     const { senha, ...userWithoutPassword } = user;
 
     return NextResponse.json({

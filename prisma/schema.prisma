@@ -42,7 +42,6 @@ model colaboradores {
   document             String?         @db.VarChar
   created_at           DateTime?       @default(now()) @db.Timestamptz(6)
   updated_at           DateTime?       @default(now()) @db.Timestamptz(6)
-  recipient_id         String?         @db.VarChar
   certificacoes        certificacoes[]
   setores              setores?        @relation(fields: [setor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   dividas              dividas[]
@@ -96,11 +95,7 @@ model pagamentos {
   divida_id      Int?
   colaborador_id Int?
   status         String?        @db.VarChar
-  qr_code        String?        @db.VarChar
   expires_at     DateTime?      @db.Timestamptz(6)
-  charge_id      String?        @db.VarChar
-  gateway_id     String?        @db.VarChar
-  order_id       String?        @db.VarChar
   created_at     DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at     DateTime?      @default(now()) @db.Timestamptz(6)
   colaboradores  colaboradores? @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pagamentos_colaboradores_id_fkey")

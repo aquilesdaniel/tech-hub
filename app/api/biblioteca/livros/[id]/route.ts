@@ -40,7 +40,6 @@ export async function PUT(
     const body = await req.json();
     const { titulo, autor, genero, isbn, capa } = body;
 
-    // Validação básica
     if (!titulo || !autor) {
       return NextResponse.json(
         { error: "Título e autor são obrigatórios" },
@@ -48,7 +47,6 @@ export async function PUT(
       );
     }
 
-    // Atualizar livro
     const livro = await prisma.livros.update({
       where: { id },
       data: {
@@ -140,7 +138,6 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = Number(idParam);
 
-    // Verificar se o livro está emprestado
     const totalEmprestado = await prisma.emprestimos.count({
       where: { livro_id: id, status: "emprestado" },
     });
@@ -152,7 +149,6 @@ export async function DELETE(
       );
     }
 
-    // Excluir livro
     await prisma.livros.delete({ where: { id } });
 
     revalidatePath("/biblioteca");

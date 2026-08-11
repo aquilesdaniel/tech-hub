@@ -3,7 +3,7 @@
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
-import { Button, Card, Chip, Separator, toast } from "@heroui/react";
+import { Card, Chip, Separator, toast } from "@heroui/react";
 import { CalendarDays, CheckCircle2, CreditCard, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
@@ -26,10 +26,7 @@ interface Pagamento {
   divida_id: number;
   colaborador_id: number;
   status: string;
-  qr_code: string;
   expires_at: string;
-  charge_id: string;
-  gateway_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -60,7 +57,6 @@ export default function DetalhesPage({
   useEffect(() => {
     const carregarDados = async () => {
       try {
-        // 1. Busca a dívida
         const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
         if (!responseDivida.ok) {
           throw new Error("Dívida não encontrada");
@@ -68,7 +64,6 @@ export default function DetalhesPage({
         const dividaData = await responseDivida.json();
         setDivida(dividaData);
 
-        // 2. Busca pagamento existente
         const responsePagamento = await fetch(
           `/api/salgados/pagamentos?divida_id=${id}`,
         );
@@ -76,7 +71,6 @@ export default function DetalhesPage({
           const pagData = await responsePagamento.json();
           setPagamento(pagData);
 
-          // 3. Busca quem pagou, se houver um pagamento com colaborador_id atrelado
           if (pagData && pagData.colaborador_id) {
             const responseColab = await fetch(
               `/api/colaboradores/${pagData.colaborador_id}`,
@@ -162,7 +156,7 @@ export default function DetalhesPage({
                 <div>
                   <p className="text-sm font-medium">Data de Registro</p>
                   <p className="flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
+                    <CalendarDays />
                     {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
                   </p>
                 </div>
@@ -212,9 +206,7 @@ export default function DetalhesPage({
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium">
-                        Documento Principal
-                      </p>
+                      <p className="text-sm font-medium">Documento Principal</p>
                       <p className="text-sm">
                         {colaboradorPagador.document_mascarado ||
                           "Não informado"}
@@ -242,7 +234,7 @@ export default function DetalhesPage({
                           >
                             {pagamento.status === "paid" && (
                               <>
-                                <CheckCircle2 className="w-4 h-4" />
+                                <CheckCircle2 />
                                 Pago
                               </>
                             )}
@@ -257,22 +249,6 @@ export default function DetalhesPage({
                             ].includes(pagamento.status) && pagamento.status}
                           </span>
                         </div>
-                        {pagamento.charge_id && (
-                          <div className="flex justify-between text-sm items-center">
-                            <span>Charge ID:</span>
-                            <span className="font-mono text-xs">
-                              {pagamento.charge_id}
-                            </span>
-                          </div>
-                        )}
-                        {pagamento.gateway_id && (
-                          <div className="flex justify-between text-sm items-center mt-2">
-                            <span>Gateway ID:</span>
-                            <span className="font-mono text-xs">
-                              {pagamento.gateway_id}
-                            </span>
-                          </div>
-                        )}
                         <div className="flex justify-between text-sm mt-2">
                           <span>Gerado em:</span>
                           <span>

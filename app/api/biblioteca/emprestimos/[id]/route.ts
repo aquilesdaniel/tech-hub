@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Buscar empréstimo por ID
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -41,7 +40,6 @@ export async function GET(
   }
 }
 
-// PATCH - Atualizar empréstimo (devolver livro)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -53,7 +51,6 @@ export async function PATCH(
     const { data_real_devolucao, status } = body;
 
     const emprestimo = await prisma.$transaction(async (tx) => {
-      // Buscar empréstimo para obter o livro_id
       const existente = await tx.emprestimos.findUnique({
         where: { id },
         select: { livro_id: true },
@@ -63,7 +60,6 @@ export async function PATCH(
         throw new Error("EMPRESTIMO_NAO_ENCONTRADO");
       }
 
-      // Atualizar empréstimo
       const atualizado = await tx.emprestimos.update({
         where: { id },
         data: {
@@ -75,7 +71,6 @@ export async function PATCH(
         },
       });
 
-      // Se o status for 'devolvido', atualizar disponibilidade do livro
       if (status === "devolvido" || !status) {
         await tx.livros.update({
           where: { id: existente.livro_id },

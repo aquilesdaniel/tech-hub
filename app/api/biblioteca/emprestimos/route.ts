@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Listar todos os empréstimos
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -27,13 +26,11 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // Com paginação a lista é só uma fatia; os totais vêm somados do banco.
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
 
-      // O resumo descreve o escopo do usuário, não o recorte de status.
       const escopo: Prisma.emprestimosWhereInput = colaboradorId
         ? { colaborador_id: Number(colaboradorId) }
         : {};
@@ -109,14 +106,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Criar novo empréstimo
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { livro_id, colaborador_id, data_emprestimo, data_prevista_devolucao } =
       body;
 
-    // Validação básica
     if (
       !livro_id ||
       !colaborador_id ||
@@ -130,7 +125,6 @@ export async function POST(req: NextRequest) {
     }
 
     const emprestimo = await prisma.$transaction(async (tx) => {
-      // Verificar se o livro está disponível
       const livro = await tx.livros.findUnique({
         where: { id: Number(livro_id) },
         select: { disponivel: true },
@@ -144,7 +138,6 @@ export async function POST(req: NextRequest) {
         throw new Error("LIVRO_INDISPONIVEL");
       }
 
-      // Criar empréstimo
       const novoEmprestimo = await tx.emprestimos.create({
         data: {
           livro_id: Number(livro_id),
@@ -155,7 +148,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Atualizar disponibilidade do livro
       await tx.livros.update({
         where: { id: Number(livro_id) },
         data: { disponivel: false, updated_at: new Date() },

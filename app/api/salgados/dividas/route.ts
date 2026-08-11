@@ -4,7 +4,6 @@ import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Listar todas as dívidas
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -41,7 +40,6 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // Se estiver usando paginação
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
@@ -92,13 +90,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Criar nova dívida
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { colaborador_id, item, motivo, data_inicio, valor } = body;
 
-    // Validação básica
     if (!colaborador_id || !item || !valor) {
       return NextResponse.json(
         { error: "Colaborador, item e valor são obrigatórios" },

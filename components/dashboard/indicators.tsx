@@ -7,11 +7,6 @@ import { dataCurta, inteiro, moeda, percentual } from "./viz";
 
 type CorMeter = "accent" | "success" | "warning" | "danger";
 
-/**
- * Uma razão contra um limite é um meter, não uma pizza de duas fatias.
- * A severidade viaja no preenchimento, mas nunca sozinha: o valor está escrito
- * ao lado e a faixa vai por extenso.
- */
 function Indicador({
   rotulo,
   valor,
@@ -20,7 +15,6 @@ function Indicador({
 }: {
   rotulo: string;
   valor: number;
-  /** `"accent"` é o tom neutro: use quando não há base para julgar a faixa. */
   cor: CorMeter;
   detalhe: string;
 }) {
@@ -49,7 +43,6 @@ function Indicador({
   );
 }
 
-/** Escolhe a faixa por severidade; a mesma regra vale para os três indicadores. */
 function faixa(
   valor: number,
   bomAcima: number,
@@ -70,8 +63,6 @@ export function PainelIndicadores({ dados }: { dados: DashboardData }) {
         100
       : 100;
 
-  // Sem lançamentos ou sem acervo não existe faixa a julgar: 0% ali significa
-  // "nada aconteceu", não "vermelho". Nesses casos o tom vai neutro.
   const houveLancamento = kpis.valorLancado > 0;
   const houveAcervo = kpis.livrosTotal > 0;
 
@@ -84,7 +75,6 @@ export function PainelIndicadores({ dados }: { dados: DashboardData }) {
         </Card.Description>
       </Card.Header>
       <Card.Content className="flex flex-col gap-5">
-        {/* A porcentagem é por valor, então o detalhe também é por valor. */}
         <Indicador
           rotulo="Quitação de salgados"
           valor={kpis.taxaQuitacao}
@@ -120,10 +110,6 @@ export function PainelIndicadores({ dados }: { dados: DashboardData }) {
   );
 }
 
-/**
- * Alertas. Estado nunca é comunicado só por cor: cada linha carrega ícone,
- * rótulo por extenso e a data.
- */
 export function PainelAlertas({ dados }: { dados: DashboardData }) {
   const { emprestimosAtrasados, certificacoesVencendo } = dados.alertas;
   const semAlertas =

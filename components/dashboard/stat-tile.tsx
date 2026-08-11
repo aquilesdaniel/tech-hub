@@ -7,8 +7,6 @@ import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { percentual } from "./viz";
 
-// Recharts entra só quando existe série para desenhar: as telas de lista usam
-// este mesmo tile sem gráfico nenhum e não devem pagar pelo pacote.
 const Sparkline = dynamic(
   () => import("./sparkline").then((m) => m.Sparkline),
   { ssr: false },

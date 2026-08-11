@@ -4,7 +4,6 @@ import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Buscar dívida por ID
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -39,7 +38,6 @@ export async function GET(
 
 const CAMPOS_ATUALIZAVEIS = ["item", "motivo", "data_inicio", "valor", "pago"] as const;
 
-// PATCH - Atualizar dívida (marcar como paga)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -81,7 +79,6 @@ export async function PATCH(
         data: { ...data, updated_at: new Date() },
       });
 
-      // Se a dívida foi marcada como paga e não estava paga antes, atualizar totalizador
       if (body.pago === true && !existente.pago) {
         await tx.colaboradores.update({
           where: { id: existente.colaborador_id },
@@ -92,7 +89,6 @@ export async function PATCH(
         });
       }
 
-      // Se a dívida foi desmarcada como paga, subtrair do totalizador
       if (body.pago === false && existente.pago) {
         await tx.colaboradores.update({
           where: { id: existente.colaborador_id },

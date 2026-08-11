@@ -394,7 +394,7 @@ export default function CertificacoesPage() {
                   window.open(certificacao.url_credencial!, "_blank")
                 }
               >
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink />
               </Button>
             )}
             {podeEditarCertificacao(certificacao) && (
@@ -405,7 +405,7 @@ export default function CertificacoesPage() {
                   aria-label="Editar certificação"
                   onPress={() => abrirDialogEdicao(certificacao)}
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit />
                 </Button>
                 <Button
                   variant="danger"
@@ -413,7 +413,7 @@ export default function CertificacoesPage() {
                   aria-label="Remover certificação"
                   onPress={() => removerCertificacao(certificacao.id)}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 />
                 </Button>
               </>
             )}
@@ -497,9 +497,7 @@ export default function CertificacoesPage() {
           <StatTile
             rotulo={ehAdmin ? "Colaboradores certificados" : "Instituições"}
             valor={inteiro(
-              ehAdmin
-                ? resumo.colaboradoresCertificados
-                : resumo.instituicoes,
+              ehAdmin ? resumo.colaboradoresCertificados : resumo.instituicoes,
             )}
             icone={Calendar}
             deltaLegenda={
@@ -531,12 +529,9 @@ export default function CertificacoesPage() {
                     : "Suas certificações"}
                 </Card.Description>
               </div>
-              <Modal
-                isOpen={isAddDialogOpen}
-                onOpenChange={setIsAddDialogOpen}
-              >
+              <Modal isOpen={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <Button>
-                  <Plus className="w-4 h-4" />
+                  <Plus />
                   Nova Certificação
                 </Button>
                 <Modal.Backdrop>
@@ -564,6 +559,7 @@ export default function CertificacoesPage() {
                                     colaborador_id: value as string,
                                   })
                                 }
+                                variant="secondary"
                                 placeholder="Selecione um colaborador"
                               >
                                 <Select.Trigger>
@@ -588,9 +584,7 @@ export default function CertificacoesPage() {
                           )}
                           <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                              <Label htmlFor="nome">
-                                Nome da Certificação
-                              </Label>
+                              <Label htmlFor="nome">Nome da Certificação</Label>
                               <Input
                                 id="nome"
                                 value={newCertificacao.nome}
@@ -600,6 +594,7 @@ export default function CertificacoesPage() {
                                     nome: e.target.value,
                                   })
                                 }
+                                variant="secondary"
                                 placeholder="Ex: AWS Solutions Architect"
                               />
                             </div>
@@ -613,6 +608,7 @@ export default function CertificacoesPage() {
                                     tipo: value as string,
                                   })
                                 }
+                                variant="secondary"
                                 placeholder="Selecione o tipo"
                               >
                                 <Select.Trigger>
@@ -646,6 +642,7 @@ export default function CertificacoesPage() {
                                   instituicao: e.target.value,
                                 })
                               }
+                              variant="secondary"
                               placeholder="Ex: Amazon Web Services"
                             />
                           </div>
@@ -664,6 +661,7 @@ export default function CertificacoesPage() {
                                     data_obtencao: e.target.value,
                                   })
                                 }
+                                variant="secondary"
                               />
                             </div>
                             <div className="grid gap-2">
@@ -680,6 +678,7 @@ export default function CertificacoesPage() {
                                     data_vencimento: e.target.value,
                                   })
                                 }
+                                variant="secondary"
                               />
                             </div>
                           </div>
@@ -697,6 +696,7 @@ export default function CertificacoesPage() {
                                   url_credencial: e.target.value,
                                 })
                               }
+                              variant="secondary"
                               placeholder="https://..."
                             />
                           </div>
@@ -713,6 +713,7 @@ export default function CertificacoesPage() {
                                   observacoes: e.target.value,
                                 })
                               }
+                              variant="secondary"
                               placeholder="Informações adicionais..."
                             />
                           </div>
@@ -780,6 +781,7 @@ export default function CertificacoesPage() {
                               nome: e.target.value,
                             })
                           }
+                          variant="secondary"
                           placeholder="Ex: AWS Solutions Architect"
                         />
                       </div>
@@ -793,6 +795,7 @@ export default function CertificacoesPage() {
                               tipo: value as string,
                             })
                           }
+                          variant="secondary"
                           placeholder="Selecione o tipo"
                         >
                           <Select.Trigger>
@@ -826,6 +829,7 @@ export default function CertificacoesPage() {
                             instituicao: e.target.value,
                           })
                         }
+                        variant="secondary"
                         placeholder="Ex: Amazon Web Services"
                       />
                     </div>
@@ -844,6 +848,7 @@ export default function CertificacoesPage() {
                               data_obtencao: e.target.value,
                             })
                           }
+                          variant="secondary"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -860,6 +865,7 @@ export default function CertificacoesPage() {
                               data_vencimento: e.target.value,
                             })
                           }
+                          variant="secondary"
                         />
                       </div>
                     </div>
@@ -877,6 +883,7 @@ export default function CertificacoesPage() {
                             url_credencial: e.target.value,
                           })
                         }
+                        variant="secondary"
                         placeholder="https://..."
                       />
                     </div>
@@ -893,6 +900,7 @@ export default function CertificacoesPage() {
                             observacoes: e.target.value,
                           })
                         }
+                        variant="secondary"
                         placeholder="Informações adicionais..."
                       />
                     </div>

@@ -48,7 +48,6 @@ function comContagem(
   }));
 }
 
-// GET - Listar setores com contagem de colaboradores
 export async function GET(req: NextRequest) {
   try {
     const page = req.nextUrl.searchParams.get("page");
@@ -117,7 +116,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Criar novo setor
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -3,7 +3,6 @@ import { isRecordNotFoundError } from "@/lib/prisma-errors";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Buscar setor por ID com colaboradores
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -39,7 +38,6 @@ export async function GET(
   }
 }
 
-// PUT - Atualizar setor
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -50,7 +48,6 @@ export async function PUT(
     const body = await req.json();
     const { nome, descricao } = body;
 
-    // Validação básica
     if (!nome) {
       return NextResponse.json(
         { error: "Nome do setor é obrigatório" },
@@ -58,7 +55,6 @@ export async function PUT(
       );
     }
 
-    // Verificar se o setor existe
     const existingSetor = await prisma.setores.findUnique({
       where: { id },
       select: { id: true },
@@ -70,7 +66,6 @@ export async function PUT(
       );
     }
 
-    // Atualizar setor
     const setor = await prisma.setores.update({
       where: { id },
       data: { nome, descricao: descricao || "", updated_at: new Date() },
@@ -87,7 +82,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Remover setor (apenas se não tiver colaboradores)
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -96,7 +90,6 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = Number(idParam);
 
-    // Verificar se há colaboradores no setor
     const totalColaboradores = await prisma.colaboradores.count({
       where: { setor_id: id },
     });
@@ -108,7 +101,6 @@ export async function DELETE(
       );
     }
 
-    // Excluir setor
     await prisma.setores.delete({ where: { id } });
 
     revalidatePath("/admin");

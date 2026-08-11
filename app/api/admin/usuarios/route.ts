@@ -2,7 +2,6 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-// Lista de emails de admins permanentes
 const ADMINS_PERMANENTES = [
   "weliton.ribeiro@prismainformatica.com.br",
   "edson@prismainformatica.com.br",
@@ -11,13 +10,11 @@ const ADMINS_PERMANENTES = [
   "everson.freire@prismainformatica.com.br",
 ];
 
-// GET - Listar colaboradores e status de admin
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get("user_email");
 
-    // Verificar se o usuário logado é admin permanente
     if (!userEmail || !ADMINS_PERMANENTES.includes(userEmail.toLowerCase())) {
       return NextResponse.json(
         {
@@ -95,13 +92,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Definir admin temporário
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { colaborador_id, admin_ate, user_email } = body;
 
-    // Verificar se o usuário logado é admin permanente
     if (!user_email || !ADMINS_PERMANENTES.includes(user_email.toLowerCase())) {
       return NextResponse.json(
         {
@@ -119,7 +114,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar se a data é futura
     const dataAdmin = new Date(admin_ate);
     const hoje = new Date();
     if (dataAdmin <= hoje) {
@@ -129,7 +123,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar se o colaborador existe
     const colaborador = await prisma.colaboradores.findUnique({
       where: { id: Number(colaborador_id) },
       select: { id: true, nome: true, email: true, admin_permanente: true },
@@ -142,7 +135,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Não permitir definir admin temporário para admin permanente
     if (
       colaborador.admin_permanente ||
       (colaborador.email &&
@@ -157,7 +149,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Atualizar colaborador
     await prisma.colaboradores.update({
       where: { id: colaborador.id },
       data: {
@@ -181,14 +172,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Remover admin temporário
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const colaborador_id = searchParams.get("colaborador_id");
     const user_email = searchParams.get("user_email");
 
-    // Verificar se o usuário logado é admin permanente
     if (!user_email || !ADMINS_PERMANENTES.includes(user_email.toLowerCase())) {
       return NextResponse.json(
         {
@@ -206,7 +195,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Verificar se o colaborador existe e não é admin permanente
     const colaborador = await prisma.colaboradores.findUnique({
       where: { id: Number(colaborador_id) },
       select: { id: true, nome: true, email: true, admin_permanente: true },
@@ -219,7 +207,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Não permitir remover admin permanente
     if (
       colaborador.admin_permanente ||
       (colaborador.email &&
@@ -231,7 +218,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Remover privilégios de admin temporário
     await prisma.colaboradores.update({
       where: { id: colaborador.id },
       data: {

@@ -17,7 +17,9 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-surface px-4 py-3">
@@ -71,7 +73,7 @@ export function Navbar() {
 
                 <Dropdown.Section>
                   <Dropdown.Item id="logout" textValue="Sair" variant="danger">
-                    <LogOut className="w-4 h-4" />
+                    <LogOut className="text-danger h-4 w-4" />
                     <Label>Sair</Label>
                   </Dropdown.Item>
                 </Dropdown.Section>

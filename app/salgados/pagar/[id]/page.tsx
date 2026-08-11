@@ -5,16 +5,7 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
 import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
-import confetti from "canvas-confetti";
-import {
-  Check,
-  Copy,
-  QrCode,
-  Receipt,
-  TriangleAlert,
-  UserRound,
-  X,
-} from "lucide-react";
+import { Check, Receipt, TriangleAlert, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
@@ -51,20 +42,6 @@ interface Colaborador {
   document_mascarado: string | null;
   created_at: Date;
   updated_at: Date;
-  recipient_id: string;
-}
-
-interface Pagamento {
-  id: number;
-  divida_id: number;
-  colaborador_id: number;
-  status: string;
-  qr_code: string;
-  expires_at: Date;
-  charge_id: string;
-  gateway_id: string;
-  created_at: Date;
-  updated_at: Date;
 }
 
 export default function PaymentPage({
@@ -80,15 +57,7 @@ export default function PaymentPage({
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const [pagamentoGerado, setPagamentoGerado] = useState<Pagamento | null>(
-    null,
-  );
-  const [tempoRestante, setTempoRestante] = useState<string>("");
-
   const [colaboradorCompleto, setColaboradorCompleto] =
-    useState<Colaborador | null>(null);
-
-  const [colaboradorGerador, setColaboradorGerador] =
     useState<Colaborador | null>(null);
 
   const possuiDadosCompletos =
@@ -103,91 +72,6 @@ export default function PaymentPage({
   const [numeroInput, setNumeroInput] = useState("");
 
   useEffect(() => {
-    if (
-      !pagamentoGerado ||
-      pagamentoGerado.status !== "pending" ||
-      divida?.pago
-    )
-      return;
-
-    const checarStatus = async () => {
-      try {
-        const res = await fetch(`/api/salgados/pagamentos?divida_id=${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.status) {
-            if (data.status !== pagamentoGerado.status) {
-              setPagamentoGerado(data);
-
-              if (data.status === "paid") {
-                toast("Atualização de Pagamento!", {
-                  description: "O pagamento foi efetuado com sucesso!",
-                });
-                confetti({
-                  particleCount: 200,
-                  spread: 120,
-                  origin: { y: 0.6, x: 0.2 },
-                });
-                confetti({
-                  particleCount: 200,
-                  spread: 120,
-                  origin: { y: 0.6, x: 0.8 },
-                });
-
-                setDivida((prev) => (prev ? { ...prev, pago: true } : prev));
-                router.refresh();
-              } else if (data.status === "canceled") {
-                router.refresh();
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Erro no polling de pagamento:", err);
-      }
-    };
-
-    const interval = setInterval(checarStatus, 10000);
-    return () => clearInterval(interval);
-  }, [pagamentoGerado, id, router, divida?.pago]);
-
-  useEffect(() => {
-    if (!pagamentoGerado) return;
-
-    let expiraEm = 0;
-    if (pagamentoGerado.expires_at) {
-      expiraEm = new Date(pagamentoGerado.expires_at).getTime();
-    } else {
-      const dataRef = pagamentoGerado.updated_at || pagamentoGerado.created_at;
-      if (!dataRef) return;
-      expiraEm = new Date(dataRef).getTime() + 24 * 60 * 60 * 1000;
-    }
-
-    const atualizarTemporizador = () => {
-      const agora = new Date().getTime();
-      const diferenca = expiraEm - agora;
-
-      if (diferenca <= 0) {
-        setTempoRestante("Expirado");
-        return;
-      }
-
-      const horas = Math.floor(diferenca / (1000 * 60 * 60));
-      const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
-      const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
-
-      setTempoRestante(
-        `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}:${String(segundos).padStart(2, "0")}`,
-      );
-    };
-
-    atualizarTemporizador();
-    const intervalo = setInterval(atualizarTemporizador, 1000);
-
-    return () => clearInterval(intervalo);
-  }, [pagamentoGerado]);
-
-  useEffect(() => {
     const carregarDados = async () => {
       try {
         const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
@@ -196,24 +80,6 @@ export default function PaymentPage({
         }
         const dividaData = await responseDivida.json();
         setDivida(dividaData);
-
-        const responsePagamento = await fetch(
-          `/api/salgados/pagamentos?divida_id=${id}`,
-        );
-        if (responsePagamento.ok) {
-          const pagExistente = await responsePagamento.json();
-          setPagamentoGerado(pagExistente);
-
-          if (pagExistente && pagExistente.colaborador_id) {
-            const responseGerador = await fetch(
-              `/api/colaboradores/${pagExistente.colaborador_id}`,
-            );
-            if (responseGerador.ok) {
-              const geradorData = await responseGerador.json();
-              setColaboradorGerador(geradorData);
-            }
-          }
-        }
 
         let userIdLocal = user?.id;
         if (!userIdLocal) {
@@ -246,118 +112,6 @@ export default function PaymentPage({
 
     carregarDados();
   }, [id, router, user?.id]);
-
-  const handleGerarPagamento = async () => {
-    if (!divida || !user) return;
-    setIsProcessing(true);
-
-    if (colaboradorCompleto && !possuiDadosCompletos) {
-      const soDigitos = (str: string) => str.replace(/\D/g, "");
-
-      const cpfLimpo = soDigitos(documentoInput);
-      const ddiLimpo = soDigitos(countryInput);
-      const dddLimpo = soDigitos(areaInput);
-      const numeroLimpo = soDigitos(numeroInput);
-
-      if (!cpfLimpo || !ddiLimpo || !dddLimpo || !numeroLimpo) {
-        toast.danger("Atenção", {
-          description: "Preencha os campos obrigatórios primeiro!",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      if (cpfLimpo.length !== 11) {
-        toast.danger("CPF Inválido", {
-          description: "O CPF deve conter 11 dígitos.",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      if (ddiLimpo.length < 1 || ddiLimpo.length > 3) {
-        toast.danger("DDI Inválido", {
-          description: "Verifique o código do país.",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      if (dddLimpo.length !== 2) {
-        toast.danger("DDD Inválido", {
-          description: "DDD deve conter 2 dígitos.",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      if (numeroLimpo.length < 8 || numeroLimpo.length > 9) {
-        toast.danger("Número Inválido", {
-          description: "Deve ter entre 8 a 9 dígitos.",
-        });
-        setIsProcessing(false);
-        return;
-      }
-
-      try {
-        const responsePatch = await fetch(`/api/colaboradores/${user.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            document: cpfLimpo,
-            country_code: ddiLimpo,
-            area_code: dddLimpo,
-            number: numeroLimpo,
-          }),
-        });
-
-        if (!responsePatch.ok) {
-          throw new Error("Erro no Update de Colaborador");
-        }
-
-        const colaboradorAtualizado = await responsePatch.json();
-        setColaboradorCompleto(colaboradorAtualizado);
-      } catch (error) {
-        toast.danger("Erro de Cadastro", {
-          description:
-            "Não conseguimos salvar seus dados complementares. Tente novamente.",
-        });
-        setIsProcessing(false);
-        return;
-      }
-    }
-
-    try {
-      const response = await fetch(`/api/salgados/pagamentos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          divida_id: divida.id,
-          colaborador_id: user.id,
-        }),
-      });
-
-      if (response.ok) {
-        const novoPagamento = await response.json();
-        setPagamentoGerado(novoPagamento);
-        setColaboradorGerador(colaboradorCompleto);
-      } else {
-        throw new Error("Falha na geração");
-      }
-    } catch (error) {
-      console.error("Erro ao gerar pagamento:", error);
-      toast.danger("Erro", {
-        description: "Não foi possível gerar a chave de pagamento no momento.",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCopiarCopiar = () => {
-    if (pagamentoGerado) {
-      navigator.clipboard.writeText(pagamentoGerado.qr_code);
-      toast("Copiado!", {
-        description: "Chave pix foi copiada para a área de transferência.",
-      });
-    }
-  };
 
   const handleSalvarDados = async () => {
     const soDigitos = (str: string) => str.replace(/\D/g, "");
@@ -433,72 +187,6 @@ export default function PaymentPage({
     }
   };
 
-  const handleSimularPagamento = async () => {
-    if (!pagamentoGerado) return;
-    try {
-      const response = await fetch("/api/salgados/pagamentos/simular", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ divida_id: id }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        toast.danger("Erro", {
-          description: data.error || "Não foi possível simular o pagamento.",
-        });
-        return;
-      }
-
-      toast("Simulado!", {
-        description:
-          "Pagamento simulado. Aguarde o próximo polling para ver a confirmação.",
-      });
-    } catch (error) {
-      console.error("Erro ao simular pagamento:", error);
-      toast.danger("Erro", {
-        description: "Não foi possível simular o pagamento.",
-      });
-    }
-  };
-
-  const handleCancelarPagamento = async () => {
-    if (!pagamentoGerado) return;
-    setIsProcessing(true);
-    try {
-      const response = await fetch(
-        `/api/salgados/pagamentos/${pagamentoGerado.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "canceled" }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast.danger("Erro", {
-          description: data.error || "Não foi possível cancelar o pagamento.",
-        });
-        return;
-      }
-
-      setPagamentoGerado(data);
-      toast("Pagamento cancelado", {
-        description:
-          "O código Pix foi cancelado. Um novo pagamento já pode ser gerado.",
-      });
-    } catch (error) {
-      console.error("Erro ao cancelar pagamento:", error);
-      toast.danger("Erro", {
-        description: "Não foi possível cancelar o pagamento.",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   if (loading) {
     return (
       <ProtectedRoute>
@@ -511,24 +199,6 @@ export default function PaymentPage({
     return null;
   }
 
-  const pagamentoPago = divida.pago || pagamentoGerado?.status === "paid";
-  const pagamentoCancelado =
-    !pagamentoPago && pagamentoGerado?.status === "canceled";
-  const pagamentoExpirado =
-    !pagamentoPago &&
-    !pagamentoCancelado &&
-    pagamentoGerado?.status === "pending" &&
-    tempoRestante === "Expirado";
-  const pagamentoPendenteAtivo =
-    !pagamentoPago &&
-    !pagamentoCancelado &&
-    !pagamentoExpirado &&
-    pagamentoGerado?.status === "pending";
-
-  const podeGerarNovoPagamento =
-    !pagamentoPago &&
-    (!pagamentoGerado || pagamentoCancelado || pagamentoExpirado);
-
   return (
     <ProtectedRoute>
       <LayoutPagina>
@@ -540,7 +210,7 @@ export default function PaymentPage({
 
         <div className="flex flex-col lg:flex-row gap-4">
           <div
-            className={`flex flex-col gap-4 transition-all duration-300 w-full ${pagamentoGerado ? "lg:w-2/3" : ""}`}
+            className={`flex flex-col gap-4 transition-all duration-300 w-full ${divida.pago ? "lg:w-2/3" : ""}`}
           >
             <Card>
               <Card.Header>
@@ -552,17 +222,9 @@ export default function PaymentPage({
                     <Card.Title>Detalhes da Dívida</Card.Title>
                   </div>
 
-                  {pagamentoPago ? (
+                  {divida.pago ? (
                     <Chip variant="primary" color="success">
                       Pago
-                    </Chip>
-                  ) : pagamentoCancelado ? (
-                    <Chip variant="primary" color="danger">
-                      Cancelado
-                    </Chip>
-                  ) : pagamentoExpirado ? (
-                    <Chip variant="primary" color="accent">
-                      Expirado
                     </Chip>
                   ) : (
                     <Chip variant="primary" color="warning">
@@ -612,75 +274,15 @@ export default function PaymentPage({
             <Card>
               <Card.Header>
                 <div className="flex items-center gap-4">
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full ${pagamentoGerado ? "bg-purple-100" : "bg-blue-100"}`}
-                  >
-                    <UserRound
-                      className={`w-5 h-5 ${pagamentoGerado ? "text-purple-600" : "text-blue-600"}`}
-                    />
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100">
+                    <UserRound className="w-5 h-5 text-blue-600" />
                   </div>
-                  <Card.Title>
-                    {pagamentoGerado
-                      ? "Minhas informações"
-                      : "Responsável pela Baixa"}
-                  </Card.Title>
+                  <Card.Title>Responsável pela Baixa</Card.Title>
                 </div>
               </Card.Header>
 
               <Card.Content>
-                {pagamentoGerado && colaboradorGerador ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Nome</p>
-                      <p className="font-medium wrap-break-word">
-                        {colaboradorGerador.nome}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Departamento
-                      </p>
-                      <p className="font-medium wrap-break-word">
-                        {colaboradorGerador.departamento || "Não informado"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Cargo</p>
-                      <p className="font-medium wrap-break-word">
-                        {colaboradorGerador.cargo || "Não informado"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Email</p>
-                      <p className="font-medium wrap-break-word">
-                        {colaboradorGerador.email}
-                      </p>
-                    </div>
-                    <div className="col-span-1 md:col-span-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500 pb-1">
-                            CPF
-                          </p>
-                          <p className="font-medium">
-                            {colaboradorGerador.document_mascarado ||
-                              "Não informado"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500 pb-1">
-                            Número de Contato
-                          </p>
-                          <p className="font-medium">
-                            {colaboradorGerador.country_code
-                              ? `+${colaboradorGerador.country_code} (${colaboradorGerador.area_code}) ${colaboradorGerador.number}`
-                              : "Não informado"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : user ? (
+                {user ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Nome</p>
@@ -733,10 +335,10 @@ export default function PaymentPage({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="col-span-1 md:col-span-2">
                             <div className="flex items-center w-full gap-1 text-sm px-2 py-1 bg-yellow-100 text-yellow-800 rounded-md font-semibold ">
-                              <TriangleAlert className="w-4 h-4" />
+                              <TriangleAlert />
                               <span>
-                                Complete seus dados pessoais para gerar o qr
-                                code de pagamento
+                                Complete seus dados pessoais para prosseguir com
+                                o pagamento
                               </span>
                             </div>
                           </div>
@@ -795,39 +397,25 @@ export default function PaymentPage({
                 )}
               </Card.Content>
 
-              {!pagamentoPago &&
-                ((colaboradorCompleto !== null && !possuiDadosCompletos) ||
-                  (possuiDadosCompletos && podeGerarNovoPagamento)) && (
+              {!divida.pago &&
+                colaboradorCompleto !== null &&
+                !possuiDadosCompletos && (
                   <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
                     <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
-                      {colaboradorCompleto !== null &&
-                        !possuiDadosCompletos && (
-                          <Button
-                            onPress={handleSalvarDados}
-                            isDisabled={isProcessing}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            Atualizar Dados
-                          </Button>
-                        )}
-
-                      {possuiDadosCompletos && podeGerarNovoPagamento && (
-                        <Button
-                          onPress={handleGerarPagamento}
-                          isDisabled={isProcessing}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <Check className="w-4 h-4" />
-                          {isProcessing ? "Gerando..." : "Gerar Pagamento PIX"}
-                        </Button>
-                      )}
+                      <Button
+                        onPress={handleSalvarDados}
+                        isDisabled={isProcessing}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        Atualizar Dados
+                      </Button>
                     </div>
                   </Card.Footer>
                 )}
             </Card>
           </div>
 
-          {pagamentoPago && (
+          {divida.pago && (
             <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-green-200">
               <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
                 <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
@@ -842,121 +430,6 @@ export default function PaymentPage({
                   Seu pagamento foi confirmado pelo sistema.
                 </p>
               </Card.Header>
-            </Card>
-          )}
-
-          {pagamentoCancelado && (
-            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-red-200">
-              <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                <div className="flex items-center justify-center w-16 h-16 bg-red-500 rounded-full">
-                  <X className="w-8 h-8 text-white" />
-                </div>
-
-                <Card.Title className="text-2xl text-center">
-                  Pagamento Cancelado
-                </Card.Title>
-
-                <p className="text-center">
-                  Este código Pix foi cancelado, mas você pode gerar um novo
-                  pagamento para quitar esta dívida.
-                </p>
-              </Card.Header>
-            </Card>
-          )}
-
-          {pagamentoExpirado && (
-            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-blue-200">
-              <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                <div className="flex items-center justify-center w-16 h-16 bg-blue-500 rounded-full">
-                  <TriangleAlert className="w-8 h-8 text-white" />
-                </div>
-
-                <Card.Title className="text-2xl text-center">
-                  Pix Expirado
-                </Card.Title>
-
-                <p className="text-center">
-                  O tempo para pagamento deste código Pix se esgotou, mas você
-                  pode gerar um novo QR code para quitar esta dívida.
-                </p>
-              </Card.Header>
-            </Card>
-          )}
-
-          {pagamentoGerado && pagamentoPendenteAtivo && (
-            <Card className="w-full lg:w-1/3 flex flex-col">
-              <Card.Header>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full">
-                    <QrCode className="w-5 h-5 text-green-600" />
-                  </div>
-                  <Card.Title>Pague via PIX</Card.Title>
-                </div>
-              </Card.Header>
-
-              <Card.Content className="flex flex-col flex-1">
-                <div className="flex flex-col items-center justify-center flex-1">
-                  <div className="flex items-center justify-center gap-1 pb-4">
-                    <span className="text-sm">Valor:</span>
-                    <span className="font-bold">
-                      R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-center items-center">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pagamentoGerado.qr_code)}`}
-                      alt="QR Code Pix"
-                      className="w-56 h-56 object-contain"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1 my-4">
-                    <span className="text-sm font-medium">Expira em: </span>
-                    <span className="font-bold tracking-wider">
-                      {tempoRestante}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col w-full mt-auto pt-4">
-                  <p className="text-sm font-medium mb-2">Copia e Cola</p>
-
-                  <div className="flex gap-4 items-center justify-between">
-                    <p className="font-mono text-sm truncate select-all">
-                      {pagamentoGerado.qr_code}
-                    </p>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onPress={handleCopiarCopiar}
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copiar
-                    </Button>
-                  </div>
-
-                  {process.env.NODE_ENV !== "production" && (
-                    <Button
-                      className="mt-2 font-semibold"
-                      variant="outline"
-                      onPress={handleSimularPagamento}
-                    >
-                      Simular Pagamento (Dev)
-                    </Button>
-                  )}
-
-                  <Button
-                    className="mt-6"
-                    variant="danger"
-                    isDisabled={isProcessing}
-                    onPress={handleCancelarPagamento}
-                  >
-                    {isProcessing ? "Cancelando..." : "Cancelar pagamento"}
-                  </Button>
-                </div>
-              </Card.Content>
             </Card>
           )}
         </div>

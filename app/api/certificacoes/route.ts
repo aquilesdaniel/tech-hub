@@ -24,14 +24,11 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Com paginação a resposta ganha envelope: a lista é só uma fatia, então os
-    // indicadores e o filtro de tipo precisam vir somados do banco.
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
 
-      // O resumo ignora busca e tipo: ele descreve o escopo, não o recorte.
       const escopo: Prisma.certificacoesWhereInput = colaborador_id
         ? { colaborador_id: Number(colaborador_id) }
         : {};

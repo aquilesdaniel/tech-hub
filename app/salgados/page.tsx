@@ -8,7 +8,6 @@ import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
-import { extrairErrosPagarme } from "@/lib/pagarme-errors";
 import {
   Button,
   Card,
@@ -24,11 +23,10 @@ import {
 } from "@heroui/react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
+  Banknote,
   Calendar,
   Check,
   DollarSign,
-  HandCoins,
-  IdCardIcon,
   Plus,
   Wallet,
 } from "lucide-react";
@@ -56,7 +54,6 @@ interface Colaborador {
   document_mascarado: string | null;
   created_at: Date;
   updated_at: Date;
-  recipient_id: string;
 }
 
 interface Divida {
@@ -87,12 +84,8 @@ export default function SalgadosPage() {
   const [motivosUnicos, setMotivosUnicos] = useState<string[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isCadastrarContaOpen, setIsCadastrarContaOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
-  const [isSubmittingConta, setIsSubmittingConta] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
-  const [isBuscandoCep, setIsBuscandoCep] = useState(false);
-  const [jaTemContaCadastrada, setJaTemContaCadastrada] = useState(false);
   const [saldoInfo, setSaldoInfo] = useState({
     available_amount: 0,
     waiting_funds_amount: 0,
@@ -101,33 +94,6 @@ export default function SalgadosPage() {
 
   const [resumo, setResumo] = useState<DashboardData | null>(null);
   const [carregandoResumo, setCarregandoResumo] = useState(true);
-  const [contaBancariaData, setContaBancariaData] = useState({
-    nomeColaborador: "",
-    emailColaborador: "",
-    documentoColaborador: "",
-    aniversario: "",
-    rendaMensal: "",
-    ocupacao: "",
-    telefoneDdd: "",
-    telefoneNumero: "",
-    cep: "",
-    rua: "",
-    numero: "",
-    complemento: "",
-    bairro: "",
-    cidade: "",
-    estado: "",
-    pontoReferencia: "",
-    nomeTitular: "",
-    documentoTitular: "",
-    banco: "",
-    agencia: "",
-    agenciaDv: "",
-    conta: "",
-    contaDv: "",
-    tipoConta: "checking",
-    observacao: "",
-  });
   const [transferData, setTransferData] = useState({
     amount: "",
     description: "",
@@ -210,7 +176,6 @@ export default function SalgadosPage() {
   useEffect(() => {
     if (user) {
       fetchSaldo();
-      fetchRecebedor();
       fetchResumo();
     }
   }, [user]);
@@ -242,89 +207,6 @@ export default function SalgadosPage() {
       }
     } catch (error) {
       console.error("Erro ao consultar saldo:", error);
-    }
-  };
-
-  const fetchRecebedor = async () => {
-    if (!user) return;
-    try {
-      const response = await fetch(
-        `/api/salgados/recebedores?colaborador_id=${user.id}`,
-      );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.recipient) {
-          setJaTemContaCadastrada(true);
-          const info = data.recipient.register_information || {};
-          const conta = data.recipient.default_bank_account || {};
-          const telefone = info.phone_numbers?.[0] || {};
-          const endereco = info.address || {};
-          setContaBancariaData({
-            nomeColaborador: info.name || "",
-            emailColaborador: info.email || "",
-            documentoColaborador: info.document || "",
-            aniversario: info.birthdate ? info.birthdate.slice(0, 10) : "",
-            rendaMensal: info.monthly_income ? String(info.monthly_income) : "",
-            ocupacao: info.professional_occupation || "",
-            telefoneDdd: telefone.ddd || "",
-            telefoneNumero: telefone.number || "",
-            cep: endereco.zip_code || "",
-            rua: endereco.street || "",
-            numero: endereco.street_number || "",
-            complemento: endereco.complementary || "",
-            bairro: endereco.neighborhood || "",
-            cidade: endereco.city || "",
-            estado: endereco.state || "",
-            pontoReferencia: endereco.reference_point || "",
-            nomeTitular: conta.holder_name || "",
-            documentoTitular: conta.holder_document || "",
-            banco: conta.bank || "",
-            agencia: conta.branch_number || "",
-            agenciaDv: conta.branch_check_digit || "",
-            conta: conta.account_number || "",
-            contaDv: conta.account_check_digit || "",
-            tipoConta: conta.type || "checking",
-            observacao: "",
-          });
-        } else {
-          setJaTemContaCadastrada(false);
-        }
-      }
-    } catch (error) {
-      console.error("Erro ao consultar recebedor:", error);
-    }
-  };
-
-  const buscarEnderecoPorCep = async (cepDigitado: string) => {
-    const cepLimpo = cepDigitado.replace(/\D/g, "");
-    if (cepLimpo.length !== 8) return;
-
-    setIsBuscandoCep(true);
-    try {
-      const response = await fetch(
-        `https://viacep.com.br/ws/${cepLimpo}/json/`,
-      );
-      const data = await response.json();
-
-      if (data.erro) {
-        toast.danger("CEP não encontrado", {
-          description:
-            "Verifique o CEP informado e preencha o endereço manualmente.",
-        });
-        return;
-      }
-
-      setContaBancariaData((prev) => ({
-        ...prev,
-        rua: data.logradouro || prev.rua,
-        bairro: data.bairro || prev.bairro,
-        cidade: data.localidade || prev.cidade,
-        estado: data.uf || prev.estado,
-      }));
-    } catch (error) {
-      console.error("Erro ao buscar CEP:", error);
-    } finally {
-      setIsBuscandoCep(false);
     }
   };
 
@@ -381,7 +263,7 @@ export default function SalgadosPage() {
           size="sm"
           onPress={() => abrirConfirmacaoPagamento(row.original)}
         >
-          <Check className="w-4 h-4" />
+          <Check />
           Pagar
         </Button>
       ),
@@ -525,88 +407,6 @@ export default function SalgadosPage() {
     }
   };
 
-  const mostrarErrosResposta = (data: {
-    error?: string;
-    detalhes?: unknown;
-  }) => {
-    const mensagens = extrairErrosPagarme(data.detalhes);
-    if (mensagens.length > 0) {
-      mensagens.forEach((msg) => toast.danger("Erro", { description: msg }));
-    } else {
-      toast.danger("Erro", {
-        description: data.error || "Ocorreu um erro inesperado.",
-      });
-    }
-  };
-
-  const handleCadastrarConta = async () => {
-    if (!user) {
-      return;
-    }
-
-    if (
-      !contaBancariaData.nomeColaborador ||
-      !contaBancariaData.emailColaborador ||
-      !contaBancariaData.documentoColaborador ||
-      !contaBancariaData.aniversario ||
-      !contaBancariaData.ocupacao ||
-      !contaBancariaData.telefoneDdd ||
-      !contaBancariaData.telefoneNumero ||
-      !contaBancariaData.cep ||
-      !contaBancariaData.rua ||
-      !contaBancariaData.numero ||
-      !contaBancariaData.bairro ||
-      !contaBancariaData.cidade ||
-      !contaBancariaData.estado ||
-      !contaBancariaData.nomeTitular ||
-      !contaBancariaData.documentoTitular ||
-      !contaBancariaData.banco ||
-      !contaBancariaData.agencia ||
-      !contaBancariaData.conta ||
-      !contaBancariaData.contaDv
-    ) {
-      toast.danger("Erro", {
-        description: "Preencha todos os campos obrigatórios.",
-      });
-      return;
-    }
-
-    setIsSubmittingConta(true);
-    try {
-      const response = await fetch("/api/salgados/recebedores", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          colaborador_id: user.id,
-          ...contaBancariaData,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        mostrarErrosResposta(data);
-        return;
-      }
-
-      toast("Sucesso", {
-        description: jaTemContaCadastrada
-          ? "Conta bancária atualizada com sucesso."
-          : "Conta bancária cadastrada com sucesso.",
-      });
-      setIsCadastrarContaOpen(false);
-      fetchRecebedor();
-      fetchSaldo();
-    } catch (error) {
-      console.error("Erro ao solicitar cadastro de conta:", error);
-      toast.danger("Erro", {
-        description: "Não foi possível cadastrar a conta bancária.",
-      });
-    } finally {
-      setIsSubmittingConta(false);
-    }
-  };
-
   const handleTransferirDinheiro = async () => {
     if (!user) {
       return;
@@ -643,7 +443,9 @@ export default function SalgadosPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        mostrarErrosResposta(data);
+        toast.danger("Erro", {
+          description: data.error || "Ocorreu um erro inesperado.",
+        });
         return;
       }
 
@@ -743,484 +545,12 @@ export default function SalgadosPage() {
                     </Card.Description>
                   </div>
                   <div className="flex gap-4 items-center flex-wrap">
-                    {user?.tipo === "admin" && (
-                      <Modal
-                        isOpen={isCadastrarContaOpen}
-                        onOpenChange={setIsCadastrarContaOpen}
-                      >
-                        <Button variant="secondary">
-                          <IdCardIcon className="w-4 h-4" />
-                          {jaTemContaCadastrada
-                            ? "Editar conta bancária"
-                            : "Cadastrar conta bancária"}
-                        </Button>
-                        <Modal.Backdrop>
-                          <Modal.Container>
-                            <Modal.Dialog className="max-w-[50vw] max-h-[75vh] overflow-y-auto">
-                              <Modal.CloseTrigger />
-                              <Modal.Header>
-                                <Modal.Heading>
-                                  {jaTemContaCadastrada
-                                    ? "Editar conta bancária"
-                                    : "Cadastrar conta bancária"}
-                                </Modal.Heading>
-                              </Modal.Header>
-                              <Modal.Body>
-                                <p className="text-sm text-muted-foreground">
-                                  Preencha os dados abaixo para{" "}
-                                  {jaTemContaCadastrada
-                                    ? "editar sua"
-                                    : "cadastrar sua"}{" "}
-                                  conta bancária.
-                                </p>
-                                <div className="grid grid-cols-2 gap-4 py-4">
-                                  <div className="col-span-2 text-sm font-semibold border-b pb-2">
-                                    Dados Pessoais
-                                  </div>
-
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_nome">
-                                      Nome Completo
-                                    </Label>
-                                    <Input
-                                      id="colab_nome"
-                                      placeholder="Nome do Colaborador"
-                                      value={contaBancariaData.nomeColaborador}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          nomeColaborador: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_email">E-mail</Label>
-                                    <Input
-                                      id="colab_email"
-                                      type="email"
-                                      placeholder="seu@email.com"
-                                      value={contaBancariaData.emailColaborador}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          emailColaborador: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_doc">
-                                      Documento (CPF)
-                                    </Label>
-                                    <Input
-                                      id="colab_doc"
-                                      placeholder="Apenas números"
-                                      value={
-                                        contaBancariaData.documentoColaborador
-                                      }
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          documentoColaborador: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_nasc">
-                                      Data de Nascimento
-                                    </Label>
-                                    <Input
-                                      id="colab_nasc"
-                                      type="date"
-                                      value={contaBancariaData.aniversario}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          aniversario: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_renda">
-                                      Renda Mensal (R$ INT)
-                                    </Label>
-                                    <Input
-                                      id="colab_renda"
-                                      placeholder="000"
-                                      value={contaBancariaData.rendaMensal}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          rendaMensal: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_ocup">Ocupação</Label>
-                                    <Input
-                                      id="colab_ocup"
-                                      placeholder="Programador, Designer..."
-                                      value={contaBancariaData.ocupacao}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          ocupacao: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="colab_telefone">
-                                      Telefone
-                                    </Label>
-                                    <div className="flex gap-2">
-                                      <Input
-                                        id="colab_telefone_ddd"
-                                        placeholder="DDD"
-                                        className="w-16"
-                                        maxLength={2}
-                                        value={contaBancariaData.telefoneDdd}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            telefoneDdd: e.target.value,
-                                          })
-                                        }
-                                      />
-                                      <Input
-                                        id="colab_telefone_numero"
-                                        placeholder="999990000"
-                                        className="flex-1"
-                                        maxLength={9}
-                                        value={contaBancariaData.telefoneNumero}
-                                        onChange={(e) =>
-                                          setContaBancariaData({
-                                            ...contaBancariaData,
-                                            telefoneNumero: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
-                                    Endereço
-                                  </div>
-
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_cep">
-                                      CEP {isBuscandoCep && "(buscando...)"}
-                                    </Label>
-                                    <Input
-                                      id="endereco_cep"
-                                      placeholder="00000000"
-                                      maxLength={9}
-                                      value={contaBancariaData.cep}
-                                      onChange={(e) => {
-                                        const valor = e.target.value;
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          cep: valor,
-                                        });
-                                        if (
-                                          valor.replace(/\D/g, "").length === 8
-                                        ) {
-                                          buscarEnderecoPorCep(valor);
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_rua">Rua</Label>
-                                    <Input
-                                      id="endereco_rua"
-                                      placeholder="Av. General Justo"
-                                      value={contaBancariaData.rua}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          rua: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_numero">
-                                      Número
-                                    </Label>
-                                    <Input
-                                      id="endereco_numero"
-                                      placeholder="375"
-                                      value={contaBancariaData.numero}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          numero: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_complemento">
-                                      Complemento
-                                    </Label>
-                                    <Input
-                                      id="endereco_complemento"
-                                      placeholder="Bloco A (opcional)"
-                                      value={contaBancariaData.complemento}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          complemento: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_bairro">
-                                      Bairro
-                                    </Label>
-                                    <Input
-                                      id="endereco_bairro"
-                                      placeholder="Centro"
-                                      value={contaBancariaData.bairro}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          bairro: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_cidade">
-                                      Cidade
-                                    </Label>
-                                    <Input
-                                      id="endereco_cidade"
-                                      placeholder="Rio de Janeiro"
-                                      value={contaBancariaData.cidade}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          cidade: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_estado">
-                                      Estado (UF)
-                                    </Label>
-                                    <Input
-                                      id="endereco_estado"
-                                      placeholder="RJ"
-                                      maxLength={2}
-                                      value={contaBancariaData.estado}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          estado: e.target.value.toUpperCase(),
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="endereco_referencia">
-                                      Ponto de Referência
-                                    </Label>
-                                    <Input
-                                      id="endereco_referencia"
-                                      placeholder="Ao lado da banca de jornal (opcional)"
-                                      value={contaBancariaData.pontoReferencia}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          pontoReferencia: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-
-                                  <div className="col-span-2 mt-4 text-sm font-semibold border-b pb-2">
-                                    Dados Bancários
-                                  </div>
-
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="titular_nome">
-                                      Nome do Titular
-                                    </Label>
-                                    <Input
-                                      id="titular_nome"
-                                      placeholder="Nome igual colab/outro"
-                                      value={contaBancariaData.nomeTitular}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          nomeTitular: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="titular_doc">
-                                      Doc do Titular
-                                    </Label>
-                                    <Input
-                                      id="titular_doc"
-                                      placeholder="Apenas números"
-                                      value={contaBancariaData.documentoTitular}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          documentoTitular: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_banco">
-                                      Banco (Código)
-                                    </Label>
-                                    <Input
-                                      id="sacar_banco"
-                                      placeholder="Ex: 341 para Itaú..."
-                                      value={contaBancariaData.banco}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          banco: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_agencia">
-                                      Agência
-                                    </Label>
-                                    <Input
-                                      id="sacar_agencia"
-                                      placeholder="0001"
-                                      value={contaBancariaData.agencia}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          agencia: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_agencia_dv">
-                                      DV Agência
-                                    </Label>
-                                    <Input
-                                      id="sacar_agencia_dv"
-                                      placeholder="X"
-                                      value={contaBancariaData.agenciaDv}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          agenciaDv: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_conta">Conta</Label>
-                                    <Input
-                                      id="sacar_conta"
-                                      placeholder="12345"
-                                      value={contaBancariaData.conta}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          conta: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_conta_dv">
-                                      DV Conta
-                                    </Label>
-                                    <Input
-                                      id="sacar_conta_dv"
-                                      placeholder="6"
-                                      value={contaBancariaData.contaDv}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          contaDv: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-2">
-                                    <Label htmlFor="sacar_tipo_conta">
-                                      Tipo da Conta
-                                    </Label>
-                                    <select
-                                      id="sacar_tipo_conta"
-                                      className="flex h-10 w-full items-center justify-between rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                      value={contaBancariaData.tipoConta}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          tipoConta: e.target.value,
-                                        })
-                                      }
-                                    >
-                                      <option value="checking">Corrente</option>
-                                      <option value="savings">Poupança</option>
-                                    </select>
-                                  </div>
-                                  <div className="grid gap-2 col-span-2">
-                                    <Label htmlFor="sacar_obs">
-                                      Observações
-                                    </Label>
-                                    <TextArea
-                                      id="sacar_obs"
-                                      placeholder="Detalhes adicionais do saque..."
-                                      value={contaBancariaData.observacao}
-                                      onChange={(e) =>
-                                        setContaBancariaData({
-                                          ...contaBancariaData,
-                                          observacao: e.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                              </Modal.Body>
-                              <Modal.Footer>
-                                <Button
-                                  onPress={handleCadastrarConta}
-                                  isDisabled={isSubmittingConta}
-                                >
-                                  {isSubmittingConta
-                                    ? "Enviando..."
-                                    : jaTemContaCadastrada
-                                      ? "Salvar Alterações"
-                                      : "Cadastrar Conta"}
-                                </Button>
-                              </Modal.Footer>
-                            </Modal.Dialog>
-                          </Modal.Container>
-                        </Modal.Backdrop>
-                      </Modal>
-                    )}
-
                     <Modal
                       isOpen={isTransferOpen}
                       onOpenChange={setIsTransferOpen}
                     >
                       <Button variant="secondary">
-                        <HandCoins className="w-4 h-4" />
+                        <Banknote />
                         Sacar dinheiro
                       </Button>
                       <Modal.Backdrop>
@@ -1232,8 +562,8 @@ export default function SalgadosPage() {
                             </Modal.Header>
                             <Modal.Body>
                               <p className="text-sm text-muted-foreground">
-                                Solicite uma transferência de valores via
-                                Pagar.me.
+                                Solicite uma transferência dos valores
+                                disponíveis.
                               </p>
                               <p className="text-sm">
                                 Saldo disponível para saque:{" "}
@@ -1253,7 +583,6 @@ export default function SalgadosPage() {
                                     id="transfer_amount"
                                     type="number"
                                     max={saldoInfo.available_amount}
-                                    placeholder="Ex: 80.50 para R$ 80,50"
                                     value={transferData.amount}
                                     onChange={(e) =>
                                       setTransferData({
@@ -1261,6 +590,8 @@ export default function SalgadosPage() {
                                         amount: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
+                                    placeholder="Ex: 80.50 para R$ 80,50"
                                   />
                                 </div>
                                 <div className="grid gap-2">
@@ -1269,7 +600,6 @@ export default function SalgadosPage() {
                                   </Label>
                                   <TextArea
                                     id="transfer_desc"
-                                    placeholder="Ex: Salgado de novembro"
                                     value={transferData.description}
                                     onChange={(e) =>
                                       setTransferData({
@@ -1277,6 +607,8 @@ export default function SalgadosPage() {
                                         description: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
+                                    placeholder="Ex: Salgado de novembro"
                                   />
                                 </div>
                               </div>
@@ -1304,7 +636,7 @@ export default function SalgadosPage() {
                       onOpenChange={setIsAddDialogOpen}
                     >
                       <Button>
-                        <Plus className="w-4 h-4" />
+                        <Plus />
                         Adicionar Dívida
                       </Button>
                       <Modal.Backdrop>
@@ -1334,6 +666,7 @@ export default function SalgadosPage() {
                                         colaborador_id: value as string,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Selecione um colaborador"
                                   >
                                     <Select.Trigger>
@@ -1366,6 +699,7 @@ export default function SalgadosPage() {
                                         valor: "",
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Selecione o tipo"
                                   >
                                     <Select.Trigger>
@@ -1508,6 +842,7 @@ export default function SalgadosPage() {
                                         motivo: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
                                   />
                                 </div>

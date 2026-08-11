@@ -1,4 +1,3 @@
-// Nunca inclui "senha": nenhuma rota deve devolver esse campo ao navegador.
 export const COLABORADOR_SELECT_SEGURO = {
   id: true,
   setor_id: true,
@@ -18,10 +17,8 @@ export const COLABORADOR_SELECT_SEGURO = {
   document: true,
   created_at: true,
   updated_at: true,
-  recipient_id: true,
 } as const;
 
-// Mantém apenas os 2 últimos dígitos do CPF visíveis (padrão de mascaramento de PII).
 function mascherarDocumento(document: string | null): string | null {
   if (!document) return null;
   const digitos = document.replace(/\D/g, "");
@@ -29,8 +26,6 @@ function mascherarDocumento(document: string | null): string | null {
   return `***.***.***-${ultimosDigitos}`;
 }
 
-// Remove o CPF em texto puro da resposta da API, substituindo por uma versão
-// mascarada e um booleano indicando se o colaborador já possui documento cadastrado.
 export function sanitizarColaborador<T extends { document: string | null }>(
   colaborador: T,
 ) {

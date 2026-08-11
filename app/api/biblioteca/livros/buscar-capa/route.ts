@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// GET - Buscar capa do livro usando Google Books API
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,13 +13,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Construir query de busca
     let query = titulo;
     if (autor) {
       query += ` ${autor}`;
     }
 
-    // Buscar na Google Books API
     const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
       query,
     )}&maxResults=1`;
@@ -32,7 +29,6 @@ export async function GET(request: NextRequest) {
       const book = data.items[0];
       const imageLinks = book.volumeInfo?.imageLinks;
 
-      // Preferir imagem grande, depois média, depois pequena
       const capaUrl =
         imageLinks?.large ||
         imageLinks?.medium ||
@@ -40,7 +36,6 @@ export async function GET(request: NextRequest) {
         imageLinks?.smallThumbnail;
 
       if (capaUrl) {
-        // Converter para HTTPS se necessário
         const httpsUrl = capaUrl.replace("http://", "https://");
 
         return NextResponse.json({
@@ -54,7 +49,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Se não encontrou na Google Books, retorna placeholder
     return NextResponse.json({
       capa: `/placeholder.svg?height=200&width=150&text=${encodeURIComponent(
         titulo,

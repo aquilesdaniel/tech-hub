@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Listar todos os livros
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -40,13 +39,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Adicionar novo livro
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { titulo, autor, genero, isbn, capa } = body;
 
-    // Validação básica
     if (!titulo || !autor) {
       return NextResponse.json(
         { error: "Título e autor são obrigatórios" },
@@ -54,14 +51,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Gerar URL da capa se não fornecida
     const capaUrl =
       capa ||
       `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(
         titulo + " book",
       )}`;
 
-    // Inserir novo livro
     const livro = await prisma.livros.create({
       data: {
         titulo,

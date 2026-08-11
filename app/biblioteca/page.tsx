@@ -539,7 +539,7 @@ export default function BibliotecaPage() {
                       onOpenChange={setIsAddLivroOpen}
                     >
                       <Button>
-                        <Plus className="w-4 h-4" />
+                        <Plus />
                         Novo Livro
                       </Button>
                       <Modal.Backdrop>
@@ -567,6 +567,7 @@ export default function BibliotecaPage() {
                                         titulo: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Título do livro"
                                   />
                                 </div>
@@ -581,6 +582,7 @@ export default function BibliotecaPage() {
                                         autor: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Nome do autor"
                                   />
                                 </div>
@@ -595,6 +597,7 @@ export default function BibliotecaPage() {
                                         genero: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Gênero do livro"
                                   />
                                 </div>
@@ -609,6 +612,7 @@ export default function BibliotecaPage() {
                                         isbn: e.target.value,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="ISBN do livro"
                                   />
                                 </div>
@@ -884,6 +888,7 @@ export default function BibliotecaPage() {
                             colaboradorId: value as string,
                           })
                         }
+                        variant="secondary"
                         placeholder="Selecione um colaborador"
                         isDisabled={user?.tipo !== "admin"}
                       >
@@ -924,6 +929,7 @@ export default function BibliotecaPage() {
                             dias: value as string,
                           })
                         }
+                        variant="secondary"
                       >
                         <Select.Trigger>
                           <Select.Value />

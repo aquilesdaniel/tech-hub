@@ -1,5 +1,3 @@
-/** Contrato de resposta de `GET /api/dashboard`. */
-
 export type PontoMensal = {
   mes: string;
   label: string;

@@ -42,9 +42,6 @@ export function FiltroDashboard({
   return (
     <Card className="flex flex-row items-center">
       <div className="flex flex-col gap-1.5">
-        {/* <span className="text-xs font-medium text-muted" id="rotulo-periodo">
-          Período
-        </span> */}
         <ToggleButtonGroup
           size="sm"
           selectionMode="single"
@@ -68,9 +65,6 @@ export function FiltroDashboard({
 
       {mostrarSetor && (
         <div className="flex min-w-52 flex-col gap-1.5">
-          {/* <span className="text-xs font-medium text-muted" id="rotulo-setor">
-            Setor
-          </span> */}
           <Select
             selectedKey={setorId}
             onSelectionChange={(chave) => onSetorChange(String(chave))}

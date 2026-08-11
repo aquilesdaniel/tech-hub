@@ -8,7 +8,6 @@ import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Listar todos os colaboradores
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -109,13 +108,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Criar novo colaborador
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { nome, email, departamento, cargo, setor_id } = body;
 
-    // Validação básica
     if (!nome || !email || !departamento) {
       return NextResponse.json(
         { error: "Nome, email e departamento são obrigatórios" },
@@ -123,7 +120,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verificar se o email já existe
     const existingUser = await prisma.colaboradores.findUnique({
       where: { email },
       select: { id: true },
@@ -135,7 +131,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Inserir novo colaborador
     const colaborador = await prisma.colaboradores.create({
       data: {
         nome,

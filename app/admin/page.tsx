@@ -259,7 +259,7 @@ export default function AdminPage() {
               setIsEditColaboradorOpen(true);
             }}
           >
-            <Edit className="w-4 h-4" />
+            <Edit />
           </Button>
           <Button
             variant={row.original.status === "ativo" ? "danger" : undefined}
@@ -271,11 +271,7 @@ export default function AdminPage() {
             }
             onPress={() => inativarColaborador(row.original.id)}
           >
-            {row.original.status === "ativo" ? (
-              <Trash2 className="w-4 h-4" />
-            ) : (
-              <Users className="w-4 h-4" />
-            )}
+            {row.original.status === "ativo" ? <Trash2 /> : <Users />}
           </Button>
         </div>
       ),
@@ -302,7 +298,7 @@ export default function AdminPage() {
       header: "Responsável",
       cell: (info) => (
         <span className="flex items-center gap-2">
-          <Users className="w-4 h-4" />
+          <Users />
           {String(info.getValue() || "Não definido")}
         </span>
       ),
@@ -367,7 +363,7 @@ export default function AdminPage() {
             size="sm"
             onPress={() => removerAdminTemporario(row.original.id)}
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 />
             Remover admin
           </Button>
         ) : null,
@@ -754,7 +750,7 @@ export default function AdminPage() {
                     onOpenChange={setIsAddColaboradorOpen}
                   >
                     <Button>
-                      <UserPlus className="w-4 h-4" />
+                      <UserPlus />
                       Novo Colaborador
                     </Button>
                     <Modal.Backdrop>
@@ -782,6 +778,7 @@ export default function AdminPage() {
                                       nome: e.target.value,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Nome do colaborador"
                                 />
                               </div>
@@ -797,6 +794,7 @@ export default function AdminPage() {
                                       email: e.target.value,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="email@empresa.com"
                                 />
                               </div>
@@ -812,6 +810,7 @@ export default function AdminPage() {
                                       departamento: value as string,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Selecione o departamento"
                                 >
                                   <Select.Trigger>
@@ -871,6 +870,7 @@ export default function AdminPage() {
                                       cargo: e.target.value,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Ex: Analista, Gerente, Coordenador..."
                                 />
                               </div>
@@ -884,6 +884,7 @@ export default function AdminPage() {
                                       setor_id: value as string,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Selecione o setor"
                                 >
                                   <Select.Trigger>
@@ -960,7 +961,7 @@ export default function AdminPage() {
                     onOpenChange={setIsAddSetorOpen}
                   >
                     <Button>
-                      <Plus className="w-4 h-4" />
+                      <Plus />
                       Novo Setor
                     </Button>
                     <Modal.Backdrop>
@@ -988,6 +989,7 @@ export default function AdminPage() {
                                       nome: e.target.value,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Ex: Desenvolvimento, Suporte..."
                                 />
                               </div>
@@ -1004,6 +1006,7 @@ export default function AdminPage() {
                                       descricao: e.target.value,
                                     })
                                   }
+                                  variant="secondary"
                                   placeholder="Breve descrição do setor"
                                 />
                               </div>
@@ -1063,7 +1066,7 @@ export default function AdminPage() {
                       onOpenChange={setIsAddAdminTempOpen}
                     >
                       <Button>
-                        <UserPlus className="w-4 h-4" />
+                        <UserPlus />
                         Definir Admin Temporário
                       </Button>
                       <Modal.Backdrop>
@@ -1093,6 +1096,7 @@ export default function AdminPage() {
                                         colaborador_id: value as string,
                                       })
                                     }
+                                    variant="secondary"
                                     placeholder="Selecione um colaborador"
                                   >
                                     <Select.Trigger>
@@ -1134,6 +1138,7 @@ export default function AdminPage() {
                                       })
                                     }
                                     min={new Date().toISOString().split("T")[0]}
+                                    variant="secondary"
                                   />
                                 </div>
                               </div>

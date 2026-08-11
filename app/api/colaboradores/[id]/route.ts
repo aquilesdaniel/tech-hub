@@ -42,7 +42,6 @@ export async function GET(
   }
 }
 
-// PATCH - Atualizar um colaborador existente
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -52,10 +51,8 @@ export async function PATCH(
     const id = Number(idParam);
     const body = await req.json();
 
-    // Campos que permitimos que sejam atualizados diretamente por esta rota
     const { document, country_code, area_code, number } = body;
 
-    // Verificar se o colaborador existe
     const existing = await prisma.colaboradores.findUnique({
       where: { id },
       select: { id: true },
@@ -68,7 +65,6 @@ export async function PATCH(
       );
     }
 
-    // Construir dinamicamente apenas com os campos enviados
     const data: {
       document?: string;
       country_code?: string;

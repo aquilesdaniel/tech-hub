@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
   try {
     const { username, password } = await req.json();
 
-    // Validação básica
     if (!username || !password) {
       return NextResponse.json(
         { error: "Usuário e senha são obrigatórios" },
@@ -21,7 +20,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Primeiro, fazer login na API do Senior para obter o token
     const loginResponse = await fetch(
       "https://platform.senior.com.br/t/senior.com.br/bridge/1.0/rest/platform/authentication/actions/login",
       {
@@ -46,7 +44,6 @@ export async function POST(req: NextRequest) {
 
     const loginData = await loginResponse.json();
 
-    // Extrair o access_token do jsonToken
     let accessToken: string;
     try {
       const tokenData = JSON.parse(loginData.jsonToken);
@@ -59,7 +56,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Usar o access_token para obter dados do usuário
     const userResponse = await fetch(
       "https://platform.senior.com.br/t/senior.com.br/bridge/1.0/rest/platform/user/queries/getUser",
       {
@@ -84,7 +80,6 @@ export async function POST(req: NextRequest) {
 
     const userData = await userResponse.json();
 
-    // Verificar se o colaborador já existe no banco local
     let localUser: {
       id: number;
       nome: string;
@@ -112,19 +107,16 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingUser) {
-        // Colaborador já existe - verificar status de admin
         localUser = existingUser;
 
         let isAdmin = false;
 
-        // Verificar se é admin permanente
         if (
           ADMINS_PERMANENTES.includes(userData.email.toLowerCase()) ||
           localUser.admin_permanente
         ) {
           isAdmin = true;
 
-          // Garantir que está marcado como admin permanente no banco
           if (!localUser.admin_permanente) {
             await prisma.colaboradores.update({
               where: { email: userData.email },
@@ -135,16 +127,13 @@ export async function POST(req: NextRequest) {
               },
             });
           }
-        }
-        // Verificar se é admin temporário
-        else if (localUser.admin_temporario_ate) {
+        } else if (localUser.admin_temporario_ate) {
           const hoje = new Date();
           const dataExpiracao = new Date(localUser.admin_temporario_ate);
 
           if (dataExpiracao >= hoje) {
             isAdmin = true;
           } else {
-            // Admin temporário expirado - remover privilégios
             await prisma.colaboradores.update({
               where: { email: userData.email },
               data: {
@@ -156,7 +145,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Atualizar tipo se necessário
         const newTipo = isAdmin ? "admin" : "user";
         if (localUser.tipo !== newTipo) {
           await prisma.colaboradores.update({
@@ -166,7 +154,6 @@ export async function POST(req: NextRequest) {
           localUser.tipo = newTipo;
         }
       } else {
-        // Colaborador não existe - criar novo
         const isAdminPermanente = ADMINS_PERMANENTES.includes(
           userData.email.toLowerCase(),
         );
@@ -201,16 +188,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Criar objeto de usuário compatível com o sistema local
     const user = {
-      id: localUser.id, // Usar ID local do banco
+      id: localUser.id,
       nome: localUser.nome,
       email: localUser.email,
       tipo: localUser.tipo,
       departamento: localUser.departamento,
       cargo: localUser.cargo,
       seniorUsername: userData.username,
-      seniorId: userData.id, // Manter ID do Senior para referência
+      seniorId: userData.id,
       tenantName: userData.tenantName,
       tenantLocale: userData.tenantLocale,
       accessToken: accessToken,

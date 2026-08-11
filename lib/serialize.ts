@@ -1,6 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
 
-/** Converte recursivamente valores Prisma.Decimal em number para respostas JSON. */
 export function serializeDecimals<T>(data: T): T {
   if (data instanceof Prisma.Decimal) {
     return data.toNumber() as unknown as T;
