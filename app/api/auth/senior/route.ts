@@ -1,13 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const ADMINS_PERMANENTES = [
-  "weliton.ribeiro@prismainformatica.com.br",
-  "edson@prismainformatica.com.br",
-  "ivan@prismainformatica.com.br",
-  "jose.xavier@prismainformatica.com.br",
-  "everson.freire@prismainformatica.com.br",
-];
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -111,22 +103,8 @@ export async function POST(req: NextRequest) {
 
         let isAdmin = false;
 
-        if (
-          ADMINS_PERMANENTES.includes(userData.email.toLowerCase()) ||
-          localUser.admin_permanente
-        ) {
+        if (localUser.admin_permanente) {
           isAdmin = true;
-
-          if (!localUser.admin_permanente) {
-            await prisma.colaboradores.update({
-              where: { email: userData.email },
-              data: {
-                admin_permanente: true,
-                tipo: "admin",
-                updated_at: new Date(),
-              },
-            });
-          }
         } else if (localUser.admin_temporario_ate) {
           const hoje = new Date();
           const dataExpiracao = new Date(localUser.admin_temporario_ate);
@@ -154,19 +132,14 @@ export async function POST(req: NextRequest) {
           localUser.tipo = newTipo;
         }
       } else {
-        const isAdminPermanente = ADMINS_PERMANENTES.includes(
-          userData.email.toLowerCase(),
-        );
-        const tipoUsuario = isAdminPermanente ? "admin" : "user";
-
         localUser = await prisma.colaboradores.create({
           data: {
             nome: userData.fullName,
             email: userData.email,
-            tipo: tipoUsuario,
+            tipo: "user",
             departamento: userData.tenantDomain || "Senior Platform",
             cargo: userData.integration?.integrationName || "Colaborador",
-            admin_permanente: isAdminPermanente,
+            admin_permanente: false,
           },
           select: {
             id: true,

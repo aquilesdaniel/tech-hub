@@ -47,6 +47,7 @@ const CAMPOS_ATUALIZAVEIS = [
 ] as const;
 
 const CAMPOS_DATA = new Set(["data_obtencao", "data_vencimento"]);
+const CAMPOS_DATA_OPCIONAIS = new Set(["data_vencimento"]);
 
 export async function PATCH(
   request: NextRequest,
@@ -60,9 +61,31 @@ export async function PATCH(
     const data: Prisma.certificacoesUpdateInput = {};
     for (const campo of CAMPOS_ATUALIZAVEIS) {
       if (body[campo] === undefined) continue;
-      (data as Record<string, unknown>)[campo] = CAMPOS_DATA.has(campo)
-        ? new Date(body[campo])
-        : body[campo];
+
+      if (!CAMPOS_DATA.has(campo)) {
+        (data as Record<string, unknown>)[campo] = body[campo];
+        continue;
+      }
+
+      if (body[campo] === null || body[campo] === "") {
+        if (!CAMPOS_DATA_OPCIONAIS.has(campo)) {
+          return NextResponse.json(
+            { error: `O campo ${campo} é obrigatório` },
+            { status: 400 },
+          );
+        }
+        (data as Record<string, unknown>)[campo] = null;
+        continue;
+      }
+
+      const dataConvertida = new Date(body[campo]);
+      if (Number.isNaN(dataConvertida.getTime())) {
+        return NextResponse.json(
+          { error: `Data inválida no campo ${campo}` },
+          { status: 400 },
+        );
+      }
+      (data as Record<string, unknown>)[campo] = dataConvertida;
     }
 
     if (Object.keys(data).length === 0) {

@@ -1,9 +1,11 @@
+import type { Prisma } from "@/generated/prisma/client";
 import {
   COLABORADOR_SELECT_SEGURO,
   sanitizarColaborador,
 } from "@/lib/colaboradores";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -51,11 +53,23 @@ export async function PATCH(
     const id = Number(idParam);
     const body = await req.json();
 
-    const { document, country_code, area_code, number } = body;
+    const {
+      document,
+      country_code,
+      area_code,
+      number,
+      nome,
+      email,
+      departamento,
+      cargo,
+      setor_id,
+      status,
+      data_admissao,
+    } = body;
 
     const existing = await prisma.colaboradores.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!existing) {
@@ -65,18 +79,110 @@ export async function PATCH(
       );
     }
 
-    const data: {
-      document?: string;
-      country_code?: string;
-      area_code?: string;
-      number?: string;
-      updated_at: Date;
-    } = { updated_at: new Date() };
+    const data: Prisma.colaboradoresUpdateInput = { updated_at: new Date() };
 
     if (document !== undefined) data.document = document;
     if (country_code !== undefined) data.country_code = country_code;
     if (area_code !== undefined) data.area_code = area_code;
     if (number !== undefined) data.number = number;
+
+    if (nome !== undefined) {
+      if (!String(nome).trim()) {
+        return NextResponse.json(
+          { error: "Nome não pode ficar vazio" },
+          { status: 400 },
+        );
+      }
+      data.nome = String(nome).trim();
+    }
+
+    if (email !== undefined) {
+      const emailNormalizado = String(email).trim().toLowerCase();
+      if (!emailNormalizado) {
+        return NextResponse.json(
+          { error: "Email não pode ficar vazio" },
+          { status: 400 },
+        );
+      }
+
+      if (emailNormalizado !== existing.email?.toLowerCase()) {
+        const emailEmUso = await prisma.colaboradores.findFirst({
+          where: { email: emailNormalizado, id: { not: id } },
+          select: { id: true },
+        });
+        if (emailEmUso) {
+          return NextResponse.json(
+            { error: "Este email já está em uso" },
+            { status: 409 },
+          );
+        }
+      }
+
+      data.email = emailNormalizado;
+    }
+
+    if (departamento !== undefined) {
+      if (!String(departamento).trim()) {
+        return NextResponse.json(
+          { error: "Departamento não pode ficar vazio" },
+          { status: 400 },
+        );
+      }
+      data.departamento = String(departamento).trim();
+    }
+
+    if (cargo !== undefined) data.cargo = cargo || null;
+
+    if (setor_id !== undefined) {
+      const setorId =
+        setor_id === null || setor_id === "" ? null : Number(setor_id);
+
+      if (setorId !== null && !Number.isFinite(setorId)) {
+        return NextResponse.json({ error: "Setor inválido" }, { status: 400 });
+      }
+
+      if (setorId !== null) {
+        const setor = await prisma.setores.findUnique({
+          where: { id: setorId },
+          select: { id: true },
+        });
+        if (!setor) {
+          return NextResponse.json(
+            { error: "Setor não encontrado" },
+            { status: 400 },
+          );
+        }
+      }
+
+      data.setores = setorId
+        ? { connect: { id: setorId } }
+        : { disconnect: true };
+    }
+
+    if (status !== undefined) {
+      if (status !== "ativo" && status !== "inativo") {
+        return NextResponse.json(
+          { error: "Status deve ser 'ativo' ou 'inativo'" },
+          { status: 400 },
+        );
+      }
+      data.status = status;
+    }
+
+    if (data_admissao !== undefined) {
+      if (data_admissao === null || data_admissao === "") {
+        data.data_admissao = null;
+      } else {
+        const dataConvertida = new Date(data_admissao);
+        if (Number.isNaN(dataConvertida.getTime())) {
+          return NextResponse.json(
+            { error: "Data de admissão inválida" },
+            { status: 400 },
+          );
+        }
+        data.data_admissao = dataConvertida;
+      }
+    }
 
     if (Object.keys(data).length === 1) {
       return NextResponse.json(
@@ -88,11 +194,18 @@ export async function PATCH(
     const colaborador = await prisma.colaboradores.update({
       where: { id },
       data,
-      select: COLABORADOR_SELECT_SEGURO,
+      select: { ...COLABORADOR_SELECT_SEGURO, setores: { select: { nome: true } } },
     });
 
+    revalidatePath("/admin");
+
+    const { setores, ...rest } = colaborador;
+
     return NextResponse.json(
-      serializeDecimals(sanitizarColaborador(colaborador)),
+      serializeDecimals({
+        ...sanitizarColaborador(rest),
+        setor_nome: setores?.nome ?? null,
+      }),
       { status: 200 },
     );
   } catch (error) {

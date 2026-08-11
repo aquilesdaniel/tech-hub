@@ -52,6 +52,20 @@ interface Certificacao {
   observacoes?: string | null;
 }
 
+const CERTIFICACAO_VAZIA = {
+  colaborador_id: "",
+  nome: "",
+  tipo: "",
+  instituicao: "",
+  data_obtencao: "",
+  data_vencimento: "",
+  url_credencial: "",
+  observacoes: "",
+};
+
+const paraCampoData = (valor?: string | null) =>
+  valor ? String(valor).slice(0, 10) : "";
+
 export default function CertificacoesPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -77,16 +91,9 @@ export default function CertificacoesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCertificacao, setSelectedCertificacao] =
     useState<Certificacao | null>(null);
-  const [newCertificacao, setNewCertificacao] = useState({
-    colaborador_id: "",
-    nome: "",
-    tipo: "",
-    instituicao: "",
-    data_obtencao: "",
-    data_vencimento: "",
-    url_credencial: "",
-    observacoes: "",
-  });
+  const [newCertificacao, setNewCertificacao] = useState(CERTIFICACAO_VAZIA);
+  const [editandoCertificacao, setEditandoCertificacao] =
+    useState(CERTIFICACAO_VAZIA);
 
   const tiposCertificacao = [
     "Certificação Senior",
@@ -196,16 +203,7 @@ export default function CertificacoesPage() {
         });
 
         setIsAddDialogOpen(false);
-        setNewCertificacao({
-          colaborador_id: "",
-          nome: "",
-          tipo: "",
-          instituicao: "",
-          data_obtencao: "",
-          data_vencimento: "",
-          url_credencial: "",
-          observacoes: "",
-        });
+        limparFormularioNovaCertificacao();
 
         window.location.reload();
       }
@@ -218,51 +216,50 @@ export default function CertificacoesPage() {
   };
 
   const editarCertificacao = async () => {
-    console.log("Função editarCertificacao chamada");
-    console.log("selectedCertificacao:", selectedCertificacao);
-    console.log("newCertificacao:", newCertificacao);
+    if (!selectedCertificacao) return;
 
-    if (!selectedCertificacao) {
-      console.log("Nenhuma certificação selecionada");
+    if (
+      !editandoCertificacao.nome ||
+      !editandoCertificacao.tipo ||
+      !editandoCertificacao.instituicao ||
+      !editandoCertificacao.data_obtencao
+    ) {
+      toast.danger("Erro", {
+        description: "Preencha todos os campos obrigatórios.",
+      });
       return;
     }
 
     try {
-      console.log("Enviando requisição PATCH...");
       const response = await fetch(
         `/api/certificacoes/${selectedCertificacao.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nome: newCertificacao.nome,
-            tipo: newCertificacao.tipo,
-            instituicao: newCertificacao.instituicao,
-            data_obtencao: newCertificacao.data_obtencao,
-            data_vencimento: newCertificacao.data_vencimento || null,
-            url_credencial: newCertificacao.url_credencial || null,
-            observacoes: newCertificacao.observacoes || null,
+            nome: editandoCertificacao.nome,
+            tipo: editandoCertificacao.tipo,
+            instituicao: editandoCertificacao.instituicao,
+            data_obtencao: editandoCertificacao.data_obtencao,
+            data_vencimento: editandoCertificacao.data_vencimento || null,
+            url_credencial: editandoCertificacao.url_credencial || null,
+            observacoes: editandoCertificacao.observacoes || null,
           }),
         },
       );
 
-      console.log("Response status:", response.status);
-      const responseData = await response.text();
-      console.log("Response data:", responseData);
-
       if (response.ok) {
-        console.log("Atualização bem-sucedida");
         fetchData();
-        setIsEditDialogOpen(false);
-        setSelectedCertificacao(null);
+        fecharDialogEdicao();
 
         toast("Certificação atualizada!", {
           description: "As informações da certificação foram atualizadas.",
         });
       } else {
-        console.log("Erro na resposta:", responseData);
+        const erro = await response.json().catch(() => null);
         toast.danger("Erro", {
-          description: "Não foi possível atualizar a certificação.",
+          description:
+            erro?.error || "Não foi possível atualizar a certificação.",
         });
       }
     } catch (error) {
@@ -297,17 +294,31 @@ export default function CertificacoesPage() {
 
   const abrirDialogEdicao = (certificacao: Certificacao) => {
     setSelectedCertificacao(certificacao);
-    setNewCertificacao({
+    setEditandoCertificacao({
       colaborador_id: certificacao.colaborador_id.toString(),
       nome: certificacao.nome,
       tipo: certificacao.tipo,
       instituicao: certificacao.instituicao,
-      data_obtencao: certificacao.data_obtencao,
-      data_vencimento: certificacao.data_vencimento || "",
+      data_obtencao: paraCampoData(certificacao.data_obtencao),
+      data_vencimento: paraCampoData(certificacao.data_vencimento),
       url_credencial: certificacao.url_credencial || "",
       observacoes: certificacao.observacoes || "",
     });
     setIsEditDialogOpen(true);
+  };
+
+  const fecharDialogEdicao = () => {
+    setIsEditDialogOpen(false);
+    setSelectedCertificacao(null);
+    setEditandoCertificacao(CERTIFICACAO_VAZIA);
+  };
+
+  const limparFormularioNovaCertificacao = () => {
+    setNewCertificacao({
+      ...CERTIFICACAO_VAZIA,
+      colaborador_id:
+        user?.tipo !== "admin" && user?.id ? user.id.toString() : "",
+    });
   };
 
   const podeEditarCertificacao = (certificacao: Certificacao) => {
@@ -387,8 +398,8 @@ export default function CertificacoesPage() {
           <div className="flex justify-end gap-2">
             {certificacao.url_credencial && (
               <Button
+                isIconOnly
                 variant="outline"
-                size="sm"
                 aria-label="Ver credencial"
                 onPress={() =>
                   window.open(certificacao.url_credencial!, "_blank")
@@ -400,16 +411,16 @@ export default function CertificacoesPage() {
             {podeEditarCertificacao(certificacao) && (
               <>
                 <Button
+                  isIconOnly
                   variant="outline"
-                  size="sm"
                   aria-label="Editar certificação"
                   onPress={() => abrirDialogEdicao(certificacao)}
                 >
                   <Edit />
                 </Button>
                 <Button
+                  isIconOnly
                   variant="danger"
-                  size="sm"
                   aria-label="Remover certificação"
                   onPress={() => removerCertificacao(certificacao.id)}
                 >
@@ -529,7 +540,13 @@ export default function CertificacoesPage() {
                     : "Suas certificações"}
                 </Card.Description>
               </div>
-              <Modal isOpen={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <Modal
+                isOpen={isAddDialogOpen}
+                onOpenChange={(aberto) => {
+                  setIsAddDialogOpen(aberto);
+                  if (!aberto) limparFormularioNovaCertificacao();
+                }}
+              >
                 <Button>
                   <Plus />
                   Nova Certificação
@@ -552,11 +569,12 @@ export default function CertificacoesPage() {
                             <div className="grid gap-2">
                               <Label htmlFor="colaborador">Colaborador</Label>
                               <Select
-                                value={newCertificacao.colaborador_id}
-                                onChange={(value) =>
+                                aria-label="Colaborador"
+                                value={newCertificacao.colaborador_id || null}
+                                onChange={(chave) =>
                                   setNewCertificacao({
                                     ...newCertificacao,
-                                    colaborador_id: value as string,
+                                    colaborador_id: chave ? String(chave) : "",
                                   })
                                 }
                                 variant="secondary"
@@ -601,11 +619,12 @@ export default function CertificacoesPage() {
                             <div className="grid gap-2">
                               <Label htmlFor="tipo">Tipo</Label>
                               <Select
-                                value={newCertificacao.tipo}
-                                onChange={(value) =>
+                                aria-label="Tipo"
+                                value={newCertificacao.tipo || null}
+                                onChange={(chave) =>
                                   setNewCertificacao({
                                     ...newCertificacao,
-                                    tipo: value as string,
+                                    tipo: chave ? String(chave) : "",
                                   })
                                 }
                                 variant="secondary"
@@ -756,7 +775,13 @@ export default function CertificacoesPage() {
           </Card.Content>
         </Card>
 
-        <Modal isOpen={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <Modal
+          isOpen={isEditDialogOpen}
+          onOpenChange={(aberto) => {
+            if (aberto) setIsEditDialogOpen(true);
+            else fecharDialogEdicao();
+          }}
+        >
           <Modal.Backdrop>
             <Modal.Container>
               <Modal.Dialog className="max-w-2xl">
@@ -774,10 +799,10 @@ export default function CertificacoesPage() {
                         <Label htmlFor="edit_nome">Nome da Certificação</Label>
                         <Input
                           id="edit_nome"
-                          value={newCertificacao.nome}
+                          value={editandoCertificacao.nome}
                           onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
+                            setEditandoCertificacao({
+                              ...editandoCertificacao,
                               nome: e.target.value,
                             })
                           }
@@ -788,11 +813,12 @@ export default function CertificacoesPage() {
                       <div className="grid gap-2">
                         <Label htmlFor="edit_tipo">Tipo</Label>
                         <Select
-                          value={newCertificacao.tipo}
-                          onChange={(value) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
-                              tipo: value as string,
+                          aria-label="Tipo"
+                          value={editandoCertificacao.tipo || null}
+                          onChange={(chave) =>
+                            setEditandoCertificacao({
+                              ...editandoCertificacao,
+                              tipo: chave ? String(chave) : "",
                             })
                           }
                           variant="secondary"
@@ -822,10 +848,10 @@ export default function CertificacoesPage() {
                       <Label htmlFor="edit_instituicao">Instituição</Label>
                       <Input
                         id="edit_instituicao"
-                        value={newCertificacao.instituicao}
+                        value={editandoCertificacao.instituicao}
                         onChange={(e) =>
-                          setNewCertificacao({
-                            ...newCertificacao,
+                          setEditandoCertificacao({
+                            ...editandoCertificacao,
                             instituicao: e.target.value,
                           })
                         }
@@ -841,10 +867,10 @@ export default function CertificacoesPage() {
                         <Input
                           id="edit_data_obtencao"
                           type="date"
-                          value={newCertificacao.data_obtencao}
+                          value={editandoCertificacao.data_obtencao}
                           onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
+                            setEditandoCertificacao({
+                              ...editandoCertificacao,
                               data_obtencao: e.target.value,
                             })
                           }
@@ -858,10 +884,10 @@ export default function CertificacoesPage() {
                         <Input
                           id="edit_data_vencimento"
                           type="date"
-                          value={newCertificacao.data_vencimento}
+                          value={editandoCertificacao.data_vencimento}
                           onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
+                            setEditandoCertificacao({
+                              ...editandoCertificacao,
                               data_vencimento: e.target.value,
                             })
                           }
@@ -876,10 +902,10 @@ export default function CertificacoesPage() {
                       <Input
                         id="edit_url_credencial"
                         type="url"
-                        value={newCertificacao.url_credencial}
+                        value={editandoCertificacao.url_credencial}
                         onChange={(e) =>
-                          setNewCertificacao({
-                            ...newCertificacao,
+                          setEditandoCertificacao({
+                            ...editandoCertificacao,
                             url_credencial: e.target.value,
                           })
                         }
@@ -893,10 +919,10 @@ export default function CertificacoesPage() {
                       </Label>
                       <TextArea
                         id="edit_observacoes"
-                        value={newCertificacao.observacoes}
+                        value={editandoCertificacao.observacoes}
                         onChange={(e) =>
-                          setNewCertificacao({
-                            ...newCertificacao,
+                          setEditandoCertificacao({
+                            ...editandoCertificacao,
                             observacoes: e.target.value,
                           })
                         }

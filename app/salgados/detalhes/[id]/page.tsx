@@ -1,5 +1,7 @@
 "use client";
 
+import { SERIE } from "@/components/dashboard/viz";
+import { IconeDestaque } from "@/components/icone-destaque";
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
@@ -119,9 +121,7 @@ export default function DetalhesPage({
             <Card.Header>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
-                    <User className="w-5 h-5 text-blue-600" />
-                  </div>
+                  <IconeDestaque icone={User} cor={SERIE.s1} />
                   <Card.Title>Devedor</Card.Title>
                 </div>
                 {divida.pago ? (
@@ -156,7 +156,7 @@ export default function DetalhesPage({
                 <div>
                   <p className="text-sm font-medium">Data de Registro</p>
                   <p className="flex items-center gap-2">
-                    <CalendarDays />
+                    <CalendarDays aria-hidden className="size-4 text-muted" />
                     {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
                   </p>
                 </div>
@@ -177,9 +177,7 @@ export default function DetalhesPage({
           <Card>
             <Card.Header>
               <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
-                  <CreditCard className="w-5 h-5 text-purple-600" />
-                </div>
+                <IconeDestaque icone={CreditCard} cor={SERIE.s7} />
                 <Card.Title>Emissor do Pagamento</Card.Title>
               </div>
             </Card.Header>
@@ -217,7 +215,7 @@ export default function DetalhesPage({
                   {pagamento && (
                     <>
                       <Separator />
-                      <div className="p-4 rounded-lg space-y-2">
+                      <div className="p-4 rounded-lg space-y-2 bg-surface-secondary">
                         <p className="text-sm font-medium mb-2">
                           Detalhes Transacionais
                         </p>
@@ -226,15 +224,18 @@ export default function DetalhesPage({
                           <span
                             className={`font-semibold flex items-center gap-1 ${
                               pagamento.status === "paid"
-                                ? "text-green-600"
+                                ? "text-success"
                                 : pagamento.status === "pending"
-                                  ? "text-yellow-600"
-                                  : "text-red-600"
+                                  ? "text-warning"
+                                  : "text-danger"
                             }`}
                           >
                             {pagamento.status === "paid" && (
                               <>
-                                <CheckCircle2 />
+                                <CheckCircle2
+                                  aria-hidden
+                                  className="size-4 shrink-0"
+                                />
                                 Pago
                               </>
                             )}

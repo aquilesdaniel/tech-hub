@@ -1,9 +1,12 @@
 "use client";
 
+import { moeda, SERIE } from "@/components/dashboard/viz";
+import { IconeDestaque } from "@/components/icone-destaque";
 import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
+import { TAXA_GATEWAY, totalComTaxaGateway } from "@/lib/salgados";
 import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
 import { Check, Receipt, TriangleAlert, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -216,9 +219,7 @@ export default function PaymentPage({
               <Card.Header>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 bg-orange-100 rounded-full">
-                      <Receipt className="w-5 h-5 text-orange-600" />
-                    </div>
+                    <IconeDestaque icone={Receipt} cor={SERIE.s2} />
                     <Card.Title>Detalhes da Dívida</Card.Title>
                   </div>
 
@@ -237,21 +238,21 @@ export default function PaymentPage({
               <Card.Content>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Devedor</p>
+                    <p className="text-sm font-medium text-muted">Devedor</p>
                     <p className="text-lg font-semibold">
                       {divida.colaborador_nome}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Motivo</p>
+                    <p className="text-sm font-medium text-muted">Motivo</p>
                     <p className="font-medium">{divida.motivo}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Item</p>
+                    <p className="text-sm font-medium text-muted">Item</p>
                     <p className="font-medium">{divida.item}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">
+                    <p className="text-sm font-medium text-muted">
                       Data de Entrada
                     </p>
                     <p className="font-medium">
@@ -262,21 +263,47 @@ export default function PaymentPage({
 
                 <Separator className="my-3" />
 
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">Valor Total:</span>
-                  <span className="text-lg font-bold">
-                    R$ {Number(divida.valor).toFixed(2).replace(".", ",")}
-                  </span>
-                </div>
+                {divida.pago ? (
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-semibold">Valor Total:</span>
+                    <span className="text-lg font-bold tabular-nums">
+                      {moeda(Number(divida.valor))}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted">Valor da dívida</span>
+                      <span className="font-medium tabular-nums">
+                        {moeda(Number(divida.valor))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted">Taxa do gateway</span>
+                      <span className="font-medium tabular-nums">
+                        + {moeda(TAXA_GATEWAY)}
+                      </span>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">
+                        Total a pagar:
+                      </span>
+                      <span className="text-lg font-bold tabular-nums">
+                        {moeda(totalComTaxaGateway(divida.valor))}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </Card.Content>
             </Card>
 
             <Card>
               <Card.Header>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100">
-                    <UserRound className="w-5 h-5 text-blue-600" />
-                  </div>
+                  <IconeDestaque icone={UserRound} cor={SERIE.s1} />
                   <Card.Title>Responsável pela Baixa</Card.Title>
                 </div>
               </Card.Header>
@@ -285,11 +312,11 @@ export default function PaymentPage({
                 {user ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Nome</p>
+                      <p className="text-sm font-medium text-muted">Nome</p>
                       <p className="font-medium wrap-break-word">{user.nome}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">
+                      <p className="text-sm font-medium text-muted">
                         Departamento
                       </p>
                       <p className="font-medium wrap-break-word">
@@ -297,13 +324,13 @@ export default function PaymentPage({
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Cargo</p>
+                      <p className="text-sm font-medium text-muted">Cargo</p>
                       <p className="font-medium wrap-break-word">
                         {user.cargo || "Não informado"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Email</p>
+                      <p className="text-sm font-medium text-muted">Email</p>
                       <p className="font-medium wrap-break-word">
                         {user.email}
                       </p>
@@ -313,7 +340,7 @@ export default function PaymentPage({
                       {possuiDadosCompletos ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <p className="text-sm font-medium text-gray-500 pb-1">
+                            <p className="text-sm font-medium text-muted pb-1">
                               CPF
                             </p>
                             <p className="font-medium">
@@ -321,7 +348,7 @@ export default function PaymentPage({
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-500 pb-1">
+                            <p className="text-sm font-medium text-muted pb-1">
                               Número de Contato
                             </p>
                             <p className="font-medium">
@@ -334,8 +361,11 @@ export default function PaymentPage({
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="col-span-1 md:col-span-2">
-                            <div className="flex items-center w-full gap-1 text-sm px-2 py-1 bg-yellow-100 text-yellow-800 rounded-md font-semibold ">
-                              <TriangleAlert />
+                            <div className="flex items-center w-full gap-2 text-sm px-3 py-2 rounded-md border border-warning/30 bg-warning/10 font-semibold">
+                              <TriangleAlert
+                                aria-hidden
+                                className="size-4 shrink-0 text-warning"
+                              />
                               <span>
                                 Complete seus dados pessoais para prosseguir com
                                 o pagamento
@@ -343,7 +373,7 @@ export default function PaymentPage({
                             </div>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-500 pb-1">
+                            <p className="text-sm font-medium text-muted pb-1">
                               CPF (Apenas Números)
                             </p>
                             <Input
@@ -356,7 +386,7 @@ export default function PaymentPage({
                             />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-500 pb-1">
+                            <p className="text-sm font-medium text-muted pb-1">
                               Telefone Completo
                             </p>
 
@@ -391,7 +421,7 @@ export default function PaymentPage({
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted">
                     Carregando informações do usuário logado...
                   </p>
                 )}
@@ -405,7 +435,6 @@ export default function PaymentPage({
                       <Button
                         onPress={handleSalvarDados}
                         isDisabled={isProcessing}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         Atualizar Dados
                       </Button>
@@ -416,10 +445,10 @@ export default function PaymentPage({
           </div>
 
           {divida.pago && (
-            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-green-200">
+            <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-success/40">
               <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
-                <div className="flex items-center justify-center w-16 h-16 bg-green-500 rounded-full">
-                  <Check className="w-8 h-8 text-white" />
+                <div className="flex items-center justify-center size-16 rounded-full bg-success text-success-foreground">
+                  <Check aria-hidden className="size-8" />
                 </div>
 
                 <Card.Title className="text-2xl text-center">

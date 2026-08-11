@@ -1,21 +1,38 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { ehAdminPermanente } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-const ADMINS_PERMANENTES = [
-  "weliton.ribeiro@prismainformatica.com.br",
-  "edson@prismainformatica.com.br",
-  "ivan@prismainformatica.com.br",
-  "jose.xavier@prismainformatica.com.br",
-  "everson.freire@prismainformatica.com.br",
-];
+const FILTRO_ADMINS: Prisma.colaboradoresWhereInput = {
+  OR: [
+    { admin_permanente: true },
+    { tipo: "admin" },
+    { admin_temporario_ate: { not: null } },
+  ],
+};
+
+const FILTRO_CANDIDATOS: Prisma.colaboradoresWhereInput = {
+  admin_permanente: { not: true },
+  tipo: { not: "admin" },
+};
+
+function ehOProprioUsuario(
+  emailAlvo?: string | null,
+  emailSolicitante?: string | null,
+) {
+  return Boolean(
+    emailAlvo &&
+    emailSolicitante &&
+    emailAlvo.toLowerCase() === emailSolicitante.trim().toLowerCase(),
+  );
+}
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get("user_email");
 
-    if (!userEmail || !ADMINS_PERMANENTES.includes(userEmail.toLowerCase())) {
+    if (!(await ehAdminPermanente(userEmail))) {
       return NextResponse.json(
         {
           error:
@@ -28,15 +45,28 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
+    const escopo = searchParams.get("escopo");
+
+    const filtroEscopo =
+      escopo === "candidatos"
+        ? FILTRO_CANDIDATOS
+        : escopo === "todos"
+          ? {}
+          : FILTRO_ADMINS;
 
     const where: Prisma.colaboradoresWhereInput = search
       ? {
-          OR: [
-            { nome: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
+          AND: [
+            filtroEscopo,
+            {
+              OR: [
+                { nome: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+              ],
+            },
           ],
         }
-      : {};
+      : filtroEscopo;
 
     const selecao = {
       id: true,
@@ -64,7 +94,7 @@ export async function GET(request: NextRequest) {
           take: limitNum,
         }),
         prisma.colaboradores.count({ where }),
-        prisma.colaboradores.count({ where: { tipo: "admin" } }),
+        prisma.colaboradores.count({ where: FILTRO_ADMINS }),
       ]);
 
       return NextResponse.json({
@@ -95,32 +125,51 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { colaborador_id, admin_ate, user_email } = body;
+    const { colaborador_id, admin_ate, user_email, admin_permanente } = body;
 
-    if (!user_email || !ADMINS_PERMANENTES.includes(user_email.toLowerCase())) {
+    if (!(await ehAdminPermanente(user_email))) {
       return NextResponse.json(
         {
           error:
-            "Acesso negado. Apenas admins permanentes podem definir admins temporários.",
+            "Acesso negado. Apenas admins permanentes podem gerenciar privilégios de admin.",
         },
         { status: 403 },
       );
     }
 
-    if (!colaborador_id || !admin_ate) {
+    if (!colaborador_id) {
       return NextResponse.json(
-        { error: "Campos obrigatórios: colaborador_id, admin_ate" },
+        { error: "Campo obrigatório: colaborador_id" },
         { status: 400 },
       );
     }
 
-    const dataAdmin = new Date(admin_ate);
-    const hoje = new Date();
-    if (dataAdmin <= hoje) {
+    const permanente = admin_permanente === true;
+
+    if (!permanente && !admin_ate) {
       return NextResponse.json(
-        { error: "A data de expiração deve ser futura" },
+        { error: "Informe a data de expiração do admin temporário" },
         { status: 400 },
       );
+    }
+
+    let dataAdmin: Date | null = null;
+
+    if (!permanente) {
+      dataAdmin = new Date(`${String(admin_ate).slice(0, 10)}T23:59:59`);
+      if (Number.isNaN(dataAdmin.getTime())) {
+        return NextResponse.json(
+          { error: "Data de expiração inválida" },
+          { status: 400 },
+        );
+      }
+
+      if (dataAdmin <= new Date()) {
+        return NextResponse.json(
+          { error: "A data de expiração deve ser futura" },
+          { status: 400 },
+        );
+      }
     }
 
     const colaborador = await prisma.colaboradores.findUnique({
@@ -135,23 +184,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      colaborador.admin_permanente ||
-      (colaborador.email &&
-        ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase()))
-    ) {
+    if (ehOProprioUsuario(colaborador.email, user_email)) {
       return NextResponse.json(
-        {
-          error:
-            "Não é possível definir admin temporário para um admin permanente",
-        },
+        { error: "Você não pode alterar seus próprios privilégios de admin" },
         { status: 400 },
       );
+    }
+
+    if (colaborador.admin_permanente === true && !permanente) {
+      const totalPermanentes = await prisma.colaboradores.count({
+        where: { admin_permanente: true },
+      });
+
+      if (totalPermanentes <= 1) {
+        return NextResponse.json(
+          { error: "É necessário manter ao menos um admin permanente" },
+          { status: 400 },
+        );
+      }
     }
 
     await prisma.colaboradores.update({
       where: { id: colaborador.id },
       data: {
+        admin_permanente: permanente,
         admin_temporario_ate: dataAdmin,
         tipo: "admin",
         updated_at: new Date(),
@@ -159,12 +215,14 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      message: `Admin temporário definido para ${
-        colaborador.nome
-      } até ${dataAdmin.toLocaleDateString("pt-BR")}`,
+      message: permanente
+        ? `${colaborador.nome} agora é admin permanente`
+        : `Admin temporário definido para ${
+            colaborador.nome
+          } até ${dataAdmin!.toLocaleDateString("pt-BR")}`,
     });
   } catch (error) {
-    console.error("Erro ao definir admin temporário:", error);
+    console.error("Erro ao definir privilégios de admin:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 },
@@ -178,11 +236,11 @@ export async function DELETE(request: NextRequest) {
     const colaborador_id = searchParams.get("colaborador_id");
     const user_email = searchParams.get("user_email");
 
-    if (!user_email || !ADMINS_PERMANENTES.includes(user_email.toLowerCase())) {
+    if (!(await ehAdminPermanente(user_email))) {
       return NextResponse.json(
         {
           error:
-            "Acesso negado. Apenas admins permanentes podem remover admins temporários.",
+            "Acesso negado. Apenas admins permanentes podem remover privilégios de admin.",
         },
         { status: 403 },
       );
@@ -207,20 +265,30 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (
-      colaborador.admin_permanente ||
-      (colaborador.email &&
-        ADMINS_PERMANENTES.includes(colaborador.email.toLowerCase()))
-    ) {
+    if (ehOProprioUsuario(colaborador.email, user_email)) {
       return NextResponse.json(
-        { error: "Não é possível remover privilégios de admin permanente" },
+        { error: "Você não pode remover seus próprios privilégios de admin" },
         { status: 400 },
       );
+    }
+
+    if (colaborador.admin_permanente === true) {
+      const totalPermanentes = await prisma.colaboradores.count({
+        where: { admin_permanente: true },
+      });
+
+      if (totalPermanentes <= 1) {
+        return NextResponse.json(
+          { error: "É necessário manter ao menos um admin permanente" },
+          { status: 400 },
+        );
+      }
     }
 
     await prisma.colaboradores.update({
       where: { id: colaborador.id },
       data: {
+        admin_permanente: false,
         admin_temporario_ate: null,
         tipo: "user",
         updated_at: new Date(),
@@ -231,7 +299,7 @@ export async function DELETE(request: NextRequest) {
       message: `Privilégios de admin removidos para ${colaborador.nome}`,
     });
   } catch (error) {
-    console.error("Erro ao remover admin temporário:", error);
+    console.error("Erro ao remover privilégios de admin:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 },

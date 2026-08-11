@@ -36,7 +36,7 @@ export function Navbar() {
           <Dropdown>
             <Button variant="ghost" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-default" />
+                <User className="h-4 w-4 text-default" />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium">{user.nome}</p>
@@ -63,7 +63,7 @@ export function Navbar() {
                 {user.tipo === "admin" && (
                   <Dropdown.Section>
                     <Dropdown.Item id="admin" textValue="Painel Admin">
-                      <Shield className="w-4 h-4" />
+                      <Shield className="h-4 w-4" />
                       <Label>Painel Admin</Label>
                     </Dropdown.Item>
                   </Dropdown.Section>

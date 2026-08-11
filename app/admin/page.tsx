@@ -115,16 +115,35 @@ export default function AdminPage() {
   const [colaboradoresAdmin, setColaboradoresAdmin] = useState<
     ColaboradorAdmin[]
   >([]);
+  const [candidatosAdmin, setCandidatosAdmin] = useState<ColaboradorAdmin[]>(
+    [],
+  );
+  const [podeGerenciarAdmins, setPodeGerenciarAdmins] = useState(false);
   const [isAddAdminTempOpen, setIsAddAdminTempOpen] = useState(false);
 
   const [adminTempData, setAdminTempData] = useState({
     colaborador_id: "",
     admin_ate: "",
+    tipo_acesso: "temporario" as "temporario" | "permanente",
   });
+
+  const [isEditAdminOpen, setIsEditAdminOpen] = useState(false);
+  const [adminEmEdicao, setAdminEmEdicao] = useState<ColaboradorAdmin | null>(
+    null,
+  );
+  const [editAdminData, setEditAdminData] = useState({
+    admin_ate: "",
+    tipo_acesso: "temporario" as "temporario" | "permanente",
+  });
+
+  const [isEditSetorOpen, setIsEditSetorOpen] = useState(false);
+  const [setorEmEdicao, setSetorEmEdicao] = useState<Setor | null>(null);
+  const [editSetor, setEditSetor] = useState({ nome: "", descricao: "" });
 
   useEffect(() => {
     fetchData();
   }, [
+    user?.email,
     paginaColaboradores,
     paginaSetores,
     paginaUsuariosAdmin,
@@ -151,20 +170,34 @@ export default function AdminPage() {
       });
       if (buscaSetores) paramsSetores.set("search", buscaSetores);
 
+      const emailUsuario = user?.email;
+
       const paramsUsuarios = new URLSearchParams({
-        user_email: user?.email ?? "",
+        user_email: emailUsuario ?? "",
         page: String(paginaUsuariosAdmin),
         limit: String(itensPorPagina),
       });
       if (buscaUsuariosAdmin) paramsUsuarios.set("search", buscaUsuariosAdmin);
 
-      const [colaboradoresRes, setoresRes, setoresPaginaRes, usuariosAdminRes] =
-        await Promise.all([
-          fetch(`/api/colaboradores?${paramsColaboradores}`),
-          fetch("/api/admin/setores"),
-          fetch(`/api/admin/setores?${paramsSetores}`),
-          fetch(`/api/admin/usuarios?${paramsUsuarios}`),
-        ]);
+      const [
+        colaboradoresRes,
+        setoresRes,
+        setoresPaginaRes,
+        usuariosAdminRes,
+        candidatosAdminRes,
+      ] = await Promise.all([
+        fetch(`/api/colaboradores?${paramsColaboradores}`),
+        fetch("/api/admin/setores"),
+        fetch(`/api/admin/setores?${paramsSetores}`),
+        emailUsuario
+          ? fetch(`/api/admin/usuarios?${paramsUsuarios}`)
+          : Promise.resolve(null),
+        emailUsuario
+          ? fetch(
+              `/api/admin/usuarios?escopo=candidatos&user_email=${encodeURIComponent(emailUsuario)}`,
+            )
+          : Promise.resolve(null),
+      ]);
 
       if (colaboradoresRes.ok && setoresRes.ok) {
         const colaboradoresData = await colaboradoresRes.json();
@@ -185,13 +218,22 @@ export default function AdminPage() {
           setTotalSetores(pagina.total ?? 0);
         }
 
-        if (usuariosAdminRes.ok) {
+        if (usuariosAdminRes) {
+          setPodeGerenciarAdmins(usuariosAdminRes.status !== 403);
+        }
+
+        if (usuariosAdminRes?.ok) {
           const usuariosAdminData = await usuariosAdminRes.json();
           setColaboradoresAdmin(usuariosAdminData.data ?? []);
           setTotalPaginasUsuariosAdmin(usuariosAdminData.totalPages ?? 1);
           setTotalUsuariosAdmin(usuariosAdminData.total ?? 0);
           if (usuariosAdminData.resumo)
             setResumoAdmins(usuariosAdminData.resumo);
+        }
+
+        if (candidatosAdminRes?.ok) {
+          const candidatos = await candidatosAdminRes.json();
+          setCandidatosAdmin(Array.isArray(candidatos) ? candidatos : []);
         }
       } else {
         toast.danger("Erro", {
@@ -251,8 +293,8 @@ export default function AdminPage() {
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
           <Button
+            isIconOnly
             variant="outline"
-            size="sm"
             aria-label="Editar colaborador"
             onPress={() => {
               setSelectedColaborador(row.original);
@@ -262,8 +304,8 @@ export default function AdminPage() {
             <Edit />
           </Button>
           <Button
+            isIconOnly
             variant={row.original.status === "ativo" ? "danger" : undefined}
-            size="sm"
             aria-label={
               row.original.status === "ativo"
                 ? "Inativar colaborador"
@@ -298,7 +340,7 @@ export default function AdminPage() {
       header: "Responsável",
       cell: (info) => (
         <span className="flex items-center gap-2">
-          <Users />
+          <Users className="h-4 w-4" />
           {String(info.getValue() || "Não definido")}
         </span>
       ),
@@ -308,6 +350,30 @@ export default function AdminPage() {
       accessorKey: "total_colaboradores",
       header: "Colaboradores",
       cell: (info) => <Chip>{Number(info.getValue() ?? 0)} pessoa(s)</Chip>,
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            isIconOnly
+            variant="outline"
+            aria-label="Editar setor"
+            onPress={() => abrirEdicaoSetor(row.original)}
+          >
+            <Edit />
+          </Button>
+          <Button
+            isIconOnly
+            variant="danger"
+            aria-label="Excluir setor"
+            onPress={() => removerSetor(row.original)}
+          >
+            <Trash2 />
+          </Button>
+        </div>
+      ),
       meta: { alinhar: "direita" },
     },
   ];
@@ -333,14 +399,16 @@ export default function AdminPage() {
     {
       id: "status_admin",
       header: "Status Admin",
-      cell: ({ row }) =>
-        row.original.admin_permanente ? (
-          <Chip color="accent">Admin Permanente</Chip>
-        ) : row.original.tipo === "admin" ? (
-          <Chip color="warning">Admin Temporário</Chip>
-        ) : (
-          <Chip>Usuário</Chip>
-        ),
+      cell: ({ row }) => {
+        if (row.original.admin_permanente)
+          return <Chip color="accent">Admin Permanente</Chip>;
+
+        const dias = diasAte(row.original.admin_temporario_ate);
+        if (dias !== null && dias < 0)
+          return <Chip color="danger">Admin Expirado</Chip>;
+
+        return <Chip color="warning">Admin Temporário</Chip>;
+      },
     },
     {
       accessorKey: "admin_temporario_ate",
@@ -356,17 +424,26 @@ export default function AdminPage() {
     {
       id: "acoes",
       header: "Ações",
-      cell: ({ row }) =>
-        !row.original.admin_permanente && row.original.tipo === "admin" ? (
+      cell: ({ row }) => (
+        <div className="flex justify-end gap-2">
           <Button
+            isIconOnly
+            variant="outline"
+            aria-label="Editar privilégios de admin"
+            onPress={() => abrirEdicaoAdmin(row.original)}
+          >
+            <Edit />
+          </Button>
+          <Button
+            isIconOnly
             variant="danger"
-            size="sm"
-            onPress={() => removerAdminTemporario(row.original.id)}
+            aria-label="Remover privilégios de admin"
+            onPress={() => removerAdminTemporario(row.original)}
           >
             <Trash2 />
-            Remover admin
           </Button>
-        ) : null,
+        </div>
+      ),
       meta: { alinhar: "direita" },
     },
   ];
@@ -456,15 +533,29 @@ export default function AdminPage() {
   const editarColaborador = async () => {
     if (!selectedColaborador) return;
 
+    if (
+      !selectedColaborador.nome.trim() ||
+      !selectedColaborador.email.trim() ||
+      !selectedColaborador.departamento
+    ) {
+      toast.danger("Erro", {
+        description: "Nome, email e departamento são obrigatórios.",
+      });
+      return;
+    }
+
     try {
       const response = await fetch(
         `/api/colaboradores/${selectedColaborador.id}`,
         {
-          method: "PUT",
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...selectedColaborador,
-            setor_id: selectedColaborador.setor_id || null,
+            nome: selectedColaborador.nome,
+            email: selectedColaborador.email,
+            departamento: selectedColaborador.departamento,
+            cargo: selectedColaborador.cargo ?? null,
+            setor_id: selectedColaborador.setor_id ?? null,
           }),
         },
       );
@@ -564,10 +655,92 @@ export default function AdminPage() {
     }
   };
 
-  const definirAdminTemporario = async () => {
-    if (!adminTempData.colaborador_id || !adminTempData.admin_ate) {
+  const abrirEdicaoSetor = (setor: Setor) => {
+    setSetorEmEdicao(setor);
+    setEditSetor({ nome: setor.nome, descricao: setor.descricao ?? "" });
+    setIsEditSetorOpen(true);
+  };
+
+  const editarSetor = async () => {
+    if (!setorEmEdicao) return;
+
+    if (!editSetor.nome.trim()) {
       toast.danger("Erro", {
-        description: "Preencha todos os campos obrigatórios.",
+        description: "Nome do setor é obrigatório.",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/setores/${setorEmEdicao.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: editSetor.nome.trim(),
+          descricao: editSetor.descricao.trim(),
+        }),
+      });
+
+      if (response.ok) {
+        fetchData();
+        setIsEditSetorOpen(false);
+        setSetorEmEdicao(null);
+
+        toast("Setor atualizado!", {
+          description: "Os dados do setor foram atualizados com sucesso.",
+        });
+      } else {
+        const error = await response.json();
+        toast.danger("Erro", {
+          description: error.error || "Não foi possível atualizar o setor.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar setor:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível atualizar o setor.",
+      });
+    }
+  };
+
+  const removerSetor = async (setor: Setor) => {
+    if (!confirm(`Tem certeza que deseja excluir o setor "${setor.nome}"?`))
+      return;
+
+    try {
+      const response = await fetch(`/api/admin/setores/${setor.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        fetchData();
+        toast("Setor excluído!", {
+          description: `O setor "${setor.nome}" foi removido com sucesso.`,
+        });
+      } else {
+        const error = await response.json();
+        toast.danger("Erro", {
+          description: error.error || "Não foi possível excluir o setor.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao excluir setor:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível excluir o setor.",
+      });
+    }
+  };
+
+  const salvarPrivilegiosAdmin = async (
+    colaboradorId: number,
+    dados: { tipo_acesso: "temporario" | "permanente"; admin_ate: string },
+    aoConcluir: () => void,
+  ) => {
+    const permanente = dados.tipo_acesso === "permanente";
+
+    if (!permanente && !dados.admin_ate) {
+      toast.danger("Erro", {
+        description: "Informe até quando o acesso de admin é válido.",
       });
       return;
     }
@@ -577,65 +750,115 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...adminTempData,
+          colaborador_id: colaboradorId,
+          admin_permanente: permanente,
+          admin_ate: permanente ? null : dados.admin_ate,
           user_email: user?.email,
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        fetchData();
-        setIsAddAdminTempOpen(false);
-        setAdminTempData({ colaborador_id: "", admin_ate: "" });
+      const data = await response.json();
 
-        toast("Admin temporário definido!", {
+      if (response.ok) {
+        fetchData();
+        aoConcluir();
+
+        toast("Privilégios atualizados!", {
           description: data.message,
         });
       } else {
-        const error = await response.json();
         toast.danger("Erro", {
           description:
-            error.error || "Não foi possível definir admin temporário.",
+            data.error || "Não foi possível salvar os privilégios de admin.",
         });
       }
     } catch (error) {
-      console.error("Erro ao definir admin temporário:", error);
+      console.error("Erro ao salvar privilégios de admin:", error);
       toast.danger("Erro", {
-        description: "Não foi possível definir admin temporário.",
+        description: "Não foi possível salvar os privilégios de admin.",
       });
     }
   };
 
-  const removerAdminTemporario = async (colaboradorId: number) => {
+  const definirAdminTemporario = async () => {
+    if (!adminTempData.colaborador_id) {
+      toast.danger("Erro", {
+        description: "Selecione um colaborador.",
+      });
+      return;
+    }
+
+    await salvarPrivilegiosAdmin(
+      Number(adminTempData.colaborador_id),
+      adminTempData,
+      () => {
+        setIsAddAdminTempOpen(false);
+        setAdminTempData({
+          colaborador_id: "",
+          admin_ate: "",
+          tipo_acesso: "temporario",
+        });
+      },
+    );
+  };
+
+  const abrirEdicaoAdmin = (colaborador: ColaboradorAdmin) => {
+    setAdminEmEdicao(colaborador);
+    setEditAdminData({
+      tipo_acesso: colaborador.admin_permanente ? "permanente" : "temporario",
+      admin_ate: colaborador.admin_temporario_ate
+        ? String(colaborador.admin_temporario_ate).slice(0, 10)
+        : "",
+    });
+    setIsEditAdminOpen(true);
+  };
+
+  const fecharEdicaoAdmin = () => {
+    setIsEditAdminOpen(false);
+    setAdminEmEdicao(null);
+    setEditAdminData({ admin_ate: "", tipo_acesso: "temporario" });
+  };
+
+  const editarAdmin = async () => {
+    if (!adminEmEdicao) return;
+
+    await salvarPrivilegiosAdmin(
+      adminEmEdicao.id,
+      editAdminData,
+      fecharEdicaoAdmin,
+    );
+  };
+
+  const removerAdminTemporario = async (colaborador: ColaboradorAdmin) => {
     if (
       !confirm(
-        "Tem certeza que deseja remover os privilégios de admin deste colaborador?",
+        `Tem certeza que deseja remover os privilégios de admin de ${colaborador.nome}?`,
       )
     )
       return;
 
     try {
       const response = await fetch(
-        `/api/admin/usuarios?colaborador_id=${colaboradorId}&user_email=${user?.email}`,
+        `/api/admin/usuarios?colaborador_id=${colaborador.id}&user_email=${encodeURIComponent(user?.email ?? "")}`,
         {
           method: "DELETE",
         },
       );
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
         fetchData();
         toast("Privilégios removidos!", {
           description: data.message,
         });
       } else {
-        const error = await response.json();
         toast.danger("Erro", {
-          description: error.error || "Não foi possível remover privilégios.",
+          description: data.error || "Não foi possível remover privilégios.",
         });
       }
     } catch (error) {
-      console.error("Erro ao remover admin temporário:", error);
+      console.error("Erro ao remover privilégios de admin:", error);
       toast.danger("Erro", {
         description: "Não foi possível remover privilégios.",
       });
@@ -651,20 +874,14 @@ export default function AdminPage() {
       : 0;
   const totalAdmins = resumoAdmins.admins;
 
+  const candidatosAdminDisponiveis = candidatosAdmin;
+
   const adminsTemporariosVisiveis = colaboradoresAdmin.filter((c) => {
     const dias = diasAte(c.admin_temporario_ate);
     return !c.admin_permanente && dias !== null && dias >= 0;
   }).length;
 
-  const isAdminPermanente =
-    user?.admin_permanente ||
-    [
-      "weliton.ribeiro@prismainformatica.com.br",
-      "edson@prismainformatica.com.br",
-      "ivan@prismainformatica.com.br",
-      "jose.xavier@prismainformatica.com.br",
-      "everson.freire@prismainformatica.com.br",
-    ].includes(user?.email?.toLowerCase() || "");
+  const isAdminPermanente = podeGerenciarAdmins;
 
   if (loading) {
     return (
@@ -747,7 +964,17 @@ export default function AdminPage() {
                   </div>
                   <Modal
                     isOpen={isAddColaboradorOpen}
-                    onOpenChange={setIsAddColaboradorOpen}
+                    onOpenChange={(aberto) => {
+                      setIsAddColaboradorOpen(aberto);
+                      if (!aberto)
+                        setNewColaborador({
+                          nome: "",
+                          email: "",
+                          departamento: "",
+                          cargo: "",
+                          setor_id: "",
+                        });
+                    }}
                   >
                     <Button>
                       <UserPlus />
@@ -803,11 +1030,12 @@ export default function AdminPage() {
                                   Departamento
                                 </Label>
                                 <Select
-                                  value={newColaborador.departamento}
-                                  onChange={(value) =>
+                                  aria-label="Departamento"
+                                  value={newColaborador.departamento || null}
+                                  onChange={(chave) =>
                                     setNewColaborador({
                                       ...newColaborador,
-                                      departamento: value as string,
+                                      departamento: chave ? String(chave) : "",
                                     })
                                   }
                                   variant="secondary"
@@ -877,11 +1105,12 @@ export default function AdminPage() {
                               <div className="grid gap-2">
                                 <Label htmlFor="setor">Setor</Label>
                                 <Select
-                                  value={newColaborador.setor_id}
-                                  onChange={(value) =>
+                                  aria-label="Setor"
+                                  value={newColaborador.setor_id || null}
+                                  onChange={(chave) =>
                                     setNewColaborador({
                                       ...newColaborador,
-                                      setor_id: value as string,
+                                      setor_id: chave ? String(chave) : "",
                                     })
                                   }
                                   variant="secondary"
@@ -958,7 +1187,10 @@ export default function AdminPage() {
                   </div>
                   <Modal
                     isOpen={isAddSetorOpen}
-                    onOpenChange={setIsAddSetorOpen}
+                    onOpenChange={(aberto) => {
+                      setIsAddSetorOpen(aberto);
+                      if (!aberto) setNewSetor({ nome: "", descricao: "" });
+                    }}
                   >
                     <Button>
                       <Plus />
@@ -1058,30 +1290,36 @@ export default function AdminPage() {
                     <div>
                       <Card.Title>Gerenciar Usuários Admin</Card.Title>
                       <Card.Description>
-                        Defina admins temporários para outros colaboradores
+                        Administradores permanentes e temporários do sistema
                       </Card.Description>
                     </div>
                     <Modal
                       isOpen={isAddAdminTempOpen}
-                      onOpenChange={setIsAddAdminTempOpen}
+                      onOpenChange={(aberto) => {
+                        setIsAddAdminTempOpen(aberto);
+                        if (!aberto)
+                          setAdminTempData({
+                            colaborador_id: "",
+                            admin_ate: "",
+                            tipo_acesso: "temporario",
+                          });
+                      }}
                     >
                       <Button>
                         <UserPlus />
-                        Definir Admin Temporário
+                        Definir Admin
                       </Button>
                       <Modal.Backdrop>
                         <Modal.Container>
                           <Modal.Dialog>
                             <Modal.CloseTrigger />
                             <Modal.Header>
-                              <Modal.Heading>
-                                Definir Admin Temporário
-                              </Modal.Heading>
+                              <Modal.Heading>Definir Admin</Modal.Heading>
                             </Modal.Header>
                             <Modal.Body>
                               <p className="text-sm text-muted mb-4">
-                                Conceda privilégios administrativos temporários
-                                a um colaborador
+                                Conceda privilégios administrativos a um
+                                colaborador, com ou sem prazo
                               </p>
                               <div className="grid gap-4">
                                 <div className="grid gap-2">
@@ -1089,11 +1327,14 @@ export default function AdminPage() {
                                     Colaborador
                                   </Label>
                                   <Select
-                                    value={adminTempData.colaborador_id}
-                                    onChange={(value) =>
+                                    aria-label="Colaborador"
+                                    value={adminTempData.colaborador_id || null}
+                                    onChange={(chave) =>
                                       setAdminTempData({
                                         ...adminTempData,
-                                        colaborador_id: value as string,
+                                        colaborador_id: chave
+                                          ? String(chave)
+                                          : "",
                                       })
                                     }
                                     variant="secondary"
@@ -1105,13 +1346,8 @@ export default function AdminPage() {
                                     </Select.Trigger>
                                     <Select.Popover>
                                       <ListBox>
-                                        {colaboradoresAdmin
-                                          .filter(
-                                            (col) =>
-                                              !col.admin_permanente &&
-                                              col.tipo !== "admin",
-                                          )
-                                          .map((colaborador) => (
+                                        {candidatosAdminDisponiveis.map(
+                                          (colaborador) => (
                                             <ListBox.Item
                                               key={colaborador.id}
                                               id={colaborador.id.toString()}
@@ -1120,27 +1356,87 @@ export default function AdminPage() {
                                               {colaborador.nome} (
                                               {colaborador.email})
                                             </ListBox.Item>
-                                          ))}
+                                          ),
+                                        )}
+                                      </ListBox>
+                                    </Select.Popover>
+                                  </Select>
+                                  {candidatosAdminDisponiveis.length === 0 && (
+                                    <p className="text-sm text-muted">
+                                      Nenhum colaborador disponível para receber
+                                      acesso de admin.
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label htmlFor="tipo-acesso-admin">
+                                    Tipo de acesso
+                                  </Label>
+                                  <Select
+                                    aria-label="Tipo de acesso"
+                                    value={adminTempData.tipo_acesso}
+                                    onChange={(chave) =>
+                                      setAdminTempData({
+                                        ...adminTempData,
+                                        tipo_acesso:
+                                          chave === "permanente"
+                                            ? "permanente"
+                                            : "temporario",
+                                        admin_ate:
+                                          chave === "permanente"
+                                            ? ""
+                                            : adminTempData.admin_ate,
+                                      })
+                                    }
+                                    variant="secondary"
+                                  >
+                                    <Select.Trigger>
+                                      <Select.Value />
+                                      <Select.Indicator />
+                                    </Select.Trigger>
+                                    <Select.Popover>
+                                      <ListBox>
+                                        <ListBox.Item
+                                          id="temporario"
+                                          textValue="Temporário (com prazo)"
+                                        >
+                                          Temporário (com prazo)
+                                        </ListBox.Item>
+                                        <ListBox.Item
+                                          id="permanente"
+                                          textValue="Permanente (sem prazo)"
+                                        >
+                                          Permanente (sem prazo)
+                                        </ListBox.Item>
                                       </ListBox>
                                     </Select.Popover>
                                   </Select>
                                 </div>
-                                <div className="grid gap-2">
-                                  <Label htmlFor="admin-ate">Admin até</Label>
-                                  <Input
-                                    id="admin-ate"
-                                    type="date"
-                                    value={adminTempData.admin_ate}
-                                    onChange={(e) =>
-                                      setAdminTempData({
-                                        ...adminTempData,
-                                        admin_ate: e.target.value,
-                                      })
-                                    }
-                                    min={new Date().toISOString().split("T")[0]}
-                                    variant="secondary"
-                                  />
-                                </div>
+                                {adminTempData.tipo_acesso === "temporario" ? (
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="admin-ate">Admin até</Label>
+                                    <Input
+                                      id="admin-ate"
+                                      type="date"
+                                      value={adminTempData.admin_ate}
+                                      onChange={(e) =>
+                                        setAdminTempData({
+                                          ...adminTempData,
+                                          admin_ate: e.target.value,
+                                        })
+                                      }
+                                      min={
+                                        new Date().toISOString().split("T")[0]
+                                      }
+                                      variant="secondary"
+                                    />
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-muted">
+                                    Admin permanente não expira e só pode ser
+                                    revogado manualmente nesta tela.
+                                  </p>
+                                )}
                               </div>
                             </Modal.Body>
                             <Modal.Footer>
@@ -1159,7 +1455,7 @@ export default function AdminPage() {
                     colunas={colunasUsuariosAdmin}
                     dados={colaboradoresAdmin}
                     rotulo="Usuários admin"
-                    vazio="Nenhum colaborador encontrado"
+                    vazio="Nenhum administrador encontrado"
                     total={totalUsuariosAdmin}
                     pagina={paginaUsuariosAdmin}
                     totalPaginas={totalPaginasUsuariosAdmin}
@@ -1196,8 +1492,168 @@ export default function AdminPage() {
         </Tabs>
 
         <Modal
+          isOpen={isEditAdminOpen}
+          onOpenChange={(aberto) => {
+            if (aberto) setIsEditAdminOpen(true);
+            else fecharEdicaoAdmin();
+          }}
+        >
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog>
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>Editar Acesso de Admin</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>
+                  <p className="text-sm text-muted mb-4">
+                    {adminEmEdicao
+                      ? `Ajuste o acesso de ${adminEmEdicao.nome}`
+                      : "Ajuste o acesso do administrador"}
+                  </p>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-tipo-acesso-admin">
+                        Tipo de acesso
+                      </Label>
+                      <Select
+                        aria-label="Tipo de acesso"
+                        value={editAdminData.tipo_acesso}
+                        onChange={(chave) =>
+                          setEditAdminData({
+                            ...editAdminData,
+                            tipo_acesso:
+                              chave === "permanente"
+                                ? "permanente"
+                                : "temporario",
+                            admin_ate:
+                              chave === "permanente"
+                                ? ""
+                                : editAdminData.admin_ate,
+                          })
+                        }
+                        variant="secondary"
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item
+                              id="temporario"
+                              textValue="Temporário (com prazo)"
+                            >
+                              Temporário (com prazo)
+                            </ListBox.Item>
+                            <ListBox.Item
+                              id="permanente"
+                              textValue="Permanente (sem prazo)"
+                            >
+                              Permanente (sem prazo)
+                            </ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </div>
+                    {editAdminData.tipo_acesso === "temporario" ? (
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-admin-ate">Admin até</Label>
+                        <Input
+                          id="edit-admin-ate"
+                          type="date"
+                          value={editAdminData.admin_ate}
+                          onChange={(e) =>
+                            setEditAdminData({
+                              ...editAdminData,
+                              admin_ate: e.target.value,
+                            })
+                          }
+                          min={new Date().toISOString().split("T")[0]}
+                          variant="secondary"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted">
+                        Admin permanente não expira e só pode ser revogado
+                        manualmente nesta tela.
+                      </p>
+                    )}
+                  </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button onPress={editarAdmin}>Salvar Alterações</Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+
+        <Modal
+          isOpen={isEditSetorOpen}
+          onOpenChange={(aberto) => {
+            setIsEditSetorOpen(aberto);
+            if (!aberto) {
+              setSetorEmEdicao(null);
+              setEditSetor({ nome: "", descricao: "" });
+            }
+          }}
+        >
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog>
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>Editar Setor</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>
+                  <p className="text-sm text-muted mb-4">
+                    Atualize o nome e a descrição do setor
+                  </p>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-nome-setor">Nome do Setor</Label>
+                      <Input
+                        id="edit-nome-setor"
+                        value={editSetor.nome}
+                        onChange={(e) =>
+                          setEditSetor({ ...editSetor, nome: e.target.value })
+                        }
+                        variant="secondary"
+                        placeholder="Ex: Desenvolvimento, Suporte..."
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-descricao-setor">Descrição</Label>
+                      <Input
+                        id="edit-descricao-setor"
+                        value={editSetor.descricao}
+                        onChange={(e) =>
+                          setEditSetor({
+                            ...editSetor,
+                            descricao: e.target.value,
+                          })
+                        }
+                        variant="secondary"
+                        placeholder="Breve descrição do setor"
+                      />
+                    </div>
+                  </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button onPress={editarSetor}>Salvar Alterações</Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+
+        <Modal
           isOpen={isEditColaboradorOpen}
-          onOpenChange={setIsEditColaboradorOpen}
+          onOpenChange={(aberto) => {
+            setIsEditColaboradorOpen(aberto);
+            if (!aberto) setSelectedColaborador(null);
+          }}
         >
           <Modal.Backdrop>
             <Modal.Container>
@@ -1223,6 +1679,7 @@ export default function AdminPage() {
                               nome: e.target.value,
                             })
                           }
+                          variant="secondary"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -1237,18 +1694,22 @@ export default function AdminPage() {
                               email: e.target.value,
                             })
                           }
+                          variant="secondary"
                         />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="edit-departamento">Departamento</Label>
                         <Select
-                          value={selectedColaborador.departamento}
-                          onChange={(value) =>
+                          aria-label="Departamento"
+                          value={selectedColaborador.departamento || null}
+                          onChange={(chave) =>
                             setSelectedColaborador({
                               ...selectedColaborador,
-                              departamento: value as string,
+                              departamento: chave ? String(chave) : "",
                             })
                           }
+                          variant="secondary"
+                          placeholder="Selecione o departamento"
                         >
                           <Select.Trigger>
                             <Select.Value />
@@ -1301,6 +1762,7 @@ export default function AdminPage() {
                               cargo: e.target.value,
                             })
                           }
+                          variant="secondary"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -1318,6 +1780,7 @@ export default function AdminPage() {
                                   : undefined,
                             })
                           }
+                          variant="secondary"
                           placeholder="Selecione o setor"
                         >
                           <Select.Trigger>
