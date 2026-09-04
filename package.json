@@ -7,7 +7,17 @@
     "dev": "next dev --turbopack",
     "lint": "next lint",
     "start": "next start",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:all": "jest && playwright test"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",
@@ -26,12 +36,19 @@
     "recharts": "^2.15.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/canvas-confetti": "^1.9.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
     "postcss": "^8.5",
     "prisma": "^7.9.0",
     "tailwindcss": "^4",
