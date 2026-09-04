@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import { PATCH } from "@/app/api/biblioteca/emprestimos/[id]/route";
 import { POST } from "@/app/api/biblioteca/emprestimos/route";
 import { prisma } from "@/lib/prisma";
