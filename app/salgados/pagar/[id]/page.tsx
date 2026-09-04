@@ -6,11 +6,24 @@ import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
 import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
-import { TAXA_GATEWAY, totalComTaxaGateway } from "@/lib/salgados";
+import {
+  INTERVALO_POLLING_MS,
+  TAXA_GATEWAY,
+  totalComTaxaGateway,
+} from "@/lib/salgados";
 import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
-import { Check, Receipt, TriangleAlert, UserRound } from "lucide-react";
+import confetti from "canvas-confetti";
+import {
+  Check,
+  Copy,
+  QrCode,
+  Receipt,
+  TriangleAlert,
+  UserRound,
+  Zap,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
 interface Divida {
   id: number;
@@ -47,6 +60,36 @@ interface Colaborador {
   updated_at: Date;
 }
 
+interface Pagamento {
+  id: number;
+  divida_id: number;
+  colaborador_id: number;
+  status: string | null;
+  pix_id: string | null;
+  br_code: string | null;
+  br_code_base64: string | null;
+  expires_at: string | null;
+}
+
+const EH_DESENVOLVIMENTO = process.env.NODE_ENV !== "production";
+
+function soltarConfetes() {
+  const disparar = (particleRatio: number, opcoes: confetti.Options) => {
+    confetti({
+      origin: { y: 0.7 },
+      spread: 70,
+      startVelocity: 45,
+      particleCount: Math.floor(200 * particleRatio),
+      ...opcoes,
+    });
+  };
+
+  disparar(0.25, { spread: 26, startVelocity: 55 });
+  disparar(0.35, { spread: 60 });
+  disparar(0.2, { spread: 120, decay: 0.91, scalar: 0.8 });
+  disparar(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+}
+
 export default function PaymentPage({
   params,
 }: {
@@ -59,6 +102,10 @@ export default function PaymentPage({
   const [divida, setDivida] = useState<Divida | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pagamento, setPagamento] = useState<Pagamento | null>(null);
+  const [gerandoPix, setGerandoPix] = useState(false);
+  const [simulando, setSimulando] = useState(false);
+  const confetesDisparados = useRef(false);
 
   const [colaboradorCompleto, setColaboradorCompleto] =
     useState<Colaborador | null>(null);
@@ -83,6 +130,14 @@ export default function PaymentPage({
         }
         const dividaData = await responseDivida.json();
         setDivida(dividaData);
+        confetesDisparados.current = Boolean(dividaData.pago);
+
+        const responsePagamento = await fetch(
+          `/api/salgados/pagamentos?divida_id=${id}`,
+        );
+        if (responsePagamento.ok) {
+          setPagamento(await responsePagamento.json());
+        }
 
         let userIdLocal = user?.id;
         if (!userIdLocal) {
@@ -115,6 +170,130 @@ export default function PaymentPage({
 
     carregarDados();
   }, [id, router, user?.id]);
+
+  const confirmarPagamento = useCallback(() => {
+    setDivida((atual) => (atual ? { ...atual, pago: true } : atual));
+    setPagamento((atual) => (atual ? { ...atual, status: "paid" } : atual));
+
+    if (confetesDisparados.current) return;
+    confetesDisparados.current = true;
+
+    soltarConfetes();
+    toast("Pagamento confirmado!", {
+      description: "O PIX foi compensado e a dívida está quitada.",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!divida || divida.pago || !pagamento?.pix_id) return;
+
+    let ativo = true;
+
+    const verificar = async () => {
+      try {
+        const response = await fetch(
+          `/api/salgados/pagamentos/status?divida_id=${id}`,
+        );
+        if (!response.ok) return;
+
+        const status = await response.json();
+        if (ativo && status.pago) {
+          confirmarPagamento();
+        }
+      } catch (error) {
+        console.error("Erro ao verificar o status do pagamento:", error);
+      }
+    };
+
+    const intervalo = setInterval(verificar, INTERVALO_POLLING_MS);
+    void verificar();
+
+    return () => {
+      ativo = false;
+      clearInterval(intervalo);
+    };
+  }, [id, divida, pagamento?.pix_id, confirmarPagamento]);
+
+  const handleGerarPix = async () => {
+    if (!user) return;
+
+    setGerandoPix(true);
+    try {
+      const response = await fetch("/api/salgados/pagamentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          divida_id: Number(id),
+          colaborador_id: user.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.danger("Erro", {
+          description: data.error || "Não foi possível gerar a cobrança PIX.",
+        });
+        return;
+      }
+
+      setPagamento(data);
+      toast("PIX gerado!", {
+        description: "Escaneie o QR Code ou copie o código para pagar.",
+      });
+    } catch (error) {
+      console.error("Erro ao gerar a cobrança PIX:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível gerar a cobrança PIX.",
+      });
+    } finally {
+      setGerandoPix(false);
+    }
+  };
+
+  const handleCopiarCodigo = async () => {
+    if (!pagamento?.br_code) return;
+
+    try {
+      await navigator.clipboard.writeText(pagamento.br_code);
+      toast("Código copiado!", {
+        description: "Cole no aplicativo do seu banco para pagar.",
+      });
+    } catch {
+      toast.danger("Erro", {
+        description: "Não foi possível copiar o código.",
+      });
+    }
+  };
+
+  const handleSimularPagamento = async () => {
+    setSimulando(true);
+    try {
+      const response = await fetch("/api/salgados/pagamentos/simular", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ divida_id: Number(id) }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.danger("Erro", {
+          description: data.error || "Não foi possível simular o pagamento.",
+        });
+        return;
+      }
+
+      if (data.pago) confirmarPagamento();
+    } catch (error) {
+      console.error("Erro ao simular o pagamento:", error);
+      toast.danger("Erro", {
+        description: "Não foi possível simular o pagamento.",
+      });
+    } finally {
+      setSimulando(false);
+    }
+  };
 
   const handleSalvarDados = async () => {
     const soDigitos = (str: string) => str.replace(/\D/g, "");
@@ -202,6 +381,12 @@ export default function PaymentPage({
     return null;
   }
 
+  const cobrancaAtiva = Boolean(pagamento?.br_code_base64) && !divida.pago;
+  const painelLateral = divida.pago || cobrancaAtiva;
+  const expiraEm = pagamento?.expires_at
+    ? new Date(pagamento.expires_at).toLocaleString("pt-BR")
+    : null;
+
   return (
     <ProtectedRoute>
       <LayoutPagina>
@@ -213,7 +398,7 @@ export default function PaymentPage({
 
         <div className="flex flex-col lg:flex-row gap-4">
           <div
-            className={`flex flex-col gap-4 transition-all duration-300 w-full ${divida.pago ? "lg:w-2/3" : ""}`}
+            className={`flex flex-col gap-4 transition-all duration-300 w-full ${painelLateral ? "lg:w-2/3" : ""}`}
           >
             <Card>
               <Card.Header>
@@ -427,22 +612,98 @@ export default function PaymentPage({
                 )}
               </Card.Content>
 
-              {!divida.pago &&
-                colaboradorCompleto !== null &&
-                !possuiDadosCompletos && (
-                  <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
-                    <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
+              {!divida.pago && colaboradorCompleto !== null && (
+                <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
+                  <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
+                    {possuiDadosCompletos ? (
+                      <Button
+                        onPress={handleGerarPix}
+                        isDisabled={gerandoPix || cobrancaAtiva}
+                      >
+                        <QrCode />
+                        {gerandoPix
+                          ? "Gerando..."
+                          : cobrancaAtiva
+                            ? "PIX gerado"
+                            : "Gerar pagamento PIX"}
+                      </Button>
+                    ) : (
                       <Button
                         onPress={handleSalvarDados}
                         isDisabled={isProcessing}
                       >
                         Atualizar Dados
                       </Button>
-                    </div>
-                  </Card.Footer>
-                )}
+                    )}
+                  </div>
+                </Card.Footer>
+              )}
             </Card>
           </div>
+
+          {cobrancaAtiva && pagamento && (
+            <Card className="w-full lg:w-1/3 border-primary/40">
+              <Card.Header>
+                <div className="flex items-center gap-4">
+                  <IconeDestaque icone={QrCode} cor={SERIE.s3} />
+                  <div>
+                    <Card.Title>Pague com PIX</Card.Title>
+                    <Card.Description>
+                      Aguardando a confirmação do pagamento
+                    </Card.Description>
+                  </div>
+                </div>
+              </Card.Header>
+
+              <Card.Content className="flex flex-col items-center gap-4">
+                {pagamento.br_code_base64 && (
+                  <img
+                    src={pagamento.br_code_base64}
+                    alt="QR Code do PIX para pagamento da dívida"
+                    className="size-56 rounded-lg bg-white p-2"
+                  />
+                )}
+
+                <p className="text-center text-sm text-muted">
+                  Escaneie o QR Code no aplicativo do seu banco ou use o código
+                  copia e cola abaixo.
+                </p>
+
+                <p className="w-full break-all rounded-md border border-border bg-default p-2 text-center font-mono text-xs">
+                  {pagamento.br_code}
+                </p>
+
+                <div className="flex w-full flex-col gap-2">
+                  <Button
+                    fullWidth
+                    variant="secondary"
+                    onPress={handleCopiarCodigo}
+                  >
+                    <Copy />
+                    Copiar código PIX
+                  </Button>
+
+                  {EH_DESENVOLVIMENTO && (
+                    <Button
+                      fullWidth
+                      variant="outline"
+                      onPress={handleSimularPagamento}
+                      isDisabled={simulando}
+                    >
+                      <Zap />
+                      {simulando ? "Simulando..." : "Simular pagamento (dev)"}
+                    </Button>
+                  )}
+                </div>
+
+                {expiraEm && (
+                  <p className="text-center text-xs text-muted">
+                    Válido até {expiraEm}
+                  </p>
+                )}
+              </Card.Content>
+            </Card>
+          )}
 
           {divida.pago && (
             <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-success/40">

@@ -95,11 +95,16 @@ model pagamentos {
   divida_id      Int?
   colaborador_id Int?
   status         String?        @db.VarChar
+  pix_id         String?        @db.VarChar
+  br_code        String?
+  br_code_base64 String?
   expires_at     DateTime?      @db.Timestamptz(6)
   created_at     DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at     DateTime?      @default(now()) @db.Timestamptz(6)
   colaboradores  colaboradores? @relation(fields: [colaborador_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pagamentos_colaboradores_id_fkey")
   dividas        dividas?       @relation(fields: [divida_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pagamentos_dividas_id_fkey")
+
+  @@index([pix_id])
 }
 
 model setores {

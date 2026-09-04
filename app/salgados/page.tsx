@@ -66,6 +66,22 @@ interface Divida {
   pago: boolean;
 }
 
+const TIPOS_CHAVE_PIX = [
+  { id: "CPF", rotulo: "CPF" },
+  { id: "CNPJ", rotulo: "CNPJ" },
+  { id: "EMAIL", rotulo: "E-mail" },
+  { id: "PHONE", rotulo: "Telefone" },
+  { id: "RANDOM", rotulo: "Chave aleatória" },
+] as const;
+
+const PLACEHOLDER_CHAVE_PIX: Record<string, string> = {
+  CPF: "00011122233",
+  CNPJ: "00000000000100",
+  EMAIL: "financeiro@empresa.com.br",
+  PHONE: "5545999990000",
+  RANDOM: "chave aleatória (EVP)",
+};
+
 export default function SalgadosPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -86,9 +102,9 @@ export default function SalgadosPage() {
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
   const [saldoInfo, setSaldoInfo] = useState({
-    available_amount: 0,
-    waiting_funds_amount: 0,
-    transferred_amount: 0,
+    disponivel: 0,
+    pendente: 0,
+    bloqueado: 0,
   });
 
   const [resumo, setResumo] = useState<DashboardData | null>(null);
@@ -96,6 +112,8 @@ export default function SalgadosPage() {
   const [transferData, setTransferData] = useState({
     amount: "",
     description: "",
+    pix_key: "",
+    pix_key_type: "CPF",
   });
   const [newDivida, setNewDivida] = useState({
     colaborador_id: "",
@@ -176,11 +194,13 @@ export default function SalgadosPage() {
     }
   };
 
+  const ehAdmin = user?.tipo === "admin";
+
   useEffect(() => {
-    if (user) {
-      fetchSaldo();
-      fetchResumo();
-    }
+    if (!user) return;
+
+    fetchResumo();
+    fetchSaldo();
   }, [user]);
 
   const fetchResumo = async () => {
@@ -195,17 +215,14 @@ export default function SalgadosPage() {
   };
 
   const fetchSaldo = async () => {
-    if (!user) return;
     try {
-      const response = await fetch(
-        `/api/salgados/saldo?colaborador_id=${user.id}`,
-      );
+      const response = await fetch("/api/salgados/saldo");
       if (response.ok) {
         const data = await response.json();
         setSaldoInfo({
-          available_amount: Number(data.available_amount) || 0,
-          waiting_funds_amount: Number(data.waiting_funds_amount) || 0,
-          transferred_amount: Number(data.transferred_amount) || 0,
+          disponivel: Number(data.disponivel) || 0,
+          pendente: Number(data.pendente) || 0,
+          bloqueado: Number(data.bloqueado) || 0,
         });
       }
     } catch (error) {
@@ -424,9 +441,16 @@ export default function SalgadosPage() {
       return;
     }
 
-    if (valor > saldoInfo.available_amount) {
+    if (valor > saldoInfo.disponivel) {
       toast.danger("Erro", {
         description: "O valor solicitado excede o saldo disponível para saque.",
+      });
+      return;
+    }
+
+    if (!transferData.pix_key.trim()) {
+      toast.danger("Erro", {
+        description: "Informe a chave PIX que receberá o valor.",
       });
       return;
     }
@@ -440,6 +464,8 @@ export default function SalgadosPage() {
           colaborador_id: user.id,
           amount: valor,
           description: transferData.description,
+          pix_key: transferData.pix_key,
+          pix_key_type: transferData.pix_key_type,
         }),
       });
 
@@ -459,6 +485,8 @@ export default function SalgadosPage() {
       setTransferData({
         amount: "",
         description: "",
+        pix_key: "",
+        pix_key_type: "CPF",
       });
       fetchSaldo();
     } catch (error) {
@@ -513,11 +541,11 @@ export default function SalgadosPage() {
 
           <StatTile
             rotulo="Disponível para saque"
-            valor={moeda(saldoInfo.available_amount)}
+            valor={moeda(saldoInfo.disponivel)}
             icone={Wallet}
             deltaLegenda={
-              saldoInfo.waiting_funds_amount > 0
-                ? `${moeda(saldoInfo.waiting_funds_amount)} ainda a liberar`
+              saldoInfo.pendente > 0
+                ? `${moeda(saldoInfo.pendente)} ainda a liberar`
                 : "nada pendente de liberação"
             }
           />
@@ -548,68 +576,120 @@ export default function SalgadosPage() {
                     </Card.Description>
                   </div>
                   <div className="flex gap-4 items-center flex-wrap">
-                    <ModalForm
-                      isOpen={isTransferOpen}
-                      onOpenChange={setIsTransferOpen}
-                      titulo="Sacar Dinheiro"
-                      descricao="Solicite uma transferência dos valores disponíveis."
-                      gatilho={
-                        <Button variant="secondary">
-                          <Banknote />
-                          Sacar dinheiro
-                        </Button>
-                      }
-                      rotuloConfirmar="Confirmar Transferência"
-                      rotuloEnviando="Enviando..."
-                      onConfirmar={handleTransferirDinheiro}
-                      isEnviando={isSubmittingTransfer}
-                      isConfirmarDesabilitado={saldoInfo.available_amount <= 0}
-                    >
-                      <p className="text-sm">
-                        Saldo disponível para saque:{" "}
-                        <strong>
-                          {saldoInfo.available_amount.toLocaleString("pt-BR", {
-                            style: "currency",
-                            currency: "BRL",
-                          })}
-                        </strong>
-                      </p>
-
-                      <CampoModal
-                        rotulo="Valor a sacar (R$)"
-                        htmlFor="transfer_amount"
+                    {ehAdmin && (
+                      <ModalForm
+                        isOpen={isTransferOpen}
+                        onOpenChange={setIsTransferOpen}
+                        titulo="Sacar Dinheiro"
+                        descricao="Solicite uma transferência PIX dos valores disponíveis."
+                        gatilho={
+                          <Button variant="secondary">
+                            <Banknote />
+                            Sacar dinheiro
+                          </Button>
+                        }
+                        rotuloConfirmar="Confirmar Transferência"
+                        rotuloEnviando="Enviando..."
+                        onConfirmar={handleTransferirDinheiro}
+                        isEnviando={isSubmittingTransfer}
+                        isConfirmarDesabilitado={saldoInfo.disponivel <= 0}
                       >
-                        <Input
-                          id="transfer_amount"
-                          type="number"
-                          max={saldoInfo.available_amount}
-                          value={transferData.amount}
-                          onChange={(e) =>
-                            setTransferData({
-                              ...transferData,
-                              amount: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Ex: 80.50 para R$ 80,50"
-                        />
-                      </CampoModal>
+                        <p className="text-sm">
+                          Saldo disponível para saque:{" "}
+                          <strong>{moeda(saldoInfo.disponivel)}</strong>
+                        </p>
 
-                      <CampoModal rotulo="Observação" htmlFor="transfer_desc">
-                        <TextArea
-                          id="transfer_desc"
-                          value={transferData.description}
-                          onChange={(e) =>
-                            setTransferData({
-                              ...transferData,
-                              description: e.target.value,
-                            })
-                          }
-                          variant="secondary"
-                          placeholder="Ex: Salgado de novembro"
-                        />
-                      </CampoModal>
-                    </ModalForm>
+                        <CampoModal
+                          rotulo="Valor a sacar (R$)"
+                          htmlFor="transfer_amount"
+                        >
+                          <Input
+                            id="transfer_amount"
+                            type="number"
+                            max={saldoInfo.disponivel}
+                            value={transferData.amount}
+                            onChange={(e) =>
+                              setTransferData({
+                                ...transferData,
+                                amount: e.target.value,
+                              })
+                            }
+                            variant="secondary"
+                            placeholder="Ex: 80.50 para R$ 80,50"
+                          />
+                        </CampoModal>
+
+                        <LinhaCampos>
+                          <CampoModal
+                            rotulo="Tipo da chave PIX"
+                            htmlFor="pix_key_type"
+                          >
+                            <Select
+                              selectedKey={transferData.pix_key_type}
+                              onSelectionChange={(chave) =>
+                                setTransferData({
+                                  ...transferData,
+                                  pix_key_type: String(chave),
+                                  pix_key: "",
+                                })
+                              }
+                              variant="secondary"
+                              aria-label="Tipo da chave PIX"
+                            >
+                              <Select.Trigger>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  {TIPOS_CHAVE_PIX.map((tipo) => (
+                                    <ListBox.Item
+                                      key={tipo.id}
+                                      id={tipo.id}
+                                      textValue={tipo.rotulo}
+                                    >
+                                      {tipo.rotulo}
+                                    </ListBox.Item>
+                                  ))}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+                          </CampoModal>
+
+                          <CampoModal rotulo="Chave PIX" htmlFor="pix_key">
+                            <Input
+                              id="pix_key"
+                              value={transferData.pix_key}
+                              onChange={(e) =>
+                                setTransferData({
+                                  ...transferData,
+                                  pix_key: e.target.value,
+                                })
+                              }
+                              variant="secondary"
+                              placeholder={
+                                PLACEHOLDER_CHAVE_PIX[transferData.pix_key_type]
+                              }
+                            />
+                          </CampoModal>
+                        </LinhaCampos>
+
+                        <CampoModal rotulo="Observação" htmlFor="transfer_desc">
+                          <TextArea
+                            id="transfer_desc"
+                            value={transferData.description}
+                            onChange={(e) =>
+                              setTransferData({
+                                ...transferData,
+                                description: e.target.value,
+                              })
+                            }
+                            variant="secondary"
+                            placeholder="Ex: Salgado de novembro"
+                          />
+                        </CampoModal>
+                      </ModalForm>
+                    )}
 
                     <ModalForm
                       isOpen={isAddDialogOpen}
