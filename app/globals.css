@@ -1,94 +1,123 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "@heroui/styles";
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * HeroUI Theme Customization
+ * Add this to your global.css after importing @heroui/styles
+ * Only includes variables users need to customize
+ * @see https://heroui.com/docs/react/getting-started/theming
+ */
+
+:root,
+.light,
+.default,
+[data-theme="light"],
+[data-theme="default"] {
+  /* Theme Colors (Light Mode) */
+  --accent: oklch(63.77% 0.1738 253.83);
+  --accent-foreground: oklch(99.11% 0 0);
+  --background: oklch(97.02% 0.005 253.83);
+  --border: oklch(90% 0.005 253.83);
+  --danger: oklch(65.32% 0.2351 25.74);
+  --danger-foreground: oklch(99.11% 0 0);
+  --default: oklch(94% 0.005 253.83);
+  --default-foreground: oklch(21.03% 0.0059 253.83);
+  --field-background: oklch(100% 0.0025 253.83);
+  --field-border: transparent;
+  --field-foreground: oklch(21.03% 0.005 253.83);
+  --field-placeholder: oklch(55.17% 0.01 253.83);
+  --focus: oklch(63.77% 0.1738 253.83);
+  --foreground: oklch(21.03% 0.005 253.83);
+  --muted: oklch(55.17% 0.01 253.83);
+  --overlay: oklch(100% 0.0015 253.83);
+  --overlay-foreground: oklch(21.03% 0.005 253.83);
+  --scrollbar: oklch(87.1% 0.005 253.83);
+  --segment: oklch(100% 0.005 253.83);
+  --segment-foreground: oklch(21.03% 0.005 253.83);
+  --separator: oklch(92% 0.005 253.83);
+  --success: oklch(73.29% 0.1954 150.81);
+  --success-foreground: oklch(21.03% 0.0059 150.81);
+  --surface: oklch(100% 0.0025 253.83);
+  --surface-foreground: oklch(21.03% 0.005 253.83);
+  --surface-secondary: oklch(95.24% 0.004 253.83);
+  --surface-secondary-foreground: oklch(21.03% 0.005 253.83);
+  --surface-tertiary: oklch(93.73% 0.004 253.83);
+  --surface-tertiary-foreground: oklch(21.03% 0.005 253.83);
+  --warning: oklch(78.19% 0.1601 72.33);
+  --warning-foreground: oklch(21.03% 0.0059 72.33);
+
+  /* Border Radius */
+  --radius: 0.25rem;
+  --field-radius: 0.5rem;
+
+  /* Font Family */
+  /* Make sure to load Public Sans font in your app */
+  --font-sans: var(--font-public-sans);
+
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-8: #e34948;
+
+  --viz-grid: var(--separator);
+  --viz-axis: var(--border);
+  --viz-de-emphasis: #b9bcc2;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  /* Theme Colors (Dark Mode) */
+  --accent: oklch(63.77% 0.1738 253.83);
+  --accent-foreground: oklch(99.11% 0 0);
+  --background: oklch(12% 0.005 253.83);
+  --border: oklch(28% 0.005 253.83);
+  --danger: oklch(59.4% 0.1987 24.63);
+  --danger-foreground: oklch(99.11% 0 0);
+  --default: oklch(27.4% 0.005 253.83);
+  --default-foreground: oklch(99.11% 0 0);
+  --field-background: oklch(21.03% 0.01 253.83);
+  --field-border: transparent;
+  --field-foreground: oklch(99.11% 0.005 253.83);
+  --field-placeholder: oklch(70.5% 0.01 253.83);
+  --focus: oklch(63.77% 0.1738 253.83);
+  --foreground: oklch(99.11% 0.005 253.83);
+  --muted: oklch(70.5% 0.01 253.83);
+  --overlay: oklch(21.03% 0.01 253.83);
+  --overlay-foreground: oklch(99.11% 0.005 253.83);
+  --scrollbar: oklch(70.5% 0.005 253.83);
+  --segment: oklch(39.64% 0.005 253.83);
+  --segment-foreground: oklch(99.11% 0.005 253.83);
+  --separator: oklch(25% 0.005 253.83);
+  --success: oklch(73.29% 0.1954 150.81);
+  --success-foreground: oklch(21.03% 0.0059 150.81);
+  --surface: oklch(21.03% 0.01 253.83);
+  --surface-foreground: oklch(99.11% 0.005 253.83);
+  --surface-secondary: oklch(25.7% 0.0075 253.83);
+  --surface-secondary-foreground: oklch(99.11% 0.005 253.83);
+  --surface-tertiary: oklch(27.21% 0.0075 253.83);
+  --surface-tertiary-foreground: oklch(99.11% 0.005 253.83);
+  --warning: oklch(82.03% 0.1402 76.34);
+  --warning-foreground: oklch(21.03% 0.0059 76.34);
+
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-7: #9085e9;
+  --viz-8: #e66767;
+
+  --viz-de-emphasis: #4b4f55;
 }
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

@@ -1,46 +1,104 @@
-import { query, serializeForJSON } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import {
+  COLABORADOR_SELECT_SEGURO,
+  sanitizarColaborador,
+} from "@/lib/colaboradores";
+import { prisma } from "@/lib/prisma";
+import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
-// GET - Listar todos os colaboradores
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
     const departamento = searchParams.get("departamento");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
-    let sqlQuery = `
-      SELECT c.*, s.nome as setor_nome
-      FROM colaboradores c
-      LEFT JOIN setores s ON c.setor_id = s.id
-      WHERE 1=1
-    `;
-
-    const params: any[] = [];
+    const where: Prisma.colaboradoresWhereInput = {};
 
     if (departamento && departamento !== "todos") {
-      sqlQuery += ` AND c.departamento = $${params.length + 1}`;
-      params.push(departamento);
+      where.departamento = departamento;
     }
 
     if (status && status !== "todos") {
-      sqlQuery += ` AND c.status = $${params.length + 1}`;
-      params.push(status);
+      where.status = status;
     }
 
     if (search) {
-      sqlQuery += ` AND (c.nome ILIKE $${params.length + 1} OR c.email ILIKE $${
-        params.length + 1
-      })`;
-      params.push(`%${search}%`);
+      where.OR = [
+        { nome: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
     }
 
-    sqlQuery += " ORDER BY c.nome ASC";
+    const selecao = {
+      ...COLABORADOR_SELECT_SEGURO,
+      setores: { select: { nome: true } },
+    };
 
-    const colaboradores = await query(sqlQuery, params);
+    type LinhaColaborador = { setores: { nome: string } | null } & Record<
+      string,
+      unknown
+    >;
 
-    return NextResponse.json(serializeForJSON(colaboradores));
+    const formatar = (linhas: LinhaColaborador[]) =>
+      linhas.map(({ setores, ...colaborador }) => ({
+        ...sanitizarColaborador(colaborador as never),
+        setor_nome: setores?.nome ?? null,
+      }));
+
+    if (page && limit) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+
+      const [colaboradores, total, ativos, departamentos] =
+        await prisma.$transaction([
+          prisma.colaboradores.findMany({
+            where,
+            select: selecao,
+            orderBy: { nome: "asc" },
+            skip: (pageNum - 1) * limitNum,
+            take: limitNum,
+          }),
+          prisma.colaboradores.count({ where }),
+          prisma.colaboradores.count({ where: { status: "ativo" } }),
+          prisma.colaboradores.findMany({
+            distinct: ["departamento"],
+            select: { departamento: true },
+            orderBy: { departamento: "asc" },
+          }),
+        ]);
+
+      const totalGeral = await prisma.colaboradores.count();
+
+      return NextResponse.json({
+        data: serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        resumo: {
+          total: totalGeral,
+          ativos,
+          inativos: totalGeral - ativos,
+          departamentos: departamentos
+            .map((d) => d.departamento)
+            .filter((d): d is string => Boolean(d)),
+        },
+      });
+    }
+
+    const colaboradores = await prisma.colaboradores.findMany({
+      where,
+      select: selecao,
+      orderBy: { nome: "asc" },
+    });
+
+    return NextResponse.json(
+      serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+    );
   } catch (error) {
     console.error("Erro ao buscar colaboradores:", error);
     return NextResponse.json(
@@ -50,13 +108,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Criar novo colaborador
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { nome, email, departamento, cargo, setor_id } = body;
 
-    // Validação básica
     if (!nome || !email || !departamento) {
       return NextResponse.json(
         { error: "Nome, email e departamento são obrigatórios" },
@@ -64,37 +120,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verificar se o email já existe
-    const existingUser = await query(
-      "SELECT id FROM colaboradores WHERE email = $1",
-      [email],
-    );
-    if (existingUser.length > 0) {
+    const existingUser = await prisma.colaboradores.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existingUser) {
       return NextResponse.json(
         { error: "Este email já está em uso" },
         { status: 409 },
       );
     }
 
-    // Inserir novo colaborador
-    const result = await query(
-      `INSERT INTO colaboradores 
-       (nome, email, departamento, cargo, data_admissao, status, setor_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING *`,
-      [
+    const colaborador = await prisma.colaboradores.create({
+      data: {
         nome,
         email,
         departamento,
-        cargo || "Colaborador",
-        new Date().toISOString().split("T")[0],
-        "ativo",
-        setor_id || null,
-      ],
-    );
+        cargo: cargo || "Colaborador",
+        data_admissao: new Date(),
+        status: "ativo",
+        setor_id: setor_id ? Number(setor_id) : null,
+      },
+      select: COLABORADOR_SELECT_SEGURO,
+    });
 
     revalidatePath("/admin");
-    return NextResponse.json(serializeForJSON(result[0]), { status: 201 });
+    return NextResponse.json(
+      serializeDecimals(sanitizarColaborador(colaborador)),
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Erro ao criar colaborador:", error);
     return NextResponse.json(

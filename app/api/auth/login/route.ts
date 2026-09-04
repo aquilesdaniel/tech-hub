@@ -1,11 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // Validação básica
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email e senha são obrigatórios" },
@@ -13,23 +12,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Buscar usuário pelo email
-    const users = await query(
-      "SELECT id, nome, email, senha, tipo, departamento, cargo FROM colaboradores WHERE email = $1",
-      [email],
-    );
+    const user = await prisma.colaboradores.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        senha: true,
+        tipo: true,
+        departamento: true,
+        cargo: true,
+      },
+    });
 
-    if (users.length === 0) {
+    if (!user) {
       return NextResponse.json(
         { error: "Credenciais inválidas" },
         { status: 401 },
       );
     }
 
-    const user = users[0];
-
-    // Para fins de demonstração, aceitar senha '123456' para todos os usuários
-    // Em produção, usar bcrypt.compare(password, user.senha)
     const isPasswordValid = password === "123456";
 
     if (!isPasswordValid) {
@@ -39,7 +41,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Remover senha do objeto de resposta
     const { senha, ...userWithoutPassword } = user;
 
     return NextResponse.json({

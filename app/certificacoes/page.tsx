@@ -1,48 +1,35 @@
 "use client";
 
-import { Navbar } from "@/components/navbar";
+import { useConfirmacao } from "@/components/confirmacao";
+import { StatTile } from "@/components/dashboard/stat-tile";
+import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { DataTable } from "@/components/data-table";
+import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
+import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { SpinnerTela } from "@/components/spinner-tela";
 import { useAuth } from "@/contexts/auth-context";
-import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowLeft,
+  Button,
+  Card,
+  Chip,
+  Input,
+  ListBox,
+  Select,
+  TextArea,
+  toast,
+} from "@heroui/react";
+import type { ColumnDef } from "@tanstack/react-table";
+import {
   Award,
+  BadgeCheck,
   Calendar,
+  CalendarClock,
   Edit,
   ExternalLink,
   Plus,
-  Search,
   Trash2,
 } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface Colaborador {
@@ -65,28 +52,49 @@ interface Certificacao {
   observacoes?: string | null;
 }
 
+const CERTIFICACAO_VAZIA = {
+  colaborador_id: "",
+  nome: "",
+  tipo: "",
+  instituicao: "",
+  data_obtencao: "",
+  data_vencimento: "",
+  url_credencial: "",
+  observacoes: "",
+};
+
+const paraCampoData = (valor?: string | null) =>
+  valor ? String(valor).slice(0, 10) : "";
+
 export default function CertificacoesPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const confirmar = useConfirmacao();
   const [certificacoes, setCertificacoes] = useState<Certificacao[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
   const [filterTipo, setFilterTipo] = useState("todos");
+
+  const [pagina, setPagina] = useState(1);
+  const [itensPorPagina, setItensPorPagina] = useState(10);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalFiltrado, setTotalFiltrado] = useState(0);
+  const [tiposDisponiveis, setTiposDisponiveis] = useState<string[]>([]);
+  const [resumo, setResumo] = useState({
+    total: 0,
+    senior: 0,
+    vencendo90: 0,
+    vencidas: 0,
+    colaboradoresCertificados: 0,
+    instituicoes: 0,
+  });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCertificacao, setSelectedCertificacao] =
     useState<Certificacao | null>(null);
-  const [newCertificacao, setNewCertificacao] = useState({
-    colaborador_id: "",
-    nome: "",
-    tipo: "",
-    instituicao: "",
-    data_obtencao: "",
-    data_vencimento: "",
-    url_credencial: "",
-    observacoes: "",
-  });
-  const { toast } = useToast();
+  const [newCertificacao, setNewCertificacao] = useState(CERTIFICACAO_VAZIA);
+  const [editandoCertificacao, setEditandoCertificacao] =
+    useState(CERTIFICACAO_VAZIA);
 
   const tiposCertificacao = [
     "Certificação Senior",
@@ -107,11 +115,14 @@ export default function CertificacoesPage() {
   ];
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     fetchData();
-  }, [user]);
+  }, [user, pagina, itensPorPagina, buscaAplicada, filterTipo]);
 
   useEffect(() => {
-    // Para usuários não-admin, definir automaticamente o colaborador_id
     if (user?.tipo !== "admin" && user?.id) {
       setNewCertificacao((prev) => ({
         ...prev,
@@ -122,10 +133,19 @@ export default function CertificacoesPage() {
 
   const fetchData = async () => {
     try {
-      const params =
-        user?.tipo === "admin" ? "" : `?colaborador_id=${user?.id}`;
+      const params = new URLSearchParams({
+        page: String(pagina),
+        limit: String(itensPorPagina),
+      });
+
+      const meuId = Number(user?.id);
+      if (user?.tipo !== "admin" && Number.isFinite(meuId))
+        params.set("colaborador_id", String(meuId));
+      if (buscaAplicada) params.set("search", buscaAplicada);
+      if (filterTipo !== "todos") params.set("tipo", filterTipo);
+
       const [certificacoesRes, colaboradoresRes] = await Promise.all([
-        fetch(`/api/certificacoes${params}`),
+        fetch(`/api/certificacoes?${params}`),
         fetch("/api/colaboradores"),
       ]);
 
@@ -133,30 +153,24 @@ export default function CertificacoesPage() {
         const certificacoesData = await certificacoesRes.json();
         const colaboradoresData = await colaboradoresRes.json();
 
-        setCertificacoes(certificacoesData);
+        setCertificacoes(certificacoesData.data ?? []);
+        setTotalPaginas(certificacoesData.totalPages ?? 1);
+        setTotalFiltrado(certificacoesData.total ?? 0);
+        if (certificacoesData.resumo) setResumo(certificacoesData.resumo);
+        if (certificacoesData.tipos)
+          setTiposDisponiveis(certificacoesData.tipos);
+
         setColaboradores(colaboradoresData);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível carregar os dados.",
-        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
-
-  const filteredCertificacoes = certificacoes.filter((cert) => {
-    const matchesSearch =
-      cert.colaborador_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.instituicao.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterTipo === "todos" || cert.tipo === filterTipo;
-
-    return matchesSearch && matchesFilter;
-  });
 
   const adicionarCertificacao = async () => {
     if (
@@ -166,10 +180,8 @@ export default function CertificacoesPage() {
       !newCertificacao.instituicao ||
       !newCertificacao.data_obtencao
     ) {
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
-        variant: "destructive",
       });
       return;
     }
@@ -191,99 +203,87 @@ export default function CertificacoesPage() {
       });
 
       if (response.ok) {
-        toast({
-          title: "Certificação adicionada!",
+        toast("Certificação adicionada!", {
           description: "Nova certificação foi registrada com sucesso.",
         });
 
         setIsAddDialogOpen(false);
-        setNewCertificacao({
-          colaborador_id: "",
-          nome: "",
-          tipo: "",
-          instituicao: "",
-          data_obtencao: "",
-          data_vencimento: "",
-          url_credencial: "",
-          observacoes: "",
-        });
+        limparFormularioNovaCertificacao();
 
-        // Recarregar a página para garantir que os dados sejam atualizados
         window.location.reload();
       }
     } catch (error) {
       console.error("Erro ao adicionar certificação:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível adicionar a certificação.",
-        variant: "destructive",
       });
     }
   };
 
   const editarCertificacao = async () => {
-    console.log("Função editarCertificacao chamada");
-    console.log("selectedCertificacao:", selectedCertificacao);
-    console.log("newCertificacao:", newCertificacao);
+    if (!selectedCertificacao) return;
 
-    if (!selectedCertificacao) {
-      console.log("Nenhuma certificação selecionada");
+    if (
+      !editandoCertificacao.nome ||
+      !editandoCertificacao.tipo ||
+      !editandoCertificacao.instituicao ||
+      !editandoCertificacao.data_obtencao
+    ) {
+      toast.danger("Erro", {
+        description: "Preencha todos os campos obrigatórios.",
+      });
       return;
     }
 
     try {
-      console.log("Enviando requisição PATCH...");
       const response = await fetch(
         `/api/certificacoes/${selectedCertificacao.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nome: newCertificacao.nome,
-            tipo: newCertificacao.tipo,
-            instituicao: newCertificacao.instituicao,
-            data_obtencao: newCertificacao.data_obtencao,
-            data_vencimento: newCertificacao.data_vencimento || null,
-            url_credencial: newCertificacao.url_credencial || null,
-            observacoes: newCertificacao.observacoes || null,
+            nome: editandoCertificacao.nome,
+            tipo: editandoCertificacao.tipo,
+            instituicao: editandoCertificacao.instituicao,
+            data_obtencao: editandoCertificacao.data_obtencao,
+            data_vencimento: editandoCertificacao.data_vencimento || null,
+            url_credencial: editandoCertificacao.url_credencial || null,
+            observacoes: editandoCertificacao.observacoes || null,
           }),
         },
       );
 
-      console.log("Response status:", response.status);
-      const responseData = await response.text();
-      console.log("Response data:", responseData);
-
       if (response.ok) {
-        console.log("Atualização bem-sucedida");
         fetchData();
-        setIsEditDialogOpen(false);
-        setSelectedCertificacao(null);
+        fecharDialogEdicao();
 
-        toast({
-          title: "Certificação atualizada!",
+        toast("Certificação atualizada!", {
           description: "As informações da certificação foram atualizadas.",
         });
       } else {
-        console.log("Erro na resposta:", responseData);
-        toast({
-          title: "Erro",
-          description: "Não foi possível atualizar a certificação.",
-          variant: "destructive",
+        const erro = await response.json().catch(() => null);
+        toast.danger("Erro", {
+          description:
+            erro?.error || "Não foi possível atualizar a certificação.",
         });
       }
     } catch (error) {
       console.error("Erro ao editar certificação:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível atualizar a certificação.",
-        variant: "destructive",
       });
     }
   };
 
   const removerCertificacao = async (id: number) => {
-    if (!confirm("Tem certeza que deseja remover esta certificação?")) return;
+    const confirmado = await confirmar({
+      titulo: "Remover certificação",
+      descricao:
+        "Tem certeza que deseja remover esta certificação? Essa ação não pode ser desfeita.",
+      rotuloConfirmar: "Remover",
+      destrutivo: true,
+    });
+    if (!confirmado) return;
 
     try {
       const response = await fetch(`/api/certificacoes/${id}`, {
@@ -292,586 +292,624 @@ export default function CertificacoesPage() {
 
       if (response.ok) {
         fetchData();
-        toast({
-          title: "Certificação removida!",
+        toast("Certificação removida!", {
           description: "A certificação foi removida com sucesso.",
         });
       }
     } catch (error) {
       console.error("Erro ao remover certificação:", error);
-      toast({
-        title: "Erro",
+      toast.danger("Erro", {
         description: "Não foi possível remover a certificação.",
-        variant: "destructive",
       });
     }
   };
 
   const abrirDialogEdicao = (certificacao: Certificacao) => {
     setSelectedCertificacao(certificacao);
-    setNewCertificacao({
+    setEditandoCertificacao({
       colaborador_id: certificacao.colaborador_id.toString(),
       nome: certificacao.nome,
       tipo: certificacao.tipo,
       instituicao: certificacao.instituicao,
-      data_obtencao: certificacao.data_obtencao,
-      data_vencimento: certificacao.data_vencimento || "",
+      data_obtencao: paraCampoData(certificacao.data_obtencao),
+      data_vencimento: paraCampoData(certificacao.data_vencimento),
       url_credencial: certificacao.url_credencial || "",
       observacoes: certificacao.observacoes || "",
     });
     setIsEditDialogOpen(true);
   };
 
+  const fecharDialogEdicao = () => {
+    setIsEditDialogOpen(false);
+    setSelectedCertificacao(null);
+    setEditandoCertificacao(CERTIFICACAO_VAZIA);
+  };
+
+  const limparFormularioNovaCertificacao = () => {
+    setNewCertificacao({
+      ...CERTIFICACAO_VAZIA,
+      colaborador_id:
+        user?.tipo !== "admin" && user?.id ? user.id.toString() : "",
+    });
+  };
+
   const podeEditarCertificacao = (certificacao: Certificacao) => {
     return user?.tipo === "admin" || certificacao.colaborador_id === user?.id;
   };
 
-  const tiposUnicos = [...new Set(certificacoes.map((c) => c.tipo))];
+  const ehAdmin = user?.tipo === "admin";
+  const participacaoSenior =
+    resumo.total > 0 ? (resumo.senior / resumo.total) * 100 : 0;
+
+  const colunasCertificacoes: ColumnDef<Certificacao, any>[] = [
+    {
+      accessorKey: "nome",
+      header: "Certificação",
+      cell: (info) => (
+        <span className="font-medium">{String(info.getValue() ?? "")}</span>
+      ),
+    },
+    {
+      accessorKey: "tipo",
+      header: "Tipo",
+      cell: (info) => (
+        <Chip className="whitespace-nowrap">
+          {String(info.getValue() ?? "")}
+        </Chip>
+      ),
+    },
+    {
+      accessorKey: "colaborador_nome",
+      header: "Colaborador",
+      meta: { classe: "hidden lg:table-cell text-muted" },
+    },
+    {
+      accessorKey: "instituicao",
+      header: "Instituição",
+      meta: { classe: "hidden md:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_obtencao",
+      header: "Obtida em",
+      cell: (info) =>
+        new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
+      meta: { classe: "hidden sm:table-cell text-muted" },
+    },
+    {
+      accessorKey: "data_vencimento",
+      header: "Vencimento",
+      cell: ({ row, getValue }) => {
+        if (!getValue())
+          return <span className="text-muted">Sem validade</span>;
+        const dias = diasAte(row.original.data_vencimento);
+        return (
+          <div className="flex items-center gap-2">
+            <span>
+              {new Date(String(getValue())).toLocaleDateString("pt-BR")}
+            </span>
+            {dias !== null && dias < 0 && (
+              <Chip size="sm" color="danger">
+                Vencida
+              </Chip>
+            )}
+            {dias !== null && dias >= 0 && dias <= 90 && (
+              <Chip size="sm" color="warning">
+                {inteiro(dias)} d
+              </Chip>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "acoes",
+      header: "Ações",
+      cell: ({ row }) => {
+        const certificacao = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            {certificacao.url_credencial && (
+              <Button
+                isIconOnly
+                variant="outline"
+                aria-label="Ver credencial"
+                onPress={() =>
+                  window.open(certificacao.url_credencial!, "_blank")
+                }
+              >
+                <ExternalLink />
+              </Button>
+            )}
+            {podeEditarCertificacao(certificacao) && (
+              <>
+                <Button
+                  isIconOnly
+                  variant="outline"
+                  aria-label="Editar certificação"
+                  onPress={() => abrirDialogEdicao(certificacao)}
+                >
+                  <Edit />
+                </Button>
+                <Button
+                  isIconOnly
+                  variant="danger"
+                  aria-label="Remover certificação"
+                  onPress={() => removerCertificacao(certificacao.id)}
+                >
+                  <Trash2 />
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
+      meta: { alinhar: "direita" },
+    },
+  ];
+
+  const filtroTipoCertificacao = (
+    <Select
+      selectedKey={filterTipo}
+      onSelectionChange={(chave) => {
+        setFilterTipo(String(chave));
+        setPagina(1);
+      }}
+      variant="secondary"
+      aria-label="Filtrar por tipo"
+    >
+      <Select.Trigger className="w-full sm:w-48">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="todos" textValue="Todos os tipos">
+            Todos os tipos
+          </ListBox.Item>
+          {tiposDisponiveis.map((tipo) => (
+            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+              {tipo}
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
 
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        </div>
+        <SpinnerTela />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col gap-4 mb-8">
-            <Link href="/" className="w-fit">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Controle de Certificações
-              </h1>
-              <p className="text-gray-600">
-                Gerencie certificações dos colaboradores
-              </p>
-            </div>
-          </div>
+      <LayoutPagina>
+        <CabecalhoPagina
+          titulo="Controle de Certificações"
+          descricao="Gerencie certificações dos colaboradores"
+          voltarHref="/"
+        />
 
-          <div className="grid lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Award className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Total de Certificações
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {certificacoes.length}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <section
+          aria-label="Indicadores de certificações"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <StatTile
+            rotulo={ehAdmin ? "Certificações" : "Suas certificações"}
+            valor={inteiro(resumo.total)}
+            icone={Award}
+            deltaLegenda={
+              tiposDisponiveis.length > 0
+                ? `${inteiro(tiposDisponiveis.length)} tipo(s) diferentes`
+                : "nenhuma registrada ainda"
+            }
+          />
+          <StatTile
+            rotulo="Certificações Sênior"
+            valor={inteiro(resumo.senior)}
+            icone={BadgeCheck}
+            deltaLegenda={
+              resumo.total > 0
+                ? `${percentual(participacaoSenior, 0)} do total`
+                : "-"
+            }
+          />
+          <StatTile
+            rotulo={ehAdmin ? "Colaboradores certificados" : "Instituições"}
+            valor={inteiro(
+              ehAdmin ? resumo.colaboradoresCertificados : resumo.instituicoes,
+            )}
+            icone={Calendar}
+            deltaLegenda={
+              ehAdmin
+                ? `de ${inteiro(colaboradores.length)} cadastrados`
+                : "emissoras das suas credenciais"
+            }
+          />
+          <StatTile
+            rotulo="Vencendo em 90 dias"
+            valor={inteiro(resumo.vencendo90)}
+            icone={CalendarClock}
+            deltaLegenda={
+              resumo.vencidas > 0
+                ? `${inteiro(resumo.vencidas)} já vencida(s)`
+                : "nenhuma vencida"
+            }
+          />
+        </section>
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Calendar className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">
-                      Certificações Sênior
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {
-                        certificacoes.filter(
-                          (c) => c.tipo === "Certificação Senior",
-                        ).length
-                      }
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <CardTitle>Lista de Certificações</CardTitle>
-                  <CardDescription>
-                    {user?.tipo === "admin"
-                      ? "Todas as certificações dos colaboradores"
-                      : "Suas certificações"}
-                  </CardDescription>
-                </div>
-                <Dialog
-                  open={isAddDialogOpen}
-                  onOpenChange={setIsAddDialogOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="w-4 h-4" />
-                      Nova Certificação
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Adicionar Nova Certificação</DialogTitle>
-                      <DialogDescription>
-                        Registre uma nova certificação
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      {user?.tipo === "admin" && (
-                        <div className="grid gap-2">
-                          <Label htmlFor="colaborador">Colaborador</Label>
-                          <Select
-                            value={newCertificacao.colaborador_id}
-                            onValueChange={(value) =>
-                              setNewCertificacao({
-                                ...newCertificacao,
-                                colaborador_id: value,
-                              })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um colaborador" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {colaboradores.map((colaborador) => (
-                                <SelectItem
-                                  key={colaborador.id}
-                                  value={colaborador.id.toString()}
-                                >
-                                  {colaborador.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="nome">Nome da Certificação</Label>
-                          <Input
-                            id="nome"
-                            value={newCertificacao.nome}
-                            onChange={(e) =>
-                              setNewCertificacao({
-                                ...newCertificacao,
-                                nome: e.target.value,
-                              })
-                            }
-                            placeholder="Ex: AWS Solutions Architect"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="tipo">Tipo</Label>
-                          <Select
-                            value={newCertificacao.tipo}
-                            onValueChange={(value) =>
-                              setNewCertificacao({
-                                ...newCertificacao,
-                                tipo: value,
-                              })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o tipo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {tiposCertificacao.map((tipo) => (
-                                <SelectItem key={tipo} value={tipo}>
-                                  {tipo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="instituicao">Instituição</Label>
-                        <Input
-                          id="instituicao"
-                          value={newCertificacao.instituicao}
-                          onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
-                              instituicao: e.target.value,
-                            })
-                          }
-                          placeholder="Ex: Amazon Web Services"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="data_obtencao">
-                            Data de Obtenção
-                          </Label>
-                          <Input
-                            id="data_obtencao"
-                            type="date"
-                            value={newCertificacao.data_obtencao}
-                            onChange={(e) =>
-                              setNewCertificacao({
-                                ...newCertificacao,
-                                data_obtencao: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="data_vencimento">
-                            Data de Vencimento (Opcional)
-                          </Label>
-                          <Input
-                            id="data_vencimento"
-                            type="date"
-                            value={newCertificacao.data_vencimento}
-                            onChange={(e) =>
-                              setNewCertificacao({
-                                ...newCertificacao,
-                                data_vencimento: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="url_credencial">
-                          URL da Credencial (Opcional)
-                        </Label>
-                        <Input
-                          id="url_credencial"
-                          type="url"
-                          value={newCertificacao.url_credencial}
-                          onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
-                              url_credencial: e.target.value,
-                            })
-                          }
-                          placeholder="https://..."
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="observacoes">
-                          Observações (Opcional)
-                        </Label>
-                        <Textarea
-                          id="observacoes"
-                          value={newCertificacao.observacoes}
-                          onChange={(e) =>
-                            setNewCertificacao({
-                              ...newCertificacao,
-                              observacoes: e.target.value,
-                            })
-                          }
-                          placeholder="Informações adicionais..."
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button onClick={adicionarCertificacao}>
-                        Adicionar Certificação
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+        <Card>
+          <Card.Header>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <Card.Title>Lista de Certificações</Card.Title>
+                <Card.Description>
+                  {user?.tipo === "admin"
+                    ? "Todas as certificações dos colaboradores"
+                    : "Suas certificações"}
+                </Card.Description>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Pesquisar por nome, certificação ou instituição..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={filterTipo} onValueChange={setFilterTipo}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Filtrar por tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os tipos</SelectItem>
-                    {tiposUnicos.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-4">
-                {filteredCertificacoes.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">
-                      Nenhuma certificação encontrada
-                    </p>
-                  </div>
-                ) : (
-                  filteredCertificacoes.map((certificacao) => (
-                    <Card
-                      key={certificacao.id}
-                      className="border-l-4 border-l-blue-500"
-                    >
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-semibold break-all">
-                                {certificacao.nome}
-                              </h3>
-                              <Badge
-                                className="whitespace-nowrap"
-                                variant={
-                                  certificacao.tipo === "Certificação Senior"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                              >
-                                {certificacao.tipo}
-                              </Badge>
-                            </div>
-                            <p className="text-gray-600 mb-2">
-                              <strong>Colaborador:</strong>{" "}
-                              {certificacao.colaborador_nome}
-                            </p>
-                            <p className="text-gray-600 mb-2">
-                              <strong>Instituição:</strong>{" "}
-                              {certificacao.instituicao}
-                            </p>
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                              <span>
-                                <strong>Obtida em:</strong>{" "}
-                                {new Date(
-                                  certificacao.data_obtencao,
-                                ).toLocaleDateString("pt-BR")}
-                              </span>
-                              {certificacao.data_vencimento && (
-                                <span>
-                                  <strong>Vence em:</strong>{" "}
-                                  {new Date(
-                                    certificacao.data_vencimento,
-                                  ).toLocaleDateString("pt-BR")}
-                                </span>
-                              )}
-                            </div>
-                            {certificacao.observacoes && (
-                              <p className="text-gray-600 mt-2">
-                                <strong>Observações:</strong>{" "}
-                                {certificacao.observacoes}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex sm:flex-row flex-col sm:w-fit w-full gap-2">
-                            {certificacao.url_credencial && (
-                              <Button
-                                className="flex sm:w-fit w-full"
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  window.open(
-                                    certificacao.url_credencial!,
-                                    "_blank",
-                                  )
-                                }
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                                Ver Credencial
-                              </Button>
-                            )}
-                            {podeEditarCertificacao(certificacao) && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    abrirDialogEdicao(certificacao)
-                                  }
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Editar
-                                </Button>
-
-                                <Button
-                                  className=""
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() =>
-                                    removerCertificacao(certificacao.id)
-                                  }
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Remover
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Dialog de Edição */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Editar Certificação</DialogTitle>
-              <DialogDescription>
-                Atualize as informações da certificação
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit_nome">Nome da Certificação</Label>
-                  <Input
-                    id="edit_nome"
-                    value={newCertificacao.nome}
-                    onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
-                        nome: e.target.value,
-                      })
-                    }
-                    placeholder="Ex: AWS Solutions Architect"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit_tipo">Tipo</Label>
-                  <Select
-                    value={newCertificacao.tipo}
-                    onValueChange={(value) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
-                        tipo: value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tiposCertificacao.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit_instituicao">Instituição</Label>
-                <Input
-                  id="edit_instituicao"
-                  value={newCertificacao.instituicao}
-                  onChange={(e) =>
-                    setNewCertificacao({
-                      ...newCertificacao,
-                      instituicao: e.target.value,
-                    })
-                  }
-                  placeholder="Ex: Amazon Web Services"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit_data_obtencao">Data de Obtenção</Label>
-                  <Input
-                    id="edit_data_obtencao"
-                    type="date"
-                    value={newCertificacao.data_obtencao}
-                    onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
-                        data_obtencao: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit_data_vencimento">
-                    Data de Vencimento (Opcional)
-                  </Label>
-                  <Input
-                    id="edit_data_vencimento"
-                    type="date"
-                    value={newCertificacao.data_vencimento}
-                    onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
-                        data_vencimento: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit_url_credencial">
-                  URL da Credencial (Opcional)
-                </Label>
-                <Input
-                  id="edit_url_credencial"
-                  type="url"
-                  value={newCertificacao.url_credencial}
-                  onChange={(e) =>
-                    setNewCertificacao({
-                      ...newCertificacao,
-                      url_credencial: e.target.value,
-                    })
-                  }
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit_observacoes">Observações (Opcional)</Label>
-                <Textarea
-                  id="edit_observacoes"
-                  value={newCertificacao.observacoes}
-                  onChange={(e) =>
-                    setNewCertificacao({
-                      ...newCertificacao,
-                      observacoes: e.target.value,
-                    })
-                  }
-                  placeholder="Informações adicionais..."
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  editarCertificacao();
+              <ModalForm
+                isOpen={isAddDialogOpen}
+                onOpenChange={(aberto) => {
+                  setIsAddDialogOpen(aberto);
+                  if (!aberto) limparFormularioNovaCertificacao();
                 }}
-                type="button"
+                titulo="Adicionar Nova Certificação"
+                descricao="Registre uma nova certificação"
+                gatilho={
+                  <Button>
+                    <Plus />
+                    Nova Certificação
+                  </Button>
+                }
+                rotuloConfirmar="Adicionar Certificação"
+                onConfirmar={adicionarCertificacao}
               >
-                Atualizar Certificação
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+                {user?.tipo === "admin" && (
+                  <CampoModal rotulo="Colaborador" htmlFor="colaborador">
+                    <Select
+                      aria-label="Colaborador"
+                      value={newCertificacao.colaborador_id || null}
+                      onChange={(chave) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          colaborador_id: chave ? String(chave) : "",
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Selecione um colaborador"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {colaboradores.map((colaborador) => (
+                            <ListBox.Item
+                              key={colaborador.id}
+                              id={colaborador.id.toString()}
+                              textValue={colaborador.nome}
+                            >
+                              {colaborador.nome}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </CampoModal>
+                )}
+
+                <LinhaCampos>
+                  <CampoModal rotulo="Nome da Certificação" htmlFor="nome">
+                    <Input
+                      id="nome"
+                      value={newCertificacao.nome}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          nome: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Ex: AWS Solutions Architect"
+                    />
+                  </CampoModal>
+
+                  <CampoModal rotulo="Tipo" htmlFor="tipo">
+                    <Select
+                      aria-label="Tipo"
+                      value={newCertificacao.tipo || null}
+                      onChange={(chave) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          tipo: chave ? String(chave) : "",
+                        })
+                      }
+                      variant="secondary"
+                      placeholder="Selecione o tipo"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {tiposCertificacao.map((tipo) => (
+                            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+                              {tipo}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </CampoModal>
+                </LinhaCampos>
+
+                <CampoModal rotulo="Instituição" htmlFor="instituicao">
+                  <Input
+                    id="instituicao"
+                    value={newCertificacao.instituicao}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        instituicao: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="Ex: Amazon Web Services"
+                  />
+                </CampoModal>
+
+                <LinhaCampos>
+                  <CampoModal rotulo="Data de Obtenção" htmlFor="data_obtencao">
+                    <Input
+                      id="data_obtencao"
+                      type="date"
+                      value={newCertificacao.data_obtencao}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          data_obtencao: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                    />
+                  </CampoModal>
+
+                  <CampoModal
+                    rotulo="Data de Vencimento (Opcional)"
+                    htmlFor="data_vencimento"
+                  >
+                    <Input
+                      id="data_vencimento"
+                      type="date"
+                      value={newCertificacao.data_vencimento}
+                      onChange={(e) =>
+                        setNewCertificacao({
+                          ...newCertificacao,
+                          data_vencimento: e.target.value,
+                        })
+                      }
+                      variant="secondary"
+                    />
+                  </CampoModal>
+                </LinhaCampos>
+
+                <CampoModal
+                  rotulo="URL da Credencial (Opcional)"
+                  htmlFor="url_credencial"
+                >
+                  <Input
+                    id="url_credencial"
+                    type="url"
+                    value={newCertificacao.url_credencial}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        url_credencial: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="https://..."
+                  />
+                </CampoModal>
+
+                <CampoModal
+                  rotulo="Observações (Opcional)"
+                  htmlFor="observacoes"
+                >
+                  <TextArea
+                    id="observacoes"
+                    value={newCertificacao.observacoes}
+                    onChange={(e) =>
+                      setNewCertificacao({
+                        ...newCertificacao,
+                        observacoes: e.target.value,
+                      })
+                    }
+                    variant="secondary"
+                    placeholder="Informações adicionais..."
+                  />
+                </CampoModal>
+              </ModalForm>
+            </div>
+          </Card.Header>
+          <Card.Content>
+            <DataTable
+              colunas={colunasCertificacoes}
+              dados={certificacoes}
+              rotulo="Certificações"
+              vazio="Nenhuma certificação encontrada"
+              total={totalFiltrado}
+              pagina={pagina}
+              totalPaginas={totalPaginas}
+              onMudarPagina={setPagina}
+              itensPorPagina={itensPorPagina}
+              onMudarItensPorPagina={(itens) => {
+                setItensPorPagina(itens);
+                setPagina(1);
+              }}
+              busca={buscaAplicada}
+              onMudarBusca={(valor) => {
+                setBuscaAplicada(valor);
+                setPagina(1);
+              }}
+              placeholderBusca="Pesquisar por certificação, colaborador ou instituição..."
+              filtros={filtroTipoCertificacao}
+            />
+          </Card.Content>
+        </Card>
+
+        <ModalForm
+          isOpen={isEditDialogOpen}
+          onOpenChange={(aberto) => {
+            if (aberto) setIsEditDialogOpen(true);
+            else fecharDialogEdicao();
+          }}
+          titulo="Editar Certificação"
+          descricao="Atualize as informações da certificação"
+          rotuloConfirmar="Atualizar Certificação"
+          onConfirmar={editarCertificacao}
+        >
+          <LinhaCampos>
+            <CampoModal rotulo="Nome da Certificação" htmlFor="edit_nome">
+              <Input
+                id="edit_nome"
+                value={editandoCertificacao.nome}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    nome: e.target.value,
+                  })
+                }
+                variant="secondary"
+                placeholder="Ex: AWS Solutions Architect"
+              />
+            </CampoModal>
+
+            <CampoModal rotulo="Tipo" htmlFor="edit_tipo">
+              <Select
+                aria-label="Tipo"
+                value={editandoCertificacao.tipo || null}
+                onChange={(chave) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    tipo: chave ? String(chave) : "",
+                  })
+                }
+                variant="secondary"
+                placeholder="Selecione o tipo"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {tiposCertificacao.map((tipo) => (
+                      <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
+                        {tipo}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </CampoModal>
+          </LinhaCampos>
+
+          <CampoModal rotulo="Instituição" htmlFor="edit_instituicao">
+            <Input
+              id="edit_instituicao"
+              value={editandoCertificacao.instituicao}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  instituicao: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="Ex: Amazon Web Services"
+            />
+          </CampoModal>
+
+          <LinhaCampos>
+            <CampoModal rotulo="Data de Obtenção" htmlFor="edit_data_obtencao">
+              <Input
+                id="edit_data_obtencao"
+                type="date"
+                value={editandoCertificacao.data_obtencao}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    data_obtencao: e.target.value,
+                  })
+                }
+                variant="secondary"
+              />
+            </CampoModal>
+
+            <CampoModal
+              rotulo="Data de Vencimento (Opcional)"
+              htmlFor="edit_data_vencimento"
+            >
+              <Input
+                id="edit_data_vencimento"
+                type="date"
+                value={editandoCertificacao.data_vencimento}
+                onChange={(e) =>
+                  setEditandoCertificacao({
+                    ...editandoCertificacao,
+                    data_vencimento: e.target.value,
+                  })
+                }
+                variant="secondary"
+              />
+            </CampoModal>
+          </LinhaCampos>
+
+          <CampoModal
+            rotulo="URL da Credencial (Opcional)"
+            htmlFor="edit_url_credencial"
+          >
+            <Input
+              id="edit_url_credencial"
+              type="url"
+              value={editandoCertificacao.url_credencial}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  url_credencial: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="https://..."
+            />
+          </CampoModal>
+
+          <CampoModal
+            rotulo="Observações (Opcional)"
+            htmlFor="edit_observacoes"
+          >
+            <TextArea
+              id="edit_observacoes"
+              value={editandoCertificacao.observacoes}
+              onChange={(e) =>
+                setEditandoCertificacao({
+                  ...editandoCertificacao,
+                  observacoes: e.target.value,
+                })
+              }
+              variant="secondary"
+              placeholder="Informações adicionais..."
+            />
+          </CampoModal>
+        </ModalForm>
+      </LayoutPagina>
     </ProtectedRoute>
   );
 }

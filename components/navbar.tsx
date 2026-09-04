@@ -1,81 +1,86 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
+import {
+  Button,
+  Chip,
+  Dropdown,
+  Header,
+  Label,
+  Separator,
+} from "@heroui/react";
 import { LogOut, Shield, User } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function Navbar() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
   return (
-    <nav className="bg-white border-b border-gray-200 px-4 py-3">
+    <nav className="sticky top-0 z-50 border-b border-border bg-surface px-4 py-3">
       <div className="container mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">TechHub</h1>
+          <h1 className="text-xl font-bold text-foreground">TechHub</h1>
 
-          <Badge variant={user.tipo === "admin" ? "default" : "secondary"}>
-            {user.tipo === "admin" ? "Administrador" : "Usuário"}
-          </Badge>
+          <Chip>{user.tipo === "admin" ? "Administrador" : "Usuário"}</Chip>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+
+          <Dropdown>
             <Button variant="ghost" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-default" />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium">{user.nome}</p>
-                <p className="text-xs text-gray-500">{user.departamento}</p>
+                <p className="text-xs text-muted">{user.departamento}</p>
               </div>
             </Button>
-          </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-full">
-            <DropdownMenuLabel>
-              <div>
-                <p className="font-medium">{user.nome}</p>
-                <p className="text-xs text-gray-500">{user.email}</p>
-              </div>
-            </DropdownMenuLabel>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                onAction={(key) => {
+                  if (key === "admin") router.push("/admin");
+                  if (key === "logout") logout();
+                }}
+              >
+                <Dropdown.Section>
+                  <Header>
+                    <p className="font-medium">{user.nome}</p>
+                    <p className="text-xs text-muted">{user.email}</p>
+                  </Header>
+                </Dropdown.Section>
 
-            {user.tipo === "admin" && <DropdownMenuSeparator />}
+                {user.tipo === "admin" && <Separator />}
 
-            {user.tipo === "admin" && (
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin"
-                  className="flex items-center cursor-pointer"
-                >
-                  <Shield className="w-4 h-4 mr-2" />
-                  Painel Admin
-                </Link>
-              </DropdownMenuItem>
-            )}
+                {user.tipo === "admin" && (
+                  <Dropdown.Section>
+                    <Dropdown.Item id="admin" textValue="Painel Admin">
+                      <Shield className="h-4 w-4" />
+                      <Label>Painel Admin</Label>
+                    </Dropdown.Item>
+                  </Dropdown.Section>
+                )}
 
-            <DropdownMenuSeparator />
+                <Separator />
 
-            <DropdownMenuItem
-              onClick={logout}
-              className="!text-red-500 cursor-pointer"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <Dropdown.Section>
+                  <Dropdown.Item id="logout" textValue="Sair" variant="danger">
+                    <LogOut className="text-danger h-4 w-4" />
+                    <Label>Sair</Label>
+                  </Dropdown.Item>
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+        </div>
       </div>
     </nav>
   );

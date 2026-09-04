@@ -5,6 +5,7 @@ import type React from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { SpinnerTela } from "./spinner-tela";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -34,11 +35,7 @@ export function ProtectedRoute({
   }, [user, isLoading, router, requiredRole]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <SpinnerTela />;
   }
 
   if (!user) {
