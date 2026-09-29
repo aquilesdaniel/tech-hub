@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PUBLIC_SIMULAR_PAGAMENTO !== "true"
+  ) {
     return NextResponse.json(
       {
         error:

@@ -71,7 +71,9 @@ interface Pagamento {
   expires_at: string | null;
 }
 
-const EH_DESENVOLVIMENTO = process.env.NODE_ENV !== "production";
+const EH_DESENVOLVIMENTO =
+  process.env.NODE_ENV !== "production" ||
+  process.env.NEXT_PUBLIC_SIMULAR_PAGAMENTO === "true";
 
 function soltarConfetes() {
   const disparar = (particleRatio: number, opcoes: confetti.Options) => {
