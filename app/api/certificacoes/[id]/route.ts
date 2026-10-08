@@ -10,22 +10,22 @@ export async function GET(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
-    const certificacao = await prisma.certificacoes.findUnique({
+    const certification = await prisma.certificacoes.findUnique({
       where: { id },
       include: { colaboradores: { select: { nome: true } } },
     });
 
-    if (!certificacao) {
+    if (!certification) {
       return NextResponse.json(
         { error: "Certificação não encontrada" },
         { status: 404 },
       );
     }
 
-    const { colaboradores, ...rest } = certificacao;
+    const { colaboradores, ...rest } = certification;
     return NextResponse.json({
       ...rest,
-      colaborador_nome: colaboradores.nome,
+      employee_name: colaboradores.nome,
     });
   } catch (error) {
     console.error("Erro ao buscar certificação:", error);
@@ -36,7 +36,7 @@ export async function GET(
   }
 }
 
-const CAMPOS_ATUALIZAVEIS = [
+const UPDATABLE_FIELDS = [
   "nome",
   "tipo",
   "instituicao",
@@ -46,8 +46,8 @@ const CAMPOS_ATUALIZAVEIS = [
   "observacoes",
 ] as const;
 
-const CAMPOS_DATA = new Set(["data_obtencao", "data_vencimento"]);
-const CAMPOS_DATA_OPCIONAIS = new Set(["data_vencimento"]);
+const DATE_FIELDS = new Set(["data_obtencao", "data_vencimento"]);
+const OPTIONAL_DATE_FIELDS = new Set(["data_vencimento"]);
 
 export async function PATCH(
   request: NextRequest,
@@ -59,33 +59,33 @@ export async function PATCH(
     const body = await request.json();
 
     const data: Prisma.certificacoesUpdateInput = {};
-    for (const campo of CAMPOS_ATUALIZAVEIS) {
-      if (body[campo] === undefined) continue;
+    for (const field of UPDATABLE_FIELDS) {
+      if (body[field] === undefined) continue;
 
-      if (!CAMPOS_DATA.has(campo)) {
-        (data as Record<string, unknown>)[campo] = body[campo];
+      if (!DATE_FIELDS.has(field)) {
+        (data as Record<string, unknown>)[field] = body[field];
         continue;
       }
 
-      if (body[campo] === null || body[campo] === "") {
-        if (!CAMPOS_DATA_OPCIONAIS.has(campo)) {
+      if (body[field] === null || body[field] === "") {
+        if (!OPTIONAL_DATE_FIELDS.has(field)) {
           return NextResponse.json(
-            { error: `O campo ${campo} é obrigatório` },
+            { error: `O campo ${field} é obrigatório` },
             { status: 400 },
           );
         }
-        (data as Record<string, unknown>)[campo] = null;
+        (data as Record<string, unknown>)[field] = null;
         continue;
       }
 
-      const dataConvertida = new Date(body[campo]);
-      if (Number.isNaN(dataConvertida.getTime())) {
+      const parsedDate = new Date(body[field]);
+      if (Number.isNaN(parsedDate.getTime())) {
         return NextResponse.json(
-          { error: `Data inválida no campo ${campo}` },
+          { error: `Data inválida no campo ${field}` },
           { status: 400 },
         );
       }
-      (data as Record<string, unknown>)[campo] = dataConvertida;
+      (data as Record<string, unknown>)[field] = parsedDate;
     }
 
     if (Object.keys(data).length === 0) {

@@ -23,14 +23,14 @@ jest.mock("@/lib/prisma", () => ({
 const findMany = prisma.dividas.findMany as unknown as jest.Mock;
 const create = prisma.dividas.create as unknown as jest.Mock;
 
-function requisicaoGet(query = "") {
+function getRequest(query = "") {
   return new NextRequest(`http://localhost/api/salgados/dividas${query}`);
 }
 
-function requisicaoPost(corpo: unknown) {
+function postRequest(body: unknown) {
   return new NextRequest("http://localhost/api/salgados/dividas", {
     method: "POST",
-    body: JSON.stringify(corpo),
+    body: JSON.stringify(body),
   });
 }
 
@@ -46,7 +46,7 @@ describe("GET /api/salgados/dividas", () => {
   it("filtra por dívidas em aberto quando pago=false", async () => {
     findMany.mockResolvedValue([]);
 
-    await GET(requisicaoGet("?pago=false"));
+    await GET(getRequest("?pago=false"));
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { pago: false } }),
@@ -63,14 +63,14 @@ describe("GET /api/salgados/dividas", () => {
       },
     ]);
 
-    const resposta = await GET(requisicaoGet());
+    const response = await GET(getRequest());
 
-    expect(await resposta.json()).toEqual([
+    expect(await response.json()).toEqual([
       {
         id: 1,
         item: "Coxinha",
         valor: 12.5,
-        colaborador_nome: "Aquiles Bastos",
+        employee_name: "Aquiles Bastos",
       },
     ]);
   });
@@ -78,10 +78,10 @@ describe("GET /api/salgados/dividas", () => {
 
 describe("POST /api/salgados/dividas", () => {
   it("exige colaborador, item e valor", async () => {
-    const resposta = await POST(requisicaoPost({ item: "Coxinha" }));
+    const response = await POST(postRequest({ item: "Coxinha" }));
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "Colaborador, item e valor são obrigatórios",
     });
     expect(create).not.toHaveBeenCalled();
@@ -96,8 +96,8 @@ describe("POST /api/salgados/dividas", () => {
       pago: false,
     });
 
-    const resposta = await POST(
-      requisicaoPost({
+    const response = await POST(
+      postRequest({
         colaborador_id: "4",
         item: "Coxinha",
         motivo: "Aposta",
@@ -105,8 +105,8 @@ describe("POST /api/salgados/dividas", () => {
       }),
     );
 
-    expect(resposta.status).toBe(201);
-    expect(await resposta.json()).toMatchObject({ id: 10, valor: 12.5 });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ id: 10, valor: 12.5 });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

@@ -106,10 +106,10 @@ export async function POST(req: NextRequest) {
         if (localUser.admin_permanente) {
           isAdmin = true;
         } else if (localUser.admin_temporario_ate) {
-          const hoje = new Date();
-          const dataExpiracao = new Date(localUser.admin_temporario_ate);
+          const now = new Date();
+          const expirationDate = new Date(localUser.admin_temporario_ate);
 
-          if (dataExpiracao >= hoje) {
+          if (expirationDate >= now) {
             isAdmin = true;
           } else {
             await prisma.colaboradores.update({
@@ -123,13 +123,13 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const newTipo = isAdmin ? "admin" : "user";
-        if (localUser.tipo !== newTipo) {
+        const newType = isAdmin ? "admin" : "user";
+        if (localUser.tipo !== newType) {
           await prisma.colaboradores.update({
             where: { email: userData.email },
-            data: { tipo: newTipo, updated_at: new Date() },
+            data: { tipo: newType, updated_at: new Date() },
           });
-          localUser.tipo = newTipo;
+          localUser.tipo = newType;
         }
       } else {
         localUser = await prisma.colaboradores.create({

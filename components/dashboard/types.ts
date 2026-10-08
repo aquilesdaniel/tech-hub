@@ -1,112 +1,112 @@
-export type PontoMensal = {
-  mes: string;
+export type MonthlyPoint = {
+  month: string;
   label: string;
-  lancado: number;
-  quitado: number;
-  certificacoes: number;
-  emprestimos: number;
-  devolucoes: number;
+  issued: number;
+  settled: number;
+  certifications: number;
+  loans: number;
+  returns: number;
 };
 
 export type DashboardKpis = {
-  valorEmAberto: number;
-  valorQuitado: number;
-  valorLancado: number;
-  gastoTotalSalgados: number;
-  dividasEmAberto: number;
-  dividasQuitadas: number;
-  taxaQuitacao: number;
-  ticketMedio: number;
-  emprestimosAtivos: number;
-  emprestimosAtrasados: number;
-  emprestimosNoPeriodo: number;
-  devolucoesNoPeriodo: number;
-  livrosTotal: number;
-  livrosDisponiveis: number;
-  taxaDisponibilidade: number;
-  certificacoesNoPeriodo: number;
-  certificacoesSenior: number;
-  certificacoesVencendo: number;
-  colaboradores: number;
-  colaboradoresAtivos: number;
-  setores: number;
+  openAmount: number;
+  settledAmount: number;
+  issuedAmount: number;
+  totalSnackSpending: number;
+  openDebts: number;
+  settledDebts: number;
+  settlementRate: number;
+  averageTicket: number;
+  activeLoans: number;
+  overdueLoans: number;
+  loansInPeriod: number;
+  returnsInPeriod: number;
+  totalBooks: number;
+  availableBooks: number;
+  availabilityRate: number;
+  certificationsInPeriod: number;
+  seniorCertifications: number;
+  expiringCertifications: number;
+  employees: number;
+  activeEmployees: number;
+  sectors: number;
 };
 
 export type DashboardDeltas = {
-  valorQuitado: number | null;
-  certificacoes: number | null;
-  emprestimos: number | null;
-  dividasLancadas: number | null;
+  settledAmount: number | null;
+  certifications: number | null;
+  loans: number | null;
+  issuedDebts: number | null;
 };
 
-export type LinhaRankingCertificacao = {
+export type CertificationRankingRow = {
   id: number;
-  nome: string;
-  departamento: string;
+  name: string;
+  department: string;
   senior: number;
-  outras: number;
+  others: number;
   total: number;
 };
 
-export type LinhaRankingDevedor = {
+export type DebtorRankingRow = {
   id: number;
-  nome: string;
-  departamento: string;
-  valor: number;
-  itens: number;
+  name: string;
+  department: string;
+  amount: number;
+  items: number;
 };
 
-export type LinhaSetor = {
-  setorId: number;
-  setor: string;
-  colaboradores: number;
+export type SectorRow = {
+  sectorId: number;
+  sector: string;
+  employees: number;
   senior: number;
-  outras: number;
+  others: number;
   total: number;
-  gasto: number;
+  spent: number;
 };
 
-export type LinhaGenero = {
-  genero: string;
+export type GenreRow = {
+  genre: string;
   total: number;
-  emprestados: number;
+  loaned: number;
 };
 
-export type LinhaItem = {
+export type ItemRow = {
   item: string;
-  quantidade: number;
-  valor: number;
+  count: number;
+  amount: number;
 };
 
-export type Setor = { id: number; nome: string };
+export type Sector = { id: number; nome: string };
 
 export type DashboardData = {
-  periodo: { meses: number; inicio: string | null; fim: string };
-  filtros: { setorId: number | null; colaboradorId: number | null };
-  setores: Setor[];
+  period: { months: number; start: string | null; end: string };
+  filters: { sectorId: number | null; employeeId: number | null };
+  sectors: Sector[];
   kpis: DashboardKpis;
   deltas: DashboardDeltas;
-  serieMensal: PontoMensal[];
-  rankingCertificacoes: LinhaRankingCertificacao[];
-  rankingDevedores: LinhaRankingDevedor[];
-  porSetor: LinhaSetor[];
-  generos: LinhaGenero[];
-  itensPopulares: LinhaItem[];
-  alertas: {
-    emprestimosAtrasados: {
+  monthlySeries: MonthlyPoint[];
+  certificationRanking: CertificationRankingRow[];
+  debtorRanking: DebtorRankingRow[];
+  bySector: SectorRow[];
+  genres: GenreRow[];
+  popularItems: ItemRow[];
+  alerts: {
+    overdueLoans: {
       id: number;
-      livro: string;
-      colaborador: string;
-      diasAtraso: number;
-      previsto: string;
+      book: string;
+      employee: string;
+      daysOverdue: number;
+      dueDate: string;
     }[];
-    certificacoesVencendo: {
+    expiringCertifications: {
       id: number;
-      nome: string;
-      tipo: string;
-      colaborador: string;
-      diasRestantes: number | null;
-      vencimento: string | null;
+      name: string;
+      type: string;
+      employee: string;
+      daysRemaining: number | null;
+      expiresAt: string | null;
     }[];
   };
 };

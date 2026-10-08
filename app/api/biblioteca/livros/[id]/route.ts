@@ -11,16 +11,16 @@ export async function GET(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
-    const livro = await prisma.livros.findUnique({ where: { id } });
+    const book = await prisma.livros.findUnique({ where: { id } });
 
-    if (!livro) {
+    if (!book) {
       return NextResponse.json(
         { error: "Livro não encontrado" },
         { status: 404 },
       );
     }
 
-    return NextResponse.json(livro);
+    return NextResponse.json(book);
   } catch (error) {
     console.error("Erro ao buscar livro:", error);
     return NextResponse.json(
@@ -38,29 +38,35 @@ export async function PUT(
     const { id: idParam } = await params;
     const id = Number(idParam);
     const body = await req.json();
-    const { titulo, autor, genero, isbn, capa } = body;
+    const {
+      titulo: title,
+      autor: author,
+      genero: genre,
+      isbn,
+      capa: cover,
+    } = body;
 
-    if (!titulo || !autor) {
+    if (!title || !author) {
       return NextResponse.json(
         { error: "Título e autor são obrigatórios" },
         { status: 400 },
       );
     }
 
-    const livro = await prisma.livros.update({
+    const book = await prisma.livros.update({
       where: { id },
       data: {
-        titulo,
-        autor,
-        genero: genero || "",
+        titulo: title,
+        autor: author,
+        genero: genre || "",
         isbn: isbn || "",
-        capa,
+        capa: cover,
         updated_at: new Date(),
       },
     });
 
     revalidatePath("/biblioteca");
-    return NextResponse.json(livro);
+    return NextResponse.json(book);
   } catch (error) {
     if (isRecordNotFoundError(error)) {
       return NextResponse.json(
@@ -76,7 +82,7 @@ export async function PUT(
   }
 }
 
-const CAMPOS_ATUALIZAVEIS = [
+const UPDATABLE_FIELDS = [
   "titulo",
   "autor",
   "genero",
@@ -95,9 +101,9 @@ export async function PATCH(
     const body = await req.json();
 
     const data: Prisma.livrosUpdateInput = {};
-    for (const campo of CAMPOS_ATUALIZAVEIS) {
-      if (body[campo] !== undefined) {
-        (data as Record<string, unknown>)[campo] = body[campo];
+    for (const field of UPDATABLE_FIELDS) {
+      if (body[field] !== undefined) {
+        (data as Record<string, unknown>)[field] = body[field];
       }
     }
 
@@ -108,13 +114,13 @@ export async function PATCH(
       );
     }
 
-    const livro = await prisma.livros.update({
+    const book = await prisma.livros.update({
       where: { id },
       data: { ...data, updated_at: new Date() },
     });
 
     revalidatePath("/biblioteca");
-    return NextResponse.json(livro);
+    return NextResponse.json(book);
   } catch (error) {
     if (isRecordNotFoundError(error)) {
       return NextResponse.json(
@@ -138,11 +144,11 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = Number(idParam);
 
-    const totalEmprestado = await prisma.emprestimos.count({
+    const loanedCount = await prisma.emprestimos.count({
       where: { livro_id: id, status: "emprestado" },
     });
 
-    if (totalEmprestado > 0) {
+    if (loanedCount > 0) {
       return NextResponse.json(
         { error: "Não é possível excluir um livro que está emprestado" },
         { status: 400 },

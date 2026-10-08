@@ -23,34 +23,35 @@ const count = prisma.colaboradores.count as unknown as jest.Mock;
 const update = prisma.colaboradores.update as unknown as jest.Mock;
 
 const ADMIN = "chefe@prismaproducao.com.br";
-const ALVO = {
+const TARGET = {
   id: 7,
   nome: "Maria Souza",
   email: "maria@prismaproducao.com.br",
 };
 
-function autenticarComoAdminPermanente(ehPermanente = true) {
-  findFirst.mockResolvedValue({ admin_permanente: ehPermanente });
+function authenticateAsPermanentAdmin(isPermanent = true) {
+  findFirst.mockResolvedValue({ admin_permanente: isPermanent });
 }
 
-function post(corpo: unknown) {
+function post(body: unknown) {
   return new NextRequest("http://localhost/api/admin/usuarios", {
     method: "POST",
-    body: JSON.stringify(corpo),
+    body: JSON.stringify(body),
   });
 }
 
-function amanha() {
-  const data = new Date();
-  data.setDate(data.getDate() + 1);
-  return data.toISOString().slice(0, 10);
+// Data local (AAAA-MM-DD): a rota interpreta admin_until no fuso local, então
+// toISOString (UTC) viraria o dia seguinte à noite no Brasil.
+function localDay(offset: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function ontem() {
-  const data = new Date();
-  data.setDate(data.getDate() - 1);
-  return data.toISOString().slice(0, 10);
-}
+const tomorrow = () => localDay(1);
+const yesterday = () => localDay(-1);
 
 beforeEach(() => {
   jest.spyOn(console, "error").mockImplementation(() => {});
@@ -62,89 +63,89 @@ afterEach(() => {
 
 describe("POST /api/admin/usuarios", () => {
   it("nega quem não é admin permanente", async () => {
-    autenticarComoAdminPermanente(false);
+    authenticateAsPermanentAdmin(false);
 
-    const resposta = await POST(
-      post({ colaborador_id: 7, admin_ate: amanha(), user_email: "ze@x.com" }),
+    const response = await POST(
+      post({ colaborador_id: 7, admin_until: tomorrow(), user_email: "ze@x.com" }),
     );
 
-    expect(resposta.status).toBe(403);
+    expect(response.status).toBe(403);
     expect(update).not.toHaveBeenCalled();
   });
 
   it("exige o colaborador_id", async () => {
-    autenticarComoAdminPermanente();
+    authenticateAsPermanentAdmin();
 
-    const resposta = await POST(
-      post({ user_email: ADMIN, admin_ate: amanha() }),
+    const response = await POST(
+      post({ user_email: ADMIN, admin_until: tomorrow() }),
     );
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "Campo obrigatório: colaborador_id",
     });
   });
 
   it("recusa data de expiração no passado", async () => {
-    autenticarComoAdminPermanente();
+    authenticateAsPermanentAdmin();
 
-    const resposta = await POST(
-      post({ colaborador_id: 7, admin_ate: ontem(), user_email: ADMIN }),
+    const response = await POST(
+      post({ colaborador_id: 7, admin_until: yesterday(), user_email: ADMIN }),
     );
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "A data de expiração deve ser futura",
     });
     expect(update).not.toHaveBeenCalled();
   });
 
   it("impede o admin de alterar os próprios privilégios", async () => {
-    autenticarComoAdminPermanente();
+    authenticateAsPermanentAdmin();
     findUnique.mockResolvedValue({
-      ...ALVO,
+      ...TARGET,
       email: ADMIN,
       admin_permanente: true,
     });
 
-    const resposta = await POST(
-      post({ colaborador_id: 7, admin_ate: amanha(), user_email: ADMIN }),
+    const response = await POST(
+      post({ colaborador_id: 7, admin_until: tomorrow(), user_email: ADMIN }),
     );
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "Você não pode alterar seus próprios privilégios de admin",
     });
     expect(update).not.toHaveBeenCalled();
   });
 
   it("impede rebaixar o último admin permanente", async () => {
-    autenticarComoAdminPermanente();
-    findUnique.mockResolvedValue({ ...ALVO, admin_permanente: true });
+    authenticateAsPermanentAdmin();
+    findUnique.mockResolvedValue({ ...TARGET, admin_permanente: true });
     count.mockResolvedValue(1);
 
-    const resposta = await POST(
-      post({ colaborador_id: 7, admin_ate: amanha(), user_email: ADMIN }),
+    const response = await POST(
+      post({ colaborador_id: 7, admin_until: tomorrow(), user_email: ADMIN }),
     );
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "É necessário manter ao menos um admin permanente",
     });
     expect(update).not.toHaveBeenCalled();
   });
 
   it("promove a admin permanente", async () => {
-    autenticarComoAdminPermanente();
-    findUnique.mockResolvedValue({ ...ALVO, admin_permanente: false });
+    authenticateAsPermanentAdmin();
+    findUnique.mockResolvedValue({ ...TARGET, admin_permanente: false });
     update.mockResolvedValue({});
 
-    const resposta = await POST(
+    const response = await POST(
       post({ colaborador_id: 7, admin_permanente: true, user_email: ADMIN }),
     );
 
-    expect(resposta.status).toBe(200);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
       message: "Maria Souza agora é admin permanente",
     });
     expect(update.mock.calls[0][0].data).toMatchObject({

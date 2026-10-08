@@ -1,18 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { mockarApi, resposta, USUARIO_COMUM } from "./support/app";
+import { mockApi, REGULAR_USER, response } from "./support/app";
 
-const SENHA = "senha-valida";
+const PASSWORD = "senha-valida";
 
 test.beforeEach(async ({ page }) => {
-  await mockarApi(page, {
-    "POST /api/auth/senior": ({ corpo }) => {
-      const { username, password } = corpo ?? {};
+  await mockApi(page, {
+    "POST /api/auth/senior": ({ body }) => {
+      const { username, password } = body ?? {};
 
-      if (username === USUARIO_COMUM.email && password === SENHA) {
-        return { user: USUARIO_COMUM, message: "Login realizado com sucesso" };
+      if (username === REGULAR_USER.email && password === PASSWORD) {
+        return { user: REGULAR_USER, message: "Login realizado com sucesso" };
       }
 
-      return resposta(401, { error: "Credenciais inválidas" });
+      return response(401, { error: "Credenciais inválidas" });
     },
   });
 });
@@ -33,7 +33,7 @@ test("credencial inválida mantém o usuário na tela de login com erro", async 
 }) => {
   await page.goto("/login");
 
-  await page.getByLabel(/usuário sênior/i).fill(USUARIO_COMUM.email);
+  await page.getByLabel(/usuário sênior/i).fill(REGULAR_USER.email);
   await page.getByLabel(/^senha$/i).fill("senha-errada");
   await page.getByRole("button", { name: /entrar/i }).click();
 
@@ -47,8 +47,8 @@ test("login válido leva o usuário à home e exibe os módulos", async ({
   page,
 }) => {
   await page.goto("/login");
-  await page.getByLabel(/usuário sênior/i).fill(USUARIO_COMUM.email);
-  await page.getByLabel(/^senha$/i).fill(SENHA);
+  await page.getByLabel(/usuário sênior/i).fill(REGULAR_USER.email);
+  await page.getByLabel(/^senha$/i).fill(PASSWORD);
   await page.getByRole("button", { name: /entrar/i }).click();
 
   await page.waitForURL(/\/$/, { timeout: 30_000 });
@@ -56,12 +56,12 @@ test("login válido leva o usuário à home e exibe os módulos", async ({
     page.getByRole("heading", { name: /olá, aquiles/i }),
   ).toBeVisible();
 
-  const modulos = page.getByRole("region", { name: "Módulos do TechHub" });
+  const modules = page.getByRole("region", { name: "Módulos do TechHub" });
   await expect(
-    modulos.getByRole("heading", { name: "Salgados" }),
+    modules.getByRole("heading", { name: "Salgados" }),
   ).toBeVisible();
 
   await expect(
-    modulos.getByRole("heading", { name: "Administração" }),
+    modules.getByRole("heading", { name: "Administração" }),
   ).toHaveCount(0);
 });

@@ -1,13 +1,13 @@
 "use client";
 
 import { StatTile } from "@/components/dashboard/stat-tile";
-import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
-import { useConfirmacao } from "@/components/confirmacao";
+import { daysUntil, formatInteger, formatPercent } from "@/components/dashboard/viz";
+import { useConfirmation } from "@/components/confirmation";
 import { DataTable } from "@/components/data-table";
-import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { ModalField, FieldRow, ModalForm } from "@/components/modal-form";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface Colaborador {
+interface Employee {
   id: number;
   nome: string;
   email: string;
@@ -42,18 +42,18 @@ interface Colaborador {
   data_admissao?: string;
   status: "ativo" | "inativo";
   setor_id?: number;
-  setor_nome?: string;
+  sector_name?: string;
 }
 
-interface Setor {
+interface Sector {
   id: number;
   nome: string;
   descricao?: string;
-  total_colaboradores?: number;
-  responsavel?: string;
+  total_employees?: number;
+  manager?: string;
 }
 
-interface ColaboradorAdmin {
+interface AdminEmployee {
   id: number;
   nome: string;
   email: string;
@@ -69,77 +69,75 @@ interface ColaboradorAdmin {
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const confirmar = useConfirmacao();
-  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [setores, setSetores] = useState<Setor[]>([]);
+  const confirm = useConfirmation();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
 
-  const [setoresPagina, setSetoresPagina] = useState<Setor[]>([]);
-  const [paginaSetores, setPaginaSetores] = useState(1);
-  const [totalPaginasSetores, setTotalPaginasSetores] = useState(1);
-  const [totalSetores, setTotalSetores] = useState(0);
-  const [buscaSetores, setBuscaSetores] = useState("");
+  const [pagedSectors, setPagedSectors] = useState<Sector[]>([]);
+  const [sectorsPage, setSectorsPage] = useState(1);
+  const [sectorsTotalPages, setSectorsTotalPages] = useState(1);
+  const [totalSectors, setTotalSectors] = useState(0);
+  const [sectorsSearch, setSectorsSearch] = useState("");
 
-  const [paginaColaboradores, setPaginaColaboradores] = useState(1);
-  const [totalPaginasColaboradores, setTotalPaginasColaboradores] = useState(1);
-  const [totalColaboradores, setTotalColaboradores] = useState(0);
-  const [paginaUsuariosAdmin, setPaginaUsuariosAdmin] = useState(1);
-  const [totalPaginasUsuariosAdmin, setTotalPaginasUsuariosAdmin] = useState(1);
-  const [totalUsuariosAdmin, setTotalUsuariosAdmin] = useState(0);
-  const [buscaUsuariosAdmin, setBuscaUsuariosAdmin] = useState("");
-  const [resumoColaboradores, setResumoColaboradores] = useState({
+  const [employeesPage, setEmployeesPage] = useState(1);
+  const [employeesTotalPages, setEmployeesTotalPages] = useState(1);
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [adminUsersPage, setAdminUsersPage] = useState(1);
+  const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
+  const [totalAdminUsers, setTotalAdminUsers] = useState(0);
+  const [adminUsersSearch, setAdminUsersSearch] = useState("");
+  const [employeesSummary, setEmployeesSummary] = useState({
     total: 0,
-    ativos: 0,
-    inativos: 0,
-    departamentos: [] as string[],
+    active: 0,
+    inactive: 0,
+    departments: [] as string[],
   });
-  const [resumoAdmins, setResumoAdmins] = useState({ admins: 0 });
-  const [itensPorPagina, setItensPorPagina] = useState(10);
+  const [adminsSummary, setAdminsSummary] = useState({ admins: 0 });
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterDepartamento, setFilterDepartamento] = useState("todos");
-  const [isAddColaboradorOpen, setIsAddColaboradorOpen] = useState(false);
-  const [isAddSetorOpen, setIsAddSetorOpen] = useState(false);
-  const [isEditColaboradorOpen, setIsEditColaboradorOpen] = useState(false);
-  const [selectedColaborador, setSelectedColaborador] =
-    useState<Colaborador | null>(null);
-  const [newColaborador, setNewColaborador] = useState({
+  const [filterDepartment, setFilterDepartment] = useState("all");
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [isAddSectorOpen, setIsAddSectorOpen] = useState(false);
+  const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] =
+    useState<Employee | null>(null);
+  const [newEmployee, setNewEmployee] = useState({
     nome: "",
     email: "",
     departamento: "",
     cargo: "",
     setor_id: "",
   });
-  const [newSetor, setNewSetor] = useState({
+  const [newSector, setNewSector] = useState({
     nome: "",
     descricao: "",
   });
 
-  const [colaboradoresAdmin, setColaboradoresAdmin] = useState<
-    ColaboradorAdmin[]
-  >([]);
-  const [candidatosAdmin, setCandidatosAdmin] = useState<ColaboradorAdmin[]>(
+  const [adminEmployees, setAdminEmployees] = useState<AdminEmployee[]>([]);
+  const [adminCandidates, setAdminCandidates] = useState<AdminEmployee[]>(
     [],
   );
-  const [podeGerenciarAdmins, setPodeGerenciarAdmins] = useState(false);
+  const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [isAddAdminTempOpen, setIsAddAdminTempOpen] = useState(false);
 
   const [adminTempData, setAdminTempData] = useState({
-    colaborador_id: "",
-    admin_ate: "",
-    tipo_acesso: "temporario" as "temporario" | "permanente",
+    employeeId: "",
+    adminUntil: "",
+    accessType: "temporary" as "temporary" | "permanent",
   });
 
   const [isEditAdminOpen, setIsEditAdminOpen] = useState(false);
-  const [adminEmEdicao, setAdminEmEdicao] = useState<ColaboradorAdmin | null>(
+  const [editingAdmin, setEditingAdmin] = useState<AdminEmployee | null>(
     null,
   );
   const [editAdminData, setEditAdminData] = useState({
-    admin_ate: "",
-    tipo_acesso: "temporario" as "temporario" | "permanente",
+    adminUntil: "",
+    accessType: "temporary" as "temporary" | "permanent",
   });
 
-  const [isEditSetorOpen, setIsEditSetorOpen] = useState(false);
-  const [setorEmEdicao, setSetorEmEdicao] = useState<Setor | null>(null);
-  const [editSetor, setEditSetor] = useState({ nome: "", descricao: "" });
+  const [isEditSectorOpen, setIsEditSectorOpen] = useState(false);
+  const [editingSector, setEditingSector] = useState<Sector | null>(null);
+  const [editSector, setEditSector] = useState({ name: "", description: "" });
 
   useEffect(() => {
     if (!user?.email) {
@@ -149,96 +147,96 @@ export default function AdminPage() {
     fetchData();
   }, [
     user?.email,
-    paginaColaboradores,
-    paginaSetores,
-    paginaUsuariosAdmin,
-    itensPorPagina,
+    employeesPage,
+    sectorsPage,
+    adminUsersPage,
+    itemsPerPage,
     searchTerm,
-    filterDepartamento,
-    buscaSetores,
-    buscaUsuariosAdmin,
+    filterDepartment,
+    sectorsSearch,
+    adminUsersSearch,
   ]);
 
   const fetchData = async () => {
     try {
-      const paramsColaboradores = new URLSearchParams({
-        page: String(paginaColaboradores),
-        limit: String(itensPorPagina),
+      const employeeParams = new URLSearchParams({
+        page: String(employeesPage),
+        limit: String(itemsPerPage),
       });
-      if (searchTerm) paramsColaboradores.set("search", searchTerm);
-      if (filterDepartamento !== "todos")
-        paramsColaboradores.set("departamento", filterDepartamento);
+      if (searchTerm) employeeParams.set("search", searchTerm);
+      if (filterDepartment !== "all")
+        employeeParams.set("departamento", filterDepartment);
 
-      const paramsSetores = new URLSearchParams({
-        page: String(paginaSetores),
-        limit: String(itensPorPagina),
+      const sectorParams = new URLSearchParams({
+        page: String(sectorsPage),
+        limit: String(itemsPerPage),
       });
-      if (buscaSetores) paramsSetores.set("search", buscaSetores);
+      if (sectorsSearch) sectorParams.set("search", sectorsSearch);
 
-      const emailUsuario = user?.email;
+      const userEmail = user?.email;
 
-      const paramsUsuarios = new URLSearchParams({
-        user_email: emailUsuario ?? "",
-        page: String(paginaUsuariosAdmin),
-        limit: String(itensPorPagina),
+      const adminUserParams = new URLSearchParams({
+        user_email: userEmail ?? "",
+        page: String(adminUsersPage),
+        limit: String(itemsPerPage),
       });
-      if (buscaUsuariosAdmin) paramsUsuarios.set("search", buscaUsuariosAdmin);
+      if (adminUsersSearch) adminUserParams.set("search", adminUsersSearch);
 
       const [
-        colaboradoresRes,
-        setoresRes,
-        setoresPaginaRes,
-        usuariosAdminRes,
-        candidatosAdminRes,
+        employeesRes,
+        sectorsRes,
+        pagedSectorsRes,
+        adminUsersRes,
+        adminCandidatesRes,
       ] = await Promise.all([
-        fetch(`/api/colaboradores?${paramsColaboradores}`),
+        fetch(`/api/colaboradores?${employeeParams}`),
         fetch("/api/admin/setores"),
-        fetch(`/api/admin/setores?${paramsSetores}`),
-        emailUsuario
-          ? fetch(`/api/admin/usuarios?${paramsUsuarios}`)
+        fetch(`/api/admin/setores?${sectorParams}`),
+        userEmail
+          ? fetch(`/api/admin/usuarios?${adminUserParams}`)
           : Promise.resolve(null),
-        emailUsuario
+        userEmail
           ? fetch(
-              `/api/admin/usuarios?escopo=candidatos&user_email=${encodeURIComponent(emailUsuario)}`,
+              `/api/admin/usuarios?scope=candidates&user_email=${encodeURIComponent(userEmail)}`,
             )
           : Promise.resolve(null),
       ]);
 
-      if (colaboradoresRes.ok && setoresRes.ok) {
-        const colaboradoresData = await colaboradoresRes.json();
-        const setoresData = await setoresRes.json();
+      if (employeesRes.ok && sectorsRes.ok) {
+        const employeesData = await employeesRes.json();
+        const sectorsData = await sectorsRes.json();
 
-        setColaboradores(colaboradoresData.data ?? []);
-        setTotalPaginasColaboradores(colaboradoresData.totalPages ?? 1);
-        setTotalColaboradores(colaboradoresData.total ?? 0);
-        if (colaboradoresData.resumo)
-          setResumoColaboradores(colaboradoresData.resumo);
+        setEmployees(employeesData.data ?? []);
+        setEmployeesTotalPages(employeesData.totalPages ?? 1);
+        setTotalEmployees(employeesData.total ?? 0);
+        if (employeesData.summary)
+          setEmployeesSummary(employeesData.summary);
 
-        setSetores(setoresData);
+        setSectors(sectorsData);
 
-        if (setoresPaginaRes.ok) {
-          const pagina = await setoresPaginaRes.json();
-          setSetoresPagina(pagina.data ?? []);
-          setTotalPaginasSetores(pagina.totalPages ?? 1);
-          setTotalSetores(pagina.total ?? 0);
+        if (pagedSectorsRes.ok) {
+          const pageData = await pagedSectorsRes.json();
+          setPagedSectors(pageData.data ?? []);
+          setSectorsTotalPages(pageData.totalPages ?? 1);
+          setTotalSectors(pageData.total ?? 0);
         }
 
-        if (usuariosAdminRes) {
-          setPodeGerenciarAdmins(usuariosAdminRes.status !== 403);
+        if (adminUsersRes) {
+          setCanManageAdmins(adminUsersRes.status !== 403);
         }
 
-        if (usuariosAdminRes?.ok) {
-          const usuariosAdminData = await usuariosAdminRes.json();
-          setColaboradoresAdmin(usuariosAdminData.data ?? []);
-          setTotalPaginasUsuariosAdmin(usuariosAdminData.totalPages ?? 1);
-          setTotalUsuariosAdmin(usuariosAdminData.total ?? 0);
-          if (usuariosAdminData.resumo)
-            setResumoAdmins(usuariosAdminData.resumo);
+        if (adminUsersRes?.ok) {
+          const adminUsersData = await adminUsersRes.json();
+          setAdminEmployees(adminUsersData.data ?? []);
+          setAdminUsersTotalPages(adminUsersData.totalPages ?? 1);
+          setTotalAdminUsers(adminUsersData.total ?? 0);
+          if (adminUsersData.summary)
+            setAdminsSummary(adminUsersData.summary);
         }
 
-        if (candidatosAdminRes?.ok) {
-          const candidatos = await candidatosAdminRes.json();
-          setCandidatosAdmin(Array.isArray(candidatos) ? candidatos : []);
+        if (adminCandidatesRes?.ok) {
+          const candidates = await adminCandidatesRes.json();
+          setAdminCandidates(Array.isArray(candidates) ? candidates : []);
         }
       } else {
         toast.danger("Erro", {
@@ -255,13 +253,13 @@ export default function AdminPage() {
     }
   };
 
-  const reiniciarPaginas = () => {
-    setPaginaColaboradores(1);
-    setPaginaSetores(1);
-    setPaginaUsuariosAdmin(1);
+  const resetPages = () => {
+    setEmployeesPage(1);
+    setSectorsPage(1);
+    setAdminUsersPage(1);
   };
 
-  const colunasColaboradores: ColumnDef<Colaborador, any>[] = [
+  const employeeColumns: ColumnDef<Employee, any>[] = [
     {
       accessorKey: "nome",
       header: "Nome",
@@ -272,7 +270,7 @@ export default function AdminPage() {
     {
       accessorKey: "email",
       header: "Email",
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
       accessorKey: "departamento",
@@ -280,10 +278,10 @@ export default function AdminPage() {
       cell: (info) => <Chip>{String(info.getValue() ?? "")}</Chip>,
     },
     {
-      accessorKey: "setor_nome",
+      accessorKey: "sector_name",
       header: "Setor",
       cell: (info) => String(info.getValue() || "Não definido"),
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
     {
       accessorKey: "status",
@@ -293,7 +291,7 @@ export default function AdminPage() {
       ),
     },
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
@@ -302,8 +300,8 @@ export default function AdminPage() {
             variant="outline"
             aria-label="Editar colaborador"
             onPress={() => {
-              setSelectedColaborador(row.original);
-              setIsEditColaboradorOpen(true);
+              setSelectedEmployee(row.original);
+              setIsEditEmployeeOpen(true);
             }}
           >
             <Edit />
@@ -316,17 +314,17 @@ export default function AdminPage() {
                 ? "Inativar colaborador"
                 : "Reativar colaborador"
             }
-            onPress={() => inativarColaborador(row.original.id)}
+            onPress={() => toggleEmployeeStatus(row.original.id)}
           >
             {row.original.status === "ativo" ? <Trash2 /> : <Users />}
           </Button>
         </div>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const colunasSetores: ColumnDef<Setor, any>[] = [
+  const sectorColumns: ColumnDef<Sector, any>[] = [
     {
       accessorKey: "nome",
       header: "Setor",
@@ -338,10 +336,10 @@ export default function AdminPage() {
       accessorKey: "descricao",
       header: "Descrição",
       cell: (info) => String(info.getValue() || "-"),
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
     {
-      accessorKey: "responsavel",
+      accessorKey: "manager",
       header: "Responsável",
       cell: (info) => (
         <span className="flex items-center gap-2">
@@ -349,15 +347,15 @@ export default function AdminPage() {
           {String(info.getValue() || "Não definido")}
         </span>
       ),
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
-      accessorKey: "total_colaboradores",
+      accessorKey: "total_employees",
       header: "Colaboradores",
       cell: (info) => <Chip>{Number(info.getValue() ?? 0)} pessoa(s)</Chip>,
     },
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
@@ -365,7 +363,7 @@ export default function AdminPage() {
             isIconOnly
             variant="outline"
             aria-label="Editar setor"
-            onPress={() => abrirEdicaoSetor(row.original)}
+            onPress={() => openSectorEdit(row.original)}
           >
             <Edit />
           </Button>
@@ -373,17 +371,17 @@ export default function AdminPage() {
             isIconOnly
             variant="danger"
             aria-label="Excluir setor"
-            onPress={() => removerSetor(row.original)}
+            onPress={() => deleteSector(row.original)}
           >
             <Trash2 />
           </Button>
         </div>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const colunasUsuariosAdmin: ColumnDef<ColaboradorAdmin, any>[] = [
+  const adminUserColumns: ColumnDef<AdminEmployee, any>[] = [
     {
       accessorKey: "nome",
       header: "Nome",
@@ -394,22 +392,22 @@ export default function AdminPage() {
     {
       accessorKey: "email",
       header: "Email",
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
       accessorKey: "departamento",
       header: "Departamento",
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
     {
-      id: "status_admin",
+      id: "admin_status",
       header: "Status Admin",
       cell: ({ row }) => {
         if (row.original.admin_permanente)
           return <Chip color="accent">Admin Permanente</Chip>;
 
-        const dias = diasAte(row.original.admin_temporario_ate);
-        if (dias !== null && dias < 0)
+        const days = daysUntil(row.original.admin_temporario_ate);
+        if (days !== null && days < 0)
           return <Chip color="danger">Admin Expirado</Chip>;
 
         return <Chip color="warning">Admin Temporário</Chip>;
@@ -424,10 +422,10 @@ export default function AdminPage() {
         ) : (
           <span className="text-muted">-</span>
         ),
-      meta: { classe: "text-muted" },
+      meta: { className: "text-muted" },
     },
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
@@ -435,7 +433,7 @@ export default function AdminPage() {
             isIconOnly
             variant="outline"
             aria-label="Editar privilégios de admin"
-            onPress={() => abrirEdicaoAdmin(row.original)}
+            onPress={() => openAdminEdit(row.original)}
           >
             <Edit />
           </Button>
@@ -443,22 +441,22 @@ export default function AdminPage() {
             isIconOnly
             variant="danger"
             aria-label="Remover privilégios de admin"
-            onPress={() => removerAdminTemporario(row.original)}
+            onPress={() => removeAdmin(row.original)}
           >
             <Trash2 />
           </Button>
         </div>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const filtroDepartamentoSelect = (
+  const departmentFilterSelect = (
     <Select
-      selectedKey={filterDepartamento}
-      onSelectionChange={(chave) => {
-        setFilterDepartamento(String(chave));
-        setPaginaColaboradores(1);
+      selectedKey={filterDepartment}
+      onSelectionChange={(key) => {
+        setFilterDepartment(String(key));
+        setEmployeesPage(1);
       }}
       variant="secondary"
       aria-label="Filtrar por departamento"
@@ -469,10 +467,10 @@ export default function AdminPage() {
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          <ListBox.Item id="todos" textValue="Todos os departamentos">
+          <ListBox.Item id="all" textValue="Todos os departamentos">
             Todos os departamentos
           </ListBox.Item>
-          {resumoColaboradores.departamentos.map((dept) => (
+          {employeesSummary.departments.map((dept) => (
             <ListBox.Item key={dept} id={dept} textValue={dept}>
               {dept}
             </ListBox.Item>
@@ -482,11 +480,11 @@ export default function AdminPage() {
     </Select>
   );
 
-  const adicionarColaborador = async () => {
+  const addEmployee = async () => {
     if (
-      !newColaborador.nome ||
-      !newColaborador.email ||
-      !newColaborador.departamento
+      !newEmployee.nome ||
+      !newEmployee.email ||
+      !newEmployee.departamento
     ) {
       toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
@@ -499,17 +497,17 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...newColaborador,
-          setor_id: newColaborador.setor_id
-            ? Number.parseInt(newColaborador.setor_id)
+          ...newEmployee,
+          setor_id: newEmployee.setor_id
+            ? Number.parseInt(newEmployee.setor_id)
             : null,
         }),
       });
 
       if (response.ok) {
         fetchData();
-        setIsAddColaboradorOpen(false);
-        setNewColaborador({
+        setIsAddEmployeeOpen(false);
+        setNewEmployee({
           nome: "",
           email: "",
           departamento: "",
@@ -535,13 +533,13 @@ export default function AdminPage() {
     }
   };
 
-  const editarColaborador = async () => {
-    if (!selectedColaborador) return;
+  const updateEmployee = async () => {
+    if (!selectedEmployee) return;
 
     if (
-      !selectedColaborador.nome.trim() ||
-      !selectedColaborador.email.trim() ||
-      !selectedColaborador.departamento
+      !selectedEmployee.nome.trim() ||
+      !selectedEmployee.email.trim() ||
+      !selectedEmployee.departamento
     ) {
       toast.danger("Erro", {
         description: "Nome, email e departamento são obrigatórios.",
@@ -551,24 +549,24 @@ export default function AdminPage() {
 
     try {
       const response = await fetch(
-        `/api/colaboradores/${selectedColaborador.id}`,
+        `/api/colaboradores/${selectedEmployee.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nome: selectedColaborador.nome,
-            email: selectedColaborador.email,
-            departamento: selectedColaborador.departamento,
-            cargo: selectedColaborador.cargo ?? null,
-            setor_id: selectedColaborador.setor_id ?? null,
+            nome: selectedEmployee.nome,
+            email: selectedEmployee.email,
+            departamento: selectedEmployee.departamento,
+            cargo: selectedEmployee.cargo ?? null,
+            setor_id: selectedEmployee.setor_id ?? null,
           }),
         },
       );
 
       if (response.ok) {
         fetchData();
-        setIsEditColaboradorOpen(false);
-        setSelectedColaborador(null);
+        setIsEditEmployeeOpen(false);
+        setSelectedEmployee(null);
 
         toast("Colaborador atualizado!", {
           description: "Dados do colaborador foram atualizados com sucesso.",
@@ -588,16 +586,16 @@ export default function AdminPage() {
     }
   };
 
-  const inativarColaborador = async (id: number) => {
+  const toggleEmployeeStatus = async (id: number) => {
     try {
-      const colaborador = colaboradores.find((c) => c.id === id);
-      if (!colaborador) return;
+      const employee = employees.find((c) => c.id === id);
+      if (!employee) return;
 
       const response = await fetch(`/api/colaboradores/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: colaborador.status === "ativo" ? "inativo" : "ativo",
+          status: employee.status === "ativo" ? "inativo" : "ativo",
         }),
       });
 
@@ -605,7 +603,7 @@ export default function AdminPage() {
         fetchData();
         toast("Status atualizado!", {
           description: `Colaborador ${
-            colaborador.status === "ativo" ? "inativado" : "ativado"
+            employee.status === "ativo" ? "inativado" : "ativado"
           } com sucesso.`,
         });
       } else {
@@ -623,8 +621,8 @@ export default function AdminPage() {
     }
   };
 
-  const adicionarSetor = async () => {
-    if (!newSetor.nome) {
+  const addSector = async () => {
+    if (!newSector.nome) {
       toast.danger("Erro", {
         description: "Nome do setor é obrigatório.",
       });
@@ -635,13 +633,13 @@ export default function AdminPage() {
       const response = await fetch("/api/admin/setores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newSetor),
+        body: JSON.stringify(newSector),
       });
 
       if (response.ok) {
         fetchData();
-        setIsAddSetorOpen(false);
-        setNewSetor({ nome: "", descricao: "" });
+        setIsAddSectorOpen(false);
+        setNewSector({ nome: "", descricao: "" });
 
         toast("Setor adicionado!", {
           description: "Novo setor foi cadastrado com sucesso.",
@@ -660,16 +658,16 @@ export default function AdminPage() {
     }
   };
 
-  const abrirEdicaoSetor = (setor: Setor) => {
-    setSetorEmEdicao(setor);
-    setEditSetor({ nome: setor.nome, descricao: setor.descricao ?? "" });
-    setIsEditSetorOpen(true);
+  const openSectorEdit = (sector: Sector) => {
+    setEditingSector(sector);
+    setEditSector({ name: sector.nome, description: sector.descricao ?? "" });
+    setIsEditSectorOpen(true);
   };
 
-  const editarSetor = async () => {
-    if (!setorEmEdicao) return;
+  const updateSector = async () => {
+    if (!editingSector) return;
 
-    if (!editSetor.nome.trim()) {
+    if (!editSector.name.trim()) {
       toast.danger("Erro", {
         description: "Nome do setor é obrigatório.",
       });
@@ -677,19 +675,19 @@ export default function AdminPage() {
     }
 
     try {
-      const response = await fetch(`/api/admin/setores/${setorEmEdicao.id}`, {
+      const response = await fetch(`/api/admin/setores/${editingSector.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nome: editSetor.nome.trim(),
-          descricao: editSetor.descricao.trim(),
+          nome: editSector.name.trim(),
+          descricao: editSector.description.trim(),
         }),
       });
 
       if (response.ok) {
         fetchData();
-        setIsEditSetorOpen(false);
-        setSetorEmEdicao(null);
+        setIsEditSectorOpen(false);
+        setEditingSector(null);
 
         toast("Setor atualizado!", {
           description: "Os dados do setor foram atualizados com sucesso.",
@@ -708,24 +706,24 @@ export default function AdminPage() {
     }
   };
 
-  const removerSetor = async (setor: Setor) => {
-    const confirmado = await confirmar({
-      titulo: "Excluir setor",
-      descricao: `Tem certeza que deseja excluir o setor "${setor.nome}"? Essa ação não pode ser desfeita.`,
-      rotuloConfirmar: "Excluir",
-      destrutivo: true,
+  const deleteSector = async (sector: Sector) => {
+    const confirmed = await confirm({
+      title: "Excluir setor",
+      description: `Tem certeza que deseja excluir o setor "${sector.nome}"? Essa ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      destructive: true,
     });
-    if (!confirmado) return;
+    if (!confirmed) return;
 
     try {
-      const response = await fetch(`/api/admin/setores/${setor.id}`, {
+      const response = await fetch(`/api/admin/setores/${sector.id}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
         fetchData();
         toast("Setor excluído!", {
-          description: `O setor "${setor.nome}" foi removido com sucesso.`,
+          description: `O setor "${sector.nome}" foi removido com sucesso.`,
         });
       } else {
         const error = await response.json();
@@ -741,14 +739,14 @@ export default function AdminPage() {
     }
   };
 
-  const salvarPrivilegiosAdmin = async (
-    colaboradorId: number,
-    dados: { tipo_acesso: "temporario" | "permanente"; admin_ate: string },
-    aoConcluir: () => void,
+  const saveAdminPrivileges = async (
+    employeeId: number,
+    values: { accessType: "temporary" | "permanent"; adminUntil: string },
+    onDone: () => void,
   ) => {
-    const permanente = dados.tipo_acesso === "permanente";
+    const isPermanent = values.accessType === "permanent";
 
-    if (!permanente && !dados.admin_ate) {
+    if (!isPermanent && !values.adminUntil) {
       toast.danger("Erro", {
         description: "Informe até quando o acesso de admin é válido.",
       });
@@ -760,9 +758,9 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          colaborador_id: colaboradorId,
-          admin_permanente: permanente,
-          admin_ate: permanente ? null : dados.admin_ate,
+          colaborador_id: employeeId,
+          admin_permanente: isPermanent,
+          admin_until: isPermanent ? null : values.adminUntil,
           user_email: user?.email,
         }),
       });
@@ -771,7 +769,7 @@ export default function AdminPage() {
 
       if (response.ok) {
         fetchData();
-        aoConcluir();
+        onDone();
 
         toast("Privilégios atualizados!", {
           description: data.message,
@@ -790,67 +788,67 @@ export default function AdminPage() {
     }
   };
 
-  const definirAdminTemporario = async () => {
-    if (!adminTempData.colaborador_id) {
+  const assignAdmin = async () => {
+    if (!adminTempData.employeeId) {
       toast.danger("Erro", {
         description: "Selecione um colaborador.",
       });
       return;
     }
 
-    await salvarPrivilegiosAdmin(
-      Number(adminTempData.colaborador_id),
+    await saveAdminPrivileges(
+      Number(adminTempData.employeeId),
       adminTempData,
       () => {
         setIsAddAdminTempOpen(false);
         setAdminTempData({
-          colaborador_id: "",
-          admin_ate: "",
-          tipo_acesso: "temporario",
+          employeeId: "",
+          adminUntil: "",
+          accessType: "temporary",
         });
       },
     );
   };
 
-  const abrirEdicaoAdmin = (colaborador: ColaboradorAdmin) => {
-    setAdminEmEdicao(colaborador);
+  const openAdminEdit = (employee: AdminEmployee) => {
+    setEditingAdmin(employee);
     setEditAdminData({
-      tipo_acesso: colaborador.admin_permanente ? "permanente" : "temporario",
-      admin_ate: colaborador.admin_temporario_ate
-        ? String(colaborador.admin_temporario_ate).slice(0, 10)
+      accessType: employee.admin_permanente ? "permanent" : "temporary",
+      adminUntil: employee.admin_temporario_ate
+        ? String(employee.admin_temporario_ate).slice(0, 10)
         : "",
     });
     setIsEditAdminOpen(true);
   };
 
-  const fecharEdicaoAdmin = () => {
+  const closeAdminEdit = () => {
     setIsEditAdminOpen(false);
-    setAdminEmEdicao(null);
-    setEditAdminData({ admin_ate: "", tipo_acesso: "temporario" });
+    setEditingAdmin(null);
+    setEditAdminData({ adminUntil: "", accessType: "temporary" });
   };
 
-  const editarAdmin = async () => {
-    if (!adminEmEdicao) return;
+  const updateAdmin = async () => {
+    if (!editingAdmin) return;
 
-    await salvarPrivilegiosAdmin(
-      adminEmEdicao.id,
+    await saveAdminPrivileges(
+      editingAdmin.id,
       editAdminData,
-      fecharEdicaoAdmin,
+      closeAdminEdit,
     );
   };
 
-  const removerAdminTemporario = async (colaborador: ColaboradorAdmin) => {
-    const confirmado = await confirmar({
-      titulo: "Remover acesso de admin",
-      descricao: `Tem certeza que deseja remover os privilégios de admin de ${colaborador.nome}?`,
-      rotuloConfirmar: "Remover acesso",
-      destrutivo: true,
+  const removeAdmin = async (employee: AdminEmployee) => {
+    const confirmed = await confirm({
+      title: "Remover acesso de admin",
+      description: `Tem certeza que deseja remover os privilégios de admin de ${employee.nome}?`,
+      confirmLabel: "Remover acesso",
+      destructive: true,
     });
-    if (!confirmado) return;
+    if (!confirmed) return;
 
     try {
       const response = await fetch(
-        `/api/admin/usuarios?colaborador_id=${colaborador.id}&user_email=${encodeURIComponent(user?.email ?? "")}`,
+        `/api/admin/usuarios?colaborador_id=${employee.id}&user_email=${encodeURIComponent(user?.email ?? "")}`,
         {
           method: "DELETE",
         },
@@ -876,39 +874,39 @@ export default function AdminPage() {
     }
   };
 
-  const departamentosUnicos = resumoColaboradores.departamentos;
-  const colaboradoresAtivos = resumoColaboradores.ativos;
+  const uniqueDepartments = employeesSummary.departments;
+  const activeEmployees = employeesSummary.active;
 
-  const taxaAtividade =
-    colaboradores.length > 0
-      ? (colaboradoresAtivos / resumoColaboradores.total) * 100
+  const activityRate =
+    employees.length > 0
+      ? (activeEmployees / employeesSummary.total) * 100
       : 0;
-  const totalAdmins = resumoAdmins.admins;
+  const totalAdmins = adminsSummary.admins;
 
-  const candidatosAdminDisponiveis = candidatosAdmin;
+  const availableAdminCandidates = adminCandidates;
 
-  const adminsTemporariosVisiveis = colaboradoresAdmin.filter((c) => {
-    const dias = diasAte(c.admin_temporario_ate);
-    return !c.admin_permanente && dias !== null && dias >= 0;
+  const visibleTemporaryAdmins = adminEmployees.filter((c) => {
+    const days = daysUntil(c.admin_temporario_ate);
+    return !c.admin_permanente && days !== null && days >= 0;
   }).length;
 
-  const isAdminPermanente = podeGerenciarAdmins;
+  const isPermanentAdmin = canManageAdmins;
 
   if (loading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute requiredRole="admin">
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Painel Administrativo"
-          descricao="Gerencie colaboradores e setores da empresa"
-          voltarHref="/"
+      <PageLayout>
+        <PageHeader
+          title="Painel Administrativo"
+          description="Gerencie colaboradores e setores da empresa"
+          backHref="/"
         />
 
         <section
@@ -916,54 +914,54 @@ export default function AdminPage() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
           <StatTile
-            rotulo="Colaboradores"
-            valor={inteiro(resumoColaboradores.total)}
-            icone={Users}
-            deltaLegenda={`${inteiro(resumoColaboradores.inativos)} inativo(s) no cadastro`}
+            label="Colaboradores"
+            value={formatInteger(employeesSummary.total)}
+            icon={Users}
+            deltaLabel={`${formatInteger(employeesSummary.inactive)} inativo(s) no cadastro`}
           />
           <StatTile
-            rotulo="Quadro ativo"
-            valor={percentual(taxaAtividade, 0)}
-            icone={TrendingUp}
-            deltaLegenda={`${inteiro(colaboradoresAtivos)} de ${inteiro(resumoColaboradores.total)} colaboradores`}
+            label="Quadro ativo"
+            value={formatPercent(activityRate, 0)}
+            icon={TrendingUp}
+            deltaLabel={`${formatInteger(activeEmployees)} de ${formatInteger(employeesSummary.total)} colaboradores`}
           />
           <StatTile
-            rotulo="Setores"
-            valor={inteiro(totalSetores)}
-            icone={Building}
-            deltaLegenda={`${inteiro(departamentosUnicos.length)} departamento(s) distintos`}
+            label="Setores"
+            value={formatInteger(totalSectors)}
+            icon={Building}
+            deltaLabel={`${formatInteger(uniqueDepartments.length)} departamento(s) distintos`}
           />
           <StatTile
-            rotulo="Administradores"
-            valor={inteiro(totalAdmins)}
-            icone={BarChart3}
-            deltaLegenda={
-              adminsTemporariosVisiveis > 0
-                ? `${inteiro(adminsTemporariosVisiveis)} temporário(s) nesta página`
+            label="Administradores"
+            value={formatInteger(totalAdmins)}
+            icon={BarChart3}
+            deltaLabel={
+              visibleTemporaryAdmins > 0
+                ? `${formatInteger(visibleTemporaryAdmins)} temporário(s) nesta página`
                 : "nenhum temporário nesta página"
             }
           />
         </section>
 
-        <Tabs defaultSelectedKey="colaboradores" className="gap-4">
+        <Tabs defaultSelectedKey="employees" className="gap-4">
           <Tabs.ListContainer>
             <Tabs.List className="grid w-full grid-cols-1 sm:grid-cols-3">
-              <Tabs.Tab id="colaboradores">
+              <Tabs.Tab id="employees">
                 Colaboradores
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="setores">
+              <Tabs.Tab id="sectors">
                 Setores
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="usuarios-admin">
+              <Tabs.Tab id="admin-users">
                 Usuários Admin
                 <Tabs.Indicator />
               </Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
 
-          <Tabs.Panel className="p-0" id="colaboradores">
+          <Tabs.Panel className="p-0" id="employees">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -974,11 +972,11 @@ export default function AdminPage() {
                     </Card.Description>
                   </div>
                   <ModalForm
-                    isOpen={isAddColaboradorOpen}
-                    onOpenChange={(aberto) => {
-                      setIsAddColaboradorOpen(aberto);
-                      if (!aberto)
-                        setNewColaborador({
+                    isOpen={isAddEmployeeOpen}
+                    onOpenChange={(open) => {
+                      setIsAddEmployeeOpen(open);
+                      if (!open)
+                        setNewEmployee({
                           nome: "",
                           email: "",
                           departamento: "",
@@ -986,62 +984,62 @@ export default function AdminPage() {
                           setor_id: "",
                         });
                     }}
-                    titulo="Adicionar Novo Colaborador"
-                    descricao="Cadastre um novo colaborador na empresa"
-                    gatilho={
+                    title="Adicionar Novo Colaborador"
+                    description="Cadastre um novo colaborador na empresa"
+                    trigger={
                       <Button>
                         <UserPlus />
                         Novo Colaborador
                       </Button>
                     }
-                    rotuloConfirmar="Cadastrar Colaborador"
-                    onConfirmar={adicionarColaborador}
+                    confirmLabel="Cadastrar Colaborador"
+                    onConfirm={addEmployee}
                   >
-                    <LinhaCampos>
-                      <CampoModal rotulo="Nome Completo" htmlFor="nome">
+                    <FieldRow>
+                      <ModalField label="Nome Completo" htmlFor="name">
                         <Input
-                          id="nome"
-                          value={newColaborador.nome}
+                          id="name"
+                          value={newEmployee.nome}
                           onChange={(e) =>
-                            setNewColaborador({
-                              ...newColaborador,
+                            setNewEmployee({
+                              ...newEmployee,
                               nome: e.target.value,
                             })
                           }
                           variant="secondary"
                           placeholder="Nome do colaborador"
                         />
-                      </CampoModal>
+                      </ModalField>
 
-                      <CampoModal rotulo="Email" htmlFor="email">
+                      <ModalField label="Email" htmlFor="email">
                         <Input
                           id="email"
                           type="email"
-                          value={newColaborador.email}
+                          value={newEmployee.email}
                           onChange={(e) =>
-                            setNewColaborador({
-                              ...newColaborador,
+                            setNewEmployee({
+                              ...newEmployee,
                               email: e.target.value,
                             })
                           }
                           variant="secondary"
                           placeholder="email@empresa.com"
                         />
-                      </CampoModal>
-                    </LinhaCampos>
+                      </ModalField>
+                    </FieldRow>
 
-                    <LinhaCampos>
-                      <CampoModal
-                        rotulo="Departamento"
-                        htmlFor="departamento"
+                    <FieldRow>
+                      <ModalField
+                        label="Departamento"
+                        htmlFor="department"
                       >
                         <Select
                           aria-label="Departamento"
-                          value={newColaborador.departamento || null}
-                          onChange={(chave) =>
-                            setNewColaborador({
-                              ...newColaborador,
-                              departamento: chave ? String(chave) : "",
+                          value={newEmployee.departamento || null}
+                          onChange={(key) =>
+                            setNewEmployee({
+                              ...newEmployee,
+                              departamento: key ? String(key) : "",
                             })
                           }
                           variant="secondary"
@@ -1089,32 +1087,32 @@ export default function AdminPage() {
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                      </CampoModal>
+                      </ModalField>
 
-                      <CampoModal rotulo="Cargo" htmlFor="cargo">
+                      <ModalField label="Cargo" htmlFor="job-title">
                         <Input
-                          id="cargo"
-                          value={newColaborador.cargo}
+                          id="job-title"
+                          value={newEmployee.cargo}
                           onChange={(e) =>
-                            setNewColaborador({
-                              ...newColaborador,
+                            setNewEmployee({
+                              ...newEmployee,
                               cargo: e.target.value,
                             })
                           }
                           variant="secondary"
                           placeholder="Ex: Analista, Gerente, Coordenador..."
                         />
-                      </CampoModal>
-                    </LinhaCampos>
+                      </ModalField>
+                    </FieldRow>
 
-                    <CampoModal rotulo="Setor" htmlFor="setor">
+                    <ModalField label="Setor" htmlFor="sector">
                       <Select
                         aria-label="Setor"
-                        value={newColaborador.setor_id || null}
-                        onChange={(chave) =>
-                          setNewColaborador({
-                            ...newColaborador,
-                            setor_id: chave ? String(chave) : "",
+                        value={newEmployee.setor_id || null}
+                        onChange={(key) =>
+                          setNewEmployee({
+                            ...newEmployee,
+                            setor_id: key ? String(key) : "",
                           })
                         }
                         variant="secondary"
@@ -1126,50 +1124,50 @@ export default function AdminPage() {
                         </Select.Trigger>
                         <Select.Popover>
                           <ListBox>
-                            {setores.map((setor) => (
+                            {sectors.map((sector) => (
                               <ListBox.Item
-                                key={setor.id}
-                                id={setor.id.toString()}
-                                textValue={setor.nome}
+                                key={sector.id}
+                                id={sector.id.toString()}
+                                textValue={sector.nome}
                               >
-                                {setor.nome}
+                                {sector.nome}
                               </ListBox.Item>
                             ))}
                           </ListBox>
                         </Select.Popover>
                       </Select>
-                    </CampoModal>
+                    </ModalField>
                   </ModalForm>
                 </div>
               </Card.Header>
               <Card.Content>
                 <DataTable
-                  colunas={colunasColaboradores}
-                  dados={colaboradores}
-                  rotulo="Colaboradores"
-                  vazio="Nenhum colaborador encontrado"
-                  total={totalColaboradores}
-                  pagina={paginaColaboradores}
-                  totalPaginas={totalPaginasColaboradores}
-                  onMudarPagina={setPaginaColaboradores}
-                  itensPorPagina={itensPorPagina}
-                  onMudarItensPorPagina={(itens) => {
-                    setItensPorPagina(itens);
-                    reiniciarPaginas();
+                  columns={employeeColumns}
+                  data={employees}
+                  label="Colaboradores"
+                  emptyMessage="Nenhum colaborador encontrado"
+                  total={totalEmployees}
+                  page={employeesPage}
+                  totalPages={employeesTotalPages}
+                  onPageChange={setEmployeesPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(items) => {
+                    setItemsPerPage(items);
+                    resetPages();
                   }}
-                  busca={searchTerm}
-                  onMudarBusca={(valor) => {
-                    setSearchTerm(valor);
-                    setPaginaColaboradores(1);
+                  search={searchTerm}
+                  onSearchChange={(value) => {
+                    setSearchTerm(value);
+                    setEmployeesPage(1);
                   }}
-                  placeholderBusca="Pesquisar por nome ou email..."
-                  filtros={filtroDepartamentoSelect}
+                  searchPlaceholder="Pesquisar por nome ou email..."
+                  filters={departmentFilterSelect}
                 />
               </Card.Content>
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel className="p-0" id="setores">
+          <Tabs.Panel className="p-0" id="sectors">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1180,83 +1178,83 @@ export default function AdminPage() {
                     </Card.Description>
                   </div>
                   <ModalForm
-                    isOpen={isAddSetorOpen}
-                    onOpenChange={(aberto) => {
-                      setIsAddSetorOpen(aberto);
-                      if (!aberto) setNewSetor({ nome: "", descricao: "" });
+                    isOpen={isAddSectorOpen}
+                    onOpenChange={(open) => {
+                      setIsAddSectorOpen(open);
+                      if (!open) setNewSector({ nome: "", descricao: "" });
                     }}
-                    titulo="Adicionar Novo Setor"
-                    descricao="Crie um novo setor para organizar os colaboradores"
-                    gatilho={
+                    title="Adicionar Novo Setor"
+                    description="Crie um novo setor para organizar os colaboradores"
+                    trigger={
                       <Button>
                         <Plus />
                         Novo Setor
                       </Button>
                     }
-                    rotuloConfirmar="Criar Setor"
-                    onConfirmar={adicionarSetor}
+                    confirmLabel="Criar Setor"
+                    onConfirm={addSector}
                   >
-                    <CampoModal rotulo="Nome do Setor" htmlFor="nome-setor">
+                    <ModalField label="Nome do Setor" htmlFor="sector-name">
                       <Input
-                        id="nome-setor"
-                        value={newSetor.nome}
+                        id="sector-name"
+                        value={newSector.nome}
                         onChange={(e) =>
-                          setNewSetor({
-                            ...newSetor,
+                          setNewSector({
+                            ...newSector,
                             nome: e.target.value,
                           })
                         }
                         variant="secondary"
                         placeholder="Ex: Desenvolvimento, Suporte..."
                       />
-                    </CampoModal>
+                    </ModalField>
 
-                    <CampoModal rotulo="Descrição" htmlFor="descricao-setor">
+                    <ModalField label="Descrição" htmlFor="sector-description">
                       <Input
-                        id="descricao-setor"
-                        value={newSetor.descricao}
+                        id="sector-description"
+                        value={newSector.descricao}
                         onChange={(e) =>
-                          setNewSetor({
-                            ...newSetor,
+                          setNewSector({
+                            ...newSector,
                             descricao: e.target.value,
                           })
                         }
                         variant="secondary"
                         placeholder="Breve descrição do setor"
                       />
-                    </CampoModal>
+                    </ModalField>
                   </ModalForm>
                 </div>
               </Card.Header>
 
               <Card.Content>
                 <DataTable
-                  colunas={colunasSetores}
-                  dados={setoresPagina}
-                  rotulo="Setores"
-                  vazio="Nenhum setor cadastrado"
-                  total={totalSetores}
-                  pagina={paginaSetores}
-                  totalPaginas={totalPaginasSetores}
-                  onMudarPagina={setPaginaSetores}
-                  itensPorPagina={itensPorPagina}
-                  onMudarItensPorPagina={(itens) => {
-                    setItensPorPagina(itens);
-                    reiniciarPaginas();
+                  columns={sectorColumns}
+                  data={pagedSectors}
+                  label="Setores"
+                  emptyMessage="Nenhum setor cadastrado"
+                  total={totalSectors}
+                  page={sectorsPage}
+                  totalPages={sectorsTotalPages}
+                  onPageChange={setSectorsPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(items) => {
+                    setItemsPerPage(items);
+                    resetPages();
                   }}
-                  busca={buscaSetores}
-                  onMudarBusca={(valor) => {
-                    setBuscaSetores(valor);
-                    setPaginaSetores(1);
+                  search={sectorsSearch}
+                  onSearchChange={(value) => {
+                    setSectorsSearch(value);
+                    setSectorsPage(1);
                   }}
-                  placeholderBusca="Pesquisar por setor ou descrição..."
+                  searchPlaceholder="Pesquisar por setor ou descrição..."
                 />
               </Card.Content>
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel className="p-0" id="usuarios-admin">
-            {isAdminPermanente ? (
+          <Tabs.Panel className="p-0" id="admin-users">
+            {isPermanentAdmin ? (
               <Card>
                 <Card.Header>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1268,37 +1266,37 @@ export default function AdminPage() {
                     </div>
                     <ModalForm
                       isOpen={isAddAdminTempOpen}
-                      onOpenChange={(aberto) => {
-                        setIsAddAdminTempOpen(aberto);
-                        if (!aberto)
+                      onOpenChange={(open) => {
+                        setIsAddAdminTempOpen(open);
+                        if (!open)
                           setAdminTempData({
-                            colaborador_id: "",
-                            admin_ate: "",
-                            tipo_acesso: "temporario",
+                            employeeId: "",
+                            adminUntil: "",
+                            accessType: "temporary",
                           });
                       }}
-                      titulo="Definir Admin"
-                      descricao="Conceda privilégios administrativos a um colaborador, com ou sem prazo"
-                      gatilho={
+                      title="Definir Admin"
+                      description="Conceda privilégios administrativos a um colaborador, com ou sem prazo"
+                      trigger={
                         <Button>
                           <UserPlus />
                           Definir Admin
                         </Button>
                       }
-                      rotuloConfirmar="Definir Admin"
-                      onConfirmar={definirAdminTemporario}
+                      confirmLabel="Definir Admin"
+                      onConfirm={assignAdmin}
                     >
-                      <CampoModal
-                        rotulo="Colaborador"
-                        htmlFor="colaborador-admin"
+                      <ModalField
+                        label="Colaborador"
+                        htmlFor="admin-employee"
                       >
                         <Select
                           aria-label="Colaborador"
-                          value={adminTempData.colaborador_id || null}
-                          onChange={(chave) =>
+                          value={adminTempData.employeeId || null}
+                          onChange={(key) =>
                             setAdminTempData({
                               ...adminTempData,
-                              colaborador_id: chave ? String(chave) : "",
+                              employeeId: key ? String(key) : "",
                             })
                           }
                           variant="secondary"
@@ -1310,45 +1308,45 @@ export default function AdminPage() {
                           </Select.Trigger>
                           <Select.Popover>
                             <ListBox>
-                              {candidatosAdminDisponiveis.map((colaborador) => (
+                              {availableAdminCandidates.map((employee) => (
                                 <ListBox.Item
-                                  key={colaborador.id}
-                                  id={colaborador.id.toString()}
-                                  textValue={`${colaborador.nome} (${colaborador.email})`}
+                                  key={employee.id}
+                                  id={employee.id.toString()}
+                                  textValue={`${employee.nome} (${employee.email})`}
                                 >
-                                  {colaborador.nome} ({colaborador.email})
+                                  {employee.nome} ({employee.email})
                                 </ListBox.Item>
                               ))}
                             </ListBox>
                           </Select.Popover>
                         </Select>
 
-                        {candidatosAdminDisponiveis.length === 0 && (
+                        {availableAdminCandidates.length === 0 && (
                           <p className="text-sm text-muted">
                             Nenhum colaborador disponível para receber acesso de
                             admin.
                           </p>
                         )}
-                      </CampoModal>
+                      </ModalField>
 
-                      <CampoModal
-                        rotulo="Tipo de acesso"
-                        htmlFor="tipo-acesso-admin"
+                      <ModalField
+                        label="Tipo de acesso"
+                        htmlFor="admin-access-type"
                       >
                         <Select
                           aria-label="Tipo de acesso"
-                          value={adminTempData.tipo_acesso}
-                          onChange={(chave) =>
+                          value={adminTempData.accessType}
+                          onChange={(key) =>
                             setAdminTempData({
                               ...adminTempData,
-                              tipo_acesso:
-                                chave === "permanente"
-                                  ? "permanente"
-                                  : "temporario",
-                              admin_ate:
-                                chave === "permanente"
+                              accessType:
+                                key === "permanent"
+                                  ? "permanent"
+                                  : "temporary",
+                              adminUntil:
+                                key === "permanent"
                                   ? ""
-                                  : adminTempData.admin_ate,
+                                  : adminTempData.adminUntil,
                             })
                           }
                           variant="secondary"
@@ -1360,13 +1358,13 @@ export default function AdminPage() {
                           <Select.Popover>
                             <ListBox>
                               <ListBox.Item
-                                id="temporario"
+                                id="temporary"
                                 textValue="Temporário (com prazo)"
                               >
                                 Temporário (com prazo)
                               </ListBox.Item>
                               <ListBox.Item
-                                id="permanente"
+                                id="permanent"
                                 textValue="Permanente (sem prazo)"
                               >
                                 Permanente (sem prazo)
@@ -1374,24 +1372,24 @@ export default function AdminPage() {
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                      </CampoModal>
+                      </ModalField>
 
-                      {adminTempData.tipo_acesso === "temporario" ? (
-                        <CampoModal rotulo="Admin até" htmlFor="admin-ate">
+                      {adminTempData.accessType === "temporary" ? (
+                        <ModalField label="Admin até" htmlFor="admin-until">
                           <Input
-                            id="admin-ate"
+                            id="admin-until"
                             type="date"
-                            value={adminTempData.admin_ate}
+                            value={adminTempData.adminUntil}
                             onChange={(e) =>
                               setAdminTempData({
                                 ...adminTempData,
-                                admin_ate: e.target.value,
+                                adminUntil: e.target.value,
                               })
                             }
                             min={new Date().toISOString().split("T")[0]}
                             variant="secondary"
                           />
-                        </CampoModal>
+                        </ModalField>
                       ) : (
                         <p className="text-sm text-muted">
                           Admin permanente não expira e só pode ser revogado
@@ -1403,25 +1401,25 @@ export default function AdminPage() {
                 </Card.Header>
                 <Card.Content>
                   <DataTable
-                    colunas={colunasUsuariosAdmin}
-                    dados={colaboradoresAdmin}
-                    rotulo="Usuários admin"
-                    vazio="Nenhum administrador encontrado"
-                    total={totalUsuariosAdmin}
-                    pagina={paginaUsuariosAdmin}
-                    totalPaginas={totalPaginasUsuariosAdmin}
-                    onMudarPagina={setPaginaUsuariosAdmin}
-                    itensPorPagina={itensPorPagina}
-                    onMudarItensPorPagina={(itens) => {
-                      setItensPorPagina(itens);
-                      reiniciarPaginas();
+                    columns={adminUserColumns}
+                    data={adminEmployees}
+                    label="Usuários admin"
+                    emptyMessage="Nenhum administrador encontrado"
+                    total={totalAdminUsers}
+                    page={adminUsersPage}
+                    totalPages={adminUsersTotalPages}
+                    onPageChange={setAdminUsersPage}
+                    itemsPerPage={itemsPerPage}
+                    onItemsPerPageChange={(items) => {
+                      setItemsPerPage(items);
+                      resetPages();
                     }}
-                    busca={buscaUsuariosAdmin}
-                    onMudarBusca={(valor) => {
-                      setBuscaUsuariosAdmin(valor);
-                      setPaginaUsuariosAdmin(1);
+                    search={adminUsersSearch}
+                    onSearchChange={(value) => {
+                      setAdminUsersSearch(value);
+                      setAdminUsersPage(1);
                     }}
-                    placeholderBusca="Pesquisar por nome ou email..."
+                    searchPlaceholder="Pesquisar por nome ou email..."
                   />
                 </Card.Content>
               </Card>
@@ -1444,33 +1442,33 @@ export default function AdminPage() {
 
         <ModalForm
           isOpen={isEditAdminOpen}
-          onOpenChange={(aberto) => {
-            if (aberto) setIsEditAdminOpen(true);
-            else fecharEdicaoAdmin();
+          onOpenChange={(open) => {
+            if (open) setIsEditAdminOpen(true);
+            else closeAdminEdit();
           }}
-          titulo="Editar Acesso de Admin"
-          descricao={
-            adminEmEdicao
-              ? `Ajuste o acesso de ${adminEmEdicao.nome}`
+          title="Editar Acesso de Admin"
+          description={
+            editingAdmin
+              ? `Ajuste o acesso de ${editingAdmin.nome}`
               : "Ajuste o acesso do administrador"
           }
-          rotuloConfirmar="Salvar Alterações"
-          onConfirmar={editarAdmin}
+          confirmLabel="Salvar Alterações"
+          onConfirm={updateAdmin}
         >
-          <CampoModal
-            rotulo="Tipo de acesso"
-            htmlFor="edit-tipo-acesso-admin"
+          <ModalField
+            label="Tipo de acesso"
+            htmlFor="edit-admin-access-type"
           >
             <Select
               aria-label="Tipo de acesso"
-              value={editAdminData.tipo_acesso}
-              onChange={(chave) =>
+              value={editAdminData.accessType}
+              onChange={(key) =>
                 setEditAdminData({
                   ...editAdminData,
-                  tipo_acesso:
-                    chave === "permanente" ? "permanente" : "temporario",
-                  admin_ate:
-                    chave === "permanente" ? "" : editAdminData.admin_ate,
+                  accessType:
+                    key === "permanent" ? "permanent" : "temporary",
+                  adminUntil:
+                    key === "permanent" ? "" : editAdminData.adminUntil,
                 })
               }
               variant="secondary"
@@ -1482,13 +1480,13 @@ export default function AdminPage() {
               <Select.Popover>
                 <ListBox>
                   <ListBox.Item
-                    id="temporario"
+                    id="temporary"
                     textValue="Temporário (com prazo)"
                   >
                     Temporário (com prazo)
                   </ListBox.Item>
                   <ListBox.Item
-                    id="permanente"
+                    id="permanent"
                     textValue="Permanente (sem prazo)"
                   >
                     Permanente (sem prazo)
@@ -1496,24 +1494,24 @@ export default function AdminPage() {
                 </ListBox>
               </Select.Popover>
             </Select>
-          </CampoModal>
+          </ModalField>
 
-          {editAdminData.tipo_acesso === "temporario" ? (
-            <CampoModal rotulo="Admin até" htmlFor="edit-admin-ate">
+          {editAdminData.accessType === "temporary" ? (
+            <ModalField label="Admin até" htmlFor="edit-admin-until">
               <Input
-                id="edit-admin-ate"
+                id="edit-admin-until"
                 type="date"
-                value={editAdminData.admin_ate}
+                value={editAdminData.adminUntil}
                 onChange={(e) =>
                   setEditAdminData({
                     ...editAdminData,
-                    admin_ate: e.target.value,
+                    adminUntil: e.target.value,
                   })
                 }
                 min={new Date().toISOString().split("T")[0]}
                 variant="secondary"
               />
-            </CampoModal>
+            </ModalField>
           ) : (
             <p className="text-sm text-muted">
               Admin permanente não expira e só pode ser revogado manualmente
@@ -1523,103 +1521,103 @@ export default function AdminPage() {
         </ModalForm>
 
         <ModalForm
-          isOpen={isEditSetorOpen}
-          onOpenChange={(aberto) => {
-            setIsEditSetorOpen(aberto);
-            if (!aberto) {
-              setSetorEmEdicao(null);
-              setEditSetor({ nome: "", descricao: "" });
+          isOpen={isEditSectorOpen}
+          onOpenChange={(open) => {
+            setIsEditSectorOpen(open);
+            if (!open) {
+              setEditingSector(null);
+              setEditSector({ name: "", description: "" });
             }
           }}
-          titulo="Editar Setor"
-          descricao="Atualize o nome e a descrição do setor"
-          rotuloConfirmar="Salvar Alterações"
-          onConfirmar={editarSetor}
+          title="Editar Setor"
+          description="Atualize o nome e a descrição do setor"
+          confirmLabel="Salvar Alterações"
+          onConfirm={updateSector}
         >
-          <CampoModal rotulo="Nome do Setor" htmlFor="edit-nome-setor">
+          <ModalField label="Nome do Setor" htmlFor="edit-sector-name">
             <Input
-              id="edit-nome-setor"
-              value={editSetor.nome}
+              id="edit-sector-name"
+              value={editSector.name}
               onChange={(e) =>
-                setEditSetor({ ...editSetor, nome: e.target.value })
+                setEditSector({ ...editSector, name: e.target.value })
               }
               variant="secondary"
               placeholder="Ex: Desenvolvimento, Suporte..."
             />
-          </CampoModal>
+          </ModalField>
 
-          <CampoModal rotulo="Descrição" htmlFor="edit-descricao-setor">
+          <ModalField label="Descrição" htmlFor="edit-sector-description">
             <Input
-              id="edit-descricao-setor"
-              value={editSetor.descricao}
+              id="edit-sector-description"
+              value={editSector.description}
               onChange={(e) =>
-                setEditSetor({
-                  ...editSetor,
-                  descricao: e.target.value,
+                setEditSector({
+                  ...editSector,
+                  description: e.target.value,
                 })
               }
               variant="secondary"
               placeholder="Breve descrição do setor"
             />
-          </CampoModal>
+          </ModalField>
         </ModalForm>
 
         <ModalForm
-          isOpen={isEditColaboradorOpen}
-          onOpenChange={(aberto) => {
-            setIsEditColaboradorOpen(aberto);
-            if (!aberto) setSelectedColaborador(null);
+          isOpen={isEditEmployeeOpen}
+          onOpenChange={(open) => {
+            setIsEditEmployeeOpen(open);
+            if (!open) setSelectedEmployee(null);
           }}
-          titulo="Editar Colaborador"
-          descricao="Atualize os dados do colaborador"
-          rotuloConfirmar="Salvar Alterações"
-          onConfirmar={editarColaborador}
+          title="Editar Colaborador"
+          description="Atualize os dados do colaborador"
+          confirmLabel="Salvar Alterações"
+          onConfirm={updateEmployee}
         >
-          {selectedColaborador && (
+          {selectedEmployee && (
             <>
-              <LinhaCampos>
-                <CampoModal rotulo="Nome Completo" htmlFor="edit-nome">
+              <FieldRow>
+                <ModalField label="Nome Completo" htmlFor="edit-name">
                   <Input
-                    id="edit-nome"
-                    value={selectedColaborador.nome}
+                    id="edit-name"
+                    value={selectedEmployee.nome}
                     onChange={(e) =>
-                      setSelectedColaborador({
-                        ...selectedColaborador,
+                      setSelectedEmployee({
+                        ...selectedEmployee,
                         nome: e.target.value,
                       })
                     }
                     variant="secondary"
                   />
-                </CampoModal>
+                </ModalField>
 
-                <CampoModal rotulo="Email" htmlFor="edit-email">
+                <ModalField label="Email" htmlFor="edit-email">
                   <Input
                     id="edit-email"
                     type="email"
-                    value={selectedColaborador.email}
+                    value={selectedEmployee.email}
                     onChange={(e) =>
-                      setSelectedColaborador({
-                        ...selectedColaborador,
+                      setSelectedEmployee({
+                        ...selectedEmployee,
                         email: e.target.value,
                       })
                     }
                     variant="secondary"
                   />
-                </CampoModal>
-              </LinhaCampos>
+                </ModalField>
+              </FieldRow>
 
-              <LinhaCampos>
-                <CampoModal
-                  rotulo="Departamento"
-                  htmlFor="edit-departamento"
+              <FieldRow>
+                <ModalField
+                  label="Departamento"
+                  htmlFor="edit-department"
                 >
                   <Select
                     aria-label="Departamento"
-                    value={selectedColaborador.departamento || null}
-                    onChange={(chave) =>
-                      setSelectedColaborador({
-                        ...selectedColaborador,
-                        departamento: chave ? String(chave) : "",
+                    value={selectedEmployee.departamento || null}
+                    onChange={(key) =>
+                      setSelectedEmployee({
+                        ...selectedEmployee,
+                        departamento: key ? String(key) : "",
                       })
                     }
                     variant="secondary"
@@ -1655,29 +1653,29 @@ export default function AdminPage() {
                       </ListBox>
                     </Select.Popover>
                   </Select>
-                </CampoModal>
+                </ModalField>
 
-                <CampoModal rotulo="Cargo" htmlFor="edit-cargo">
+                <ModalField label="Cargo" htmlFor="edit-job-title">
                   <Input
-                    id="edit-cargo"
-                    value={selectedColaborador.cargo || ""}
+                    id="edit-job-title"
+                    value={selectedEmployee.cargo || ""}
                     onChange={(e) =>
-                      setSelectedColaborador({
-                        ...selectedColaborador,
+                      setSelectedEmployee({
+                        ...selectedEmployee,
                         cargo: e.target.value,
                       })
                     }
                     variant="secondary"
                   />
-                </CampoModal>
-              </LinhaCampos>
+                </ModalField>
+              </FieldRow>
 
-              <CampoModal rotulo="Setor" htmlFor="edit-setor">
+              <ModalField label="Setor" htmlFor="edit-sector">
                 <Select
-                  value={selectedColaborador.setor_id?.toString() || "0"}
+                  value={selectedEmployee.setor_id?.toString() || "0"}
                   onChange={(value) =>
-                    setSelectedColaborador({
-                      ...selectedColaborador,
+                    setSelectedEmployee({
+                      ...selectedEmployee,
                       setor_id:
                         value && value !== "0"
                           ? Number.parseInt(value as string)
@@ -1696,23 +1694,23 @@ export default function AdminPage() {
                       <ListBox.Item id="0" textValue="Nenhum">
                         Nenhum
                       </ListBox.Item>
-                      {setores.map((setor) => (
+                      {sectors.map((sector) => (
                         <ListBox.Item
-                          key={setor.id}
-                          id={setor.id.toString()}
-                          textValue={setor.nome}
+                          key={sector.id}
+                          id={sector.id.toString()}
+                          textValue={sector.nome}
                         >
-                          {setor.nome}
+                          {sector.nome}
                         </ListBox.Item>
                       ))}
                     </ListBox>
                   </Select.Popover>
                 </Select>
-              </CampoModal>
+              </ModalField>
             </>
           )}
         </ModalForm>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

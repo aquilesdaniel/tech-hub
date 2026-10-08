@@ -1,25 +1,25 @@
 import { expect, test } from "@playwright/test";
-import { prepararSessao, USUARIO_ADMIN, USUARIO_COMUM } from "./support/app";
+import { ADMIN_USER, REGULAR_USER, setupSession } from "./support/app";
 
-const modulos = (page: import("@playwright/test").Page) =>
+const modules = (page: import("@playwright/test").Page) =>
   page.getByRole("region", { name: "Módulos do TechHub" });
 
 test("o módulo Administração só aparece para admin", async ({ page }) => {
-  await prepararSessao(page, USUARIO_COMUM);
+  await setupSession(page, REGULAR_USER);
   await page.goto("/");
 
   await expect(
-    modulos(page).getByRole("heading", { name: "Salgados" }),
+    modules(page).getByRole("heading", { name: "Salgados" }),
   ).toBeVisible();
   await expect(
-    modulos(page).getByRole("heading", { name: "Administração" }),
+    modules(page).getByRole("heading", { name: "Administração" }),
   ).toHaveCount(0);
 });
 
 test("usuário comum que tenta abrir /admin é devolvido para a home", async ({
   page,
 }) => {
-  await prepararSessao(page, USUARIO_COMUM);
+  await setupSession(page, REGULAR_USER);
   await page.goto("/admin");
 
   await expect(page).toHaveURL(/\/$/);
@@ -29,7 +29,7 @@ test("usuário comum que tenta abrir /admin é devolvido para a home", async ({
 });
 
 test("admin acessa o painel administrativo", async ({ page }) => {
-  await prepararSessao(page, USUARIO_ADMIN);
+  await setupSession(page, ADMIN_USER);
   await page.goto("/admin");
 
   await expect(

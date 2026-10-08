@@ -1,6 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 
-export const USUARIO_COMUM = {
+export const REGULAR_USER = {
   id: 3,
   nome: "Aquiles Bastos",
   email: "aquiles@prismaproducao.com.br",
@@ -11,8 +11,8 @@ export const USUARIO_COMUM = {
   admin_temporario_ate: null,
 };
 
-export const USUARIO_ADMIN = {
-  ...USUARIO_COMUM,
+export const ADMIN_USER = {
+  ...REGULAR_USER,
   id: 1,
   nome: "Chefe Prisma",
   email: "chefe@prismaproducao.com.br",
@@ -20,37 +20,37 @@ export const USUARIO_ADMIN = {
   admin_permanente: true,
 };
 
-export async function entrarComo(page: Page, usuario: object) {
-  await page.addInitScript((dados) => {
-    window.localStorage.setItem("user", JSON.stringify(dados));
-  }, usuario);
+export async function signInAs(page: Page, user: object) {
+  await page.addInitScript((data) => {
+    window.localStorage.setItem("user", JSON.stringify(data));
+  }, user);
 }
 
-export type Contexto = {
+export type RequestContext = {
   url: URL;
-  metodo: string;
-  corpo: any;
+  method: string;
+  body: any;
 };
 
-const ENVELOPE = "__respostaMock";
+const ENVELOPE = "__mockResponse";
 
 export type Envelope = {
   [ENVELOPE]: true;
   status: number;
-  corpo?: unknown;
+  body?: unknown;
 };
 
-export function resposta(status: number, corpo?: unknown): Envelope {
-  return { [ENVELOPE]: true, status, corpo };
+export function response(status: number, body?: unknown): Envelope {
+  return { [ENVELOPE]: true, status, body };
 }
 
-export type Manipulador = (
-  contexto: Contexto,
+export type Handler = (
+  context: RequestContext,
 ) => unknown | Promise<unknown> | Envelope;
 
-export type Rotas = Record<string, Manipulador>;
+export type Routes = Record<string, Handler>;
 
-export const COLABORADORES = [
+export const EMPLOYEES = [
   {
     id: 3,
     nome: "Aquiles Bastos",
@@ -69,11 +69,11 @@ export const COLABORADORES = [
   },
 ];
 
-export const DIVIDAS_PENDENTES = [
+export const PENDING_DEBTS = [
   {
     id: 101,
     colaborador_id: 3,
-    colaborador_nome: "Aquiles Bastos",
+    employee_name: "Aquiles Bastos",
     item: "Coxinha",
     motivo: "Aposta",
     data_inicio: "2026-02-10T00:00:00.000Z",
@@ -83,7 +83,7 @@ export const DIVIDAS_PENDENTES = [
   {
     id: 102,
     colaborador_id: 4,
-    colaborador_nome: "Maria Souza",
+    employee_name: "Maria Souza",
     item: "Empada",
     motivo: "Café da tarde",
     data_inicio: "2026-02-12T00:00:00.000Z",
@@ -92,11 +92,11 @@ export const DIVIDAS_PENDENTES = [
   },
 ];
 
-export const DIVIDAS_PAGAS = [
+export const PAID_DEBTS = [
   {
     id: 90,
     colaborador_id: 3,
-    colaborador_nome: "Aquiles Bastos",
+    employee_name: "Aquiles Bastos",
     item: "Pastel",
     motivo: "Aposta",
     data_inicio: "2026-01-05T00:00:00.000Z",
@@ -105,7 +105,7 @@ export const DIVIDAS_PAGAS = [
   },
 ];
 
-export const LIVROS = [
+export const BOOKS = [
   {
     id: 1,
     titulo: "Clean Code",
@@ -126,14 +126,14 @@ export const LIVROS = [
   },
 ];
 
-export const EMPRESTIMOS_ATIVOS = [
+export const ACTIVE_LOANS = [
   {
     id: 501,
     livro_id: 2,
     colaborador_id: 3,
-    livro_titulo: "O Programador Pragmático",
-    livro_autor: "Andrew Hunt",
-    colaborador_nome: "Aquiles Bastos",
+    book_title: "O Programador Pragmático",
+    book_author: "Andrew Hunt",
+    employee_name: "Aquiles Bastos",
     data_emprestimo: "2026-02-01T00:00:00.000Z",
     data_prevista_devolucao: "2026-02-15T00:00:00.000Z",
     data_real_devolucao: null,
@@ -141,11 +141,11 @@ export const EMPRESTIMOS_ATIVOS = [
   },
 ];
 
-export const CERTIFICACOES = [
+export const CERTIFICATIONS = [
   {
     id: 201,
     colaborador_id: 3,
-    colaborador_nome: "Aquiles Bastos",
+    employee_name: "Aquiles Bastos",
     nome: "AWS Solutions Architect",
     tipo: "Certificação Cloud",
     instituicao: "Amazon",
@@ -156,123 +156,124 @@ export const CERTIFICACOES = [
   },
 ];
 
-const KPIS_ZERADOS = {
-  valorEmAberto: 20.5,
-  valorQuitado: 20,
-  valorLancado: 40.5,
-  gastoTotalSalgados: 20,
-  dividasEmAberto: 2,
-  dividasQuitadas: 1,
-  taxaQuitacao: 33,
-  ticketMedio: 13.5,
-  emprestimosAtivos: 1,
-  emprestimosAtrasados: 0,
-  emprestimosNoPeriodo: 1,
-  devolucoesNoPeriodo: 0,
-  livrosTotal: 2,
-  livrosDisponiveis: 1,
-  taxaDisponibilidade: 50,
-  certificacoesNoPeriodo: 1,
-  certificacoesSenior: 0,
-  certificacoesVencendo: 0,
-  colaboradores: 2,
-  colaboradoresAtivos: 2,
-  setores: 1,
+const DEFAULT_KPIS = {
+  openAmount: 20.5,
+  settledAmount: 20,
+  issuedAmount: 40.5,
+  totalSnackSpending: 20,
+  openDebts: 2,
+  settledDebts: 1,
+  settlementRate: 33,
+  averageTicket: 13.5,
+  activeLoans: 1,
+  overdueLoans: 0,
+  loansInPeriod: 1,
+  returnsInPeriod: 0,
+  totalBooks: 2,
+  availableBooks: 1,
+  availabilityRate: 50,
+  certificationsInPeriod: 1,
+  seniorCertifications: 0,
+  expiringCertifications: 0,
+  employees: 2,
+  activeEmployees: 2,
+  sectors: 1,
 };
 
-export function respostasPadrao(): Rotas {
+export function defaultResponses(): Routes {
   return {
-    "/api/colaboradores": () => COLABORADORES,
+    "/api/colaboradores": () => EMPLOYEES,
 
     "/api/dashboard": () => ({
-      periodo: { meses: 0, inicio: null, fim: new Date().toISOString() },
-      filtros: { setorId: null, colaboradorId: null },
-      setores: [],
-      kpis: KPIS_ZERADOS,
+      period: { months: 0, start: null, end: new Date().toISOString() },
+      filters: { sectorId: null, employeeId: null },
+      sectors: [],
+      kpis: DEFAULT_KPIS,
       deltas: {
-        valorQuitado: null,
-        certificacoes: null,
-        emprestimos: null,
-        dividasLancadas: null,
+        settledAmount: null,
+        certifications: null,
+        loans: null,
+        issuedDebts: null,
       },
-      serieMensal: [],
-      rankingCertificacoes: [],
-      rankingDevedores: [],
-      porSetor: [],
-      generos: [],
-      itensPopulares: [],
+      monthlySeries: [],
+      certificationRanking: [],
+      debtorRanking: [],
+      bySector: [],
+      genres: [],
+      popularItems: [],
+      alerts: { overdueLoans: [], expiringCertifications: [] },
     }),
 
     "/api/salgados/saldo": () => ({
-      disponivel: 150.75,
-      pendente: 0,
-      bloqueado: 0,
+      available: 150.75,
+      pending: 0,
+      blocked: 0,
     }),
 
-    "/api/salgados/dividas": ({ url, metodo }) => {
-      if (metodo === "POST") return resposta(201, { id: 999 });
-      if (url.searchParams.get("motivos_only") === "true")
+    "/api/salgados/dividas": ({ url, method }) => {
+      if (method === "POST") return response(201, { id: 999 });
+      if (url.searchParams.get("reasons_only") === "true")
         return ["Aposta", "Café da tarde"];
 
-      const pagas = url.searchParams.get("pago") === "true";
-      const data = pagas ? DIVIDAS_PAGAS : DIVIDAS_PENDENTES;
+      const paid = url.searchParams.get("pago") === "true";
+      const data = paid ? PAID_DEBTS : PENDING_DEBTS;
       return { data, total: data.length, page: 1, totalPages: 1 };
     },
 
-    "/api/biblioteca/livros": ({ metodo }) =>
-      metodo === "POST" ? resposta(201, { id: 3 }) : LIVROS,
+    "/api/biblioteca/livros": ({ method }) =>
+      method === "POST" ? response(201, { id: 3 }) : BOOKS,
 
-    "/api/biblioteca/emprestimos": ({ url, metodo }) => {
-      if (metodo === "POST") return resposta(201, { id: 502 });
+    "/api/biblioteca/emprestimos": ({ url, method }) => {
+      if (method === "POST") return response(201, { id: 502 });
 
-      const ativos = url.searchParams.get("status") === "emprestado";
-      const data = ativos ? EMPRESTIMOS_ATIVOS : EMPRESTIMOS_ATIVOS;
+      const active = url.searchParams.get("status") === "emprestado";
+      const data = active ? ACTIVE_LOANS : ACTIVE_LOANS;
       return {
         data,
         total: data.length,
         page: 1,
         totalPages: 1,
-        resumo: { total: 1, ativos: 1, atrasados: 0, devolvidos: 0 },
+        summary: { total: 1, active: 1, overdue: 0, returned: 0 },
       };
     },
 
-    "/api/certificacoes": ({ metodo }) => {
-      if (metodo === "POST") return resposta(201, { message: "ok", id: 202 });
+    "/api/certificacoes": ({ method }) => {
+      if (method === "POST") return response(201, { message: "ok", id: 202 });
 
       return {
-        data: CERTIFICACOES,
-        total: CERTIFICACOES.length,
+        data: CERTIFICATIONS,
+        total: CERTIFICATIONS.length,
         page: 1,
         totalPages: 1,
-        resumo: {
+        summary: {
           total: 1,
           senior: 0,
-          vencendo90: 0,
-          vencidas: 0,
-          colaboradoresCertificados: 1,
-          instituicoes: 1,
+          expiringIn90: 0,
+          expired: 0,
+          certifiedEmployees: 1,
+          institutions: 1,
         },
-        tipos: ["Certificação Cloud"],
+        types: ["Certificação Cloud"],
       };
     },
 
     "/api/ranking/colaboradores": () =>
-      COLABORADORES.map((c) => ({
+      EMPLOYEES.map((c) => ({
         ...c,
-        total_certificacoes: c.id === 3 ? 1 : 0,
-        certificacoes_senior: 0,
-        outras_certificacoes: c.id === 3 ? 1 : 0,
-        ultima_certificacao: c.id === 3 ? "2026-01-10T00:00:00.000Z" : null,
-        tipos_certificacao: c.id === 3 ? { "Certificação Cloud": 1 } : {},
+        total_certifications: c.id === 3 ? 1 : 0,
+        senior_certifications: 0,
+        other_certifications: c.id === 3 ? 1 : 0,
+        last_certification: c.id === 3 ? "2026-01-10T00:00:00.000Z" : null,
+        certification_types: c.id === 3 ? { "Certificação Cloud": 1 } : {},
       })),
 
     "/api/ranking/estatisticas": () => ({
-      total_colaboradores: 2,
-      total_certificacoes: 1,
-      media_certificacoes_por_colaborador: 0.5,
-      colaborador_mais_certificacoes: "Aquiles Bastos",
-      tipo_certificacao_mais_popular: "Certificação Cloud",
-      crescimento_mensal: [],
+      total_employees: 2,
+      total_certifications: 1,
+      average_certifications_per_employee: 0.5,
+      top_certified_employee: "Aquiles Bastos",
+      most_popular_certification_type: "Certificação Cloud",
+      monthly_growth: [],
     }),
 
     "/api/admin/setores": () => [
@@ -284,59 +285,59 @@ export function respostasPadrao(): Rotas {
       total: 0,
       page: 1,
       totalPages: 1,
-      resumo: { admins: 1 },
+      summary: { admins: 1 },
     }),
   };
 }
 
-export async function mockarApi(page: Page, rotas: Rotas = {}) {
-  const tabela: Rotas = { ...respostasPadrao(), ...rotas };
+export async function mockApi(page: Page, routes: Routes = {}) {
+  const routeTable: Routes = { ...defaultResponses(), ...routes };
 
   await page.route("**/api/**", async (route: Route) => {
-    const requisicao = route.request();
-    const url = new URL(requisicao.url());
-    const metodo = requisicao.method();
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
 
-    const manipulador =
-      tabela[`${metodo} ${url.pathname}`] ?? tabela[url.pathname];
+    const handler =
+      routeTable[`${method} ${url.pathname}`] ?? routeTable[url.pathname];
 
-    if (!manipulador) {
+    if (!handler) {
       await route.fulfill({
         status: 501,
         contentType: "application/json",
         body: JSON.stringify({
-          error: `Rota não mockada no teste: ${metodo} ${url.pathname}`,
+          error: `Rota não mockada no teste: ${method} ${url.pathname}`,
         }),
       });
       return;
     }
 
-    let corpo: any = null;
+    let body: any = null;
     try {
-      corpo = requisicao.postDataJSON();
+      body = request.postDataJSON();
     } catch {
-      corpo = null;
+      body = null;
     }
 
-    const resultado = await manipulador({ url, metodo, corpo });
+    const result = await handler({ url, method, body });
     const envelope =
-      resultado && typeof resultado === "object" && ENVELOPE in resultado
-        ? (resultado as Envelope)
-        : { status: 200, corpo: resultado };
+      result && typeof result === "object" && ENVELOPE in result
+        ? (result as Envelope)
+        : { status: 200, body: result };
 
     await route.fulfill({
       status: envelope.status,
       contentType: "application/json",
-      body: JSON.stringify(envelope.corpo ?? null),
+      body: JSON.stringify(envelope.body ?? null),
     });
   });
 }
 
-export async function prepararSessao(
+export async function setupSession(
   page: Page,
-  usuario: object = USUARIO_COMUM,
-  rotas: Rotas = {},
+  user: object = REGULAR_USER,
+  routes: Routes = {},
 ) {
-  await entrarComo(page, usuario);
-  await mockarApi(page, rotas);
+  await signInAs(page, user);
+  await mockApi(page, routes);
 }

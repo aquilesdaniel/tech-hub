@@ -1,10 +1,10 @@
 import {
-  criarCobrancaPix,
-  ErroAbacatePay,
-  paraCentavos,
+  createPixCharge,
+  AbacatePayError,
+  toCents,
 } from "@/lib/abacatepay";
 import { prisma } from "@/lib/prisma";
-import { EXPIRACAO_PIX_SEGUNDOS, totalComTaxaGateway } from "@/lib/salgados";
+import { PIX_EXPIRATION_SECONDS, totalWithGatewayFee } from "@/lib/snacks";
 import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
@@ -12,25 +12,25 @@ import { type NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
-    const divida_id = searchParams.get("divida_id");
+    const rawDebtId = searchParams.get("divida_id");
 
-    if (!divida_id) {
+    if (!rawDebtId) {
       return NextResponse.json(
         { error: "O ID da dívida é obrigatório" },
         { status: 400 },
       );
     }
 
-    const pagamento = await prisma.pagamentos.findFirst({
-      where: { divida_id: Number(divida_id) },
+    const payment = await prisma.pagamentos.findFirst({
+      where: { divida_id: Number(rawDebtId) },
       orderBy: { created_at: "desc" },
     });
 
-    if (!pagamento) {
+    if (!payment) {
       return NextResponse.json(null);
     }
 
-    return NextResponse.json(serializeDecimals(pagamento));
+    return NextResponse.json(serializeDecimals(payment));
   } catch (error) {
     console.error("Erro ao buscar pagamento:", error);
     return NextResponse.json(
@@ -40,61 +40,61 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function textoLimitado(texto: string, limite = 140) {
-  const limpo = texto.replace(/\s+/g, " ").trim();
-  return limpo.length > limite ? `${limpo.slice(0, limite - 1)}…` : limpo;
+function truncateText(text: string, limit = 140) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean.length > limit ? `${clean.slice(0, limit - 1)}…` : clean;
 }
 
-function cobrancaAindaValida(pagamento: {
+function isChargeStillValid(payment: {
   status: string | null;
   pix_id: string | null;
   br_code: string | null;
   expires_at: Date | null;
 }) {
   return Boolean(
-    pagamento.status === "pending" &&
-    pagamento.pix_id &&
-    pagamento.br_code &&
-    pagamento.expires_at &&
-    new Date(pagamento.expires_at) > new Date(),
+    payment.status === "pending" &&
+    payment.pix_id &&
+    payment.br_code &&
+    payment.expires_at &&
+    new Date(payment.expires_at) > new Date(),
   );
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { divida_id, colaborador_id } = await req.json();
+    const { divida_id: rawDebtId, colaborador_id: rawPayerId } = await req.json();
 
-    if (!divida_id || !colaborador_id) {
+    if (!rawDebtId || !rawPayerId) {
       return NextResponse.json(
         { error: "A dívida e o colaborador pagador são obrigatórios" },
         { status: 400 },
       );
     }
 
-    const dividaId = Number(divida_id);
-    const pagadorId = Number(colaborador_id);
+    const debtId = Number(rawDebtId);
+    const payerId = Number(rawPayerId);
 
-    const divida = await prisma.dividas.findUnique({
-      where: { id: dividaId },
+    const debt = await prisma.dividas.findUnique({
+      where: { id: debtId },
       include: { colaboradores: { select: { nome: true } } },
     });
 
-    if (!divida) {
+    if (!debt) {
       return NextResponse.json(
         { error: "Dívida não encontrada" },
         { status: 404 },
       );
     }
 
-    if (divida.pago) {
+    if (debt.pago) {
       return NextResponse.json(
         { error: "Esta dívida já está quitada" },
         { status: 409 },
       );
     }
 
-    const pagador = await prisma.colaboradores.findUnique({
-      where: { id: pagadorId },
+    const payer = await prisma.colaboradores.findUnique({
+      where: { id: payerId },
       select: {
         id: true,
         nome: true,
@@ -106,20 +106,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!pagador) {
+    if (!payer) {
       return NextResponse.json(
         { error: "Colaborador pagador não encontrado" },
         { status: 404 },
       );
     }
 
-    const documento = pagador.document?.replace(/\D/g, "") ?? "";
-    const celular = `${pagador.area_code ?? ""}${pagador.number ?? ""}`.replace(
+    const documentDigits = payer.document?.replace(/\D/g, "") ?? "";
+    const phoneDigits = `${payer.area_code ?? ""}${payer.number ?? ""}`.replace(
       /\D/g,
       "",
     );
 
-    if (!documento || !pagador.email || !celular) {
+    if (!documentDigits || !payer.email || !phoneDigits) {
       return NextResponse.json(
         {
           error:
@@ -129,59 +129,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const existente = await prisma.pagamentos.findFirst({
-      where: { divida_id: dividaId },
+    const existing = await prisma.pagamentos.findFirst({
+      where: { divida_id: debtId },
       orderBy: { created_at: "desc" },
     });
 
-    if (existente && cobrancaAindaValida(existente)) {
-      return NextResponse.json(serializeDecimals(existente));
+    if (existing && isChargeStillValid(existing)) {
+      return NextResponse.json(serializeDecimals(existing));
     }
 
-    const pagamento = await prisma.pagamentos.create({
+    const payment = await prisma.pagamentos.create({
       data: {
-        divida_id: dividaId,
-        colaborador_id: pagador.id,
+        divida_id: debtId,
+        colaborador_id: payer.id,
         status: "pending",
       },
     });
 
-    let cobranca: Awaited<ReturnType<typeof criarCobrancaPix>>;
+    let charge: Awaited<ReturnType<typeof createPixCharge>>;
     try {
-      cobranca = await criarCobrancaPix({
-        amount: paraCentavos(totalComTaxaGateway(Number(divida.valor))),
-        expiresIn: EXPIRACAO_PIX_SEGUNDOS,
-        description: textoLimitado(
-          `Salgados - ${divida.item}${divida.motivo ? ` (${divida.motivo})` : ""} - ${divida.colaboradores.nome}`,
+      charge = await createPixCharge({
+        amount: toCents(totalWithGatewayFee(Number(debt.valor))),
+        expiresIn: PIX_EXPIRATION_SECONDS,
+        description: truncateText(
+          `Salgados - ${debt.item}${debt.motivo ? ` (${debt.motivo})` : ""} - ${debt.colaboradores.nome}`,
         ),
-        externalId: `divida-${dividaId}-pagamento-${pagamento.id}`,
+        externalId: `divida-${debtId}-pagamento-${payment.id}`,
         customer: {
-          name: pagador.nome,
-          taxId: documento,
-          email: pagador.email,
-          cellphone: celular,
+          name: payer.nome,
+          taxId: documentDigits,
+          email: payer.email,
+          cellphone: phoneDigits,
         },
       });
-    } catch (erro) {
-      await prisma.pagamentos.delete({ where: { id: pagamento.id } });
-      throw erro;
+    } catch (err) {
+      await prisma.pagamentos.delete({ where: { id: payment.id } });
+      throw err;
     }
 
-    const atualizado = await prisma.pagamentos.update({
-      where: { id: pagamento.id },
+    const updated = await prisma.pagamentos.update({
+      where: { id: payment.id },
       data: {
-        pix_id: cobranca.id,
-        br_code: cobranca.brCode,
-        br_code_base64: cobranca.brCodeBase64,
-        expires_at: cobranca.expiresAt ? new Date(cobranca.expiresAt) : null,
+        pix_id: charge.id,
+        br_code: charge.brCode,
+        br_code_base64: charge.brCodeBase64,
+        expires_at: charge.expiresAt ? new Date(charge.expiresAt) : null,
         updated_at: new Date(),
       },
     });
 
-    revalidatePath(`/salgados/pagar/${dividaId}`);
-    return NextResponse.json(serializeDecimals(atualizado), { status: 201 });
+    revalidatePath(`/salgados/pagar/${debtId}`);
+    return NextResponse.json(serializeDecimals(updated), { status: 201 });
   } catch (error) {
-    if (error instanceof ErroAbacatePay) {
+    if (error instanceof AbacatePayError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

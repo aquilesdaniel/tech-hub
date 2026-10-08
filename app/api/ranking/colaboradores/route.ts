@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const colaboradores = await prisma.colaboradores.findMany({
+    const employees = await prisma.colaboradores.findMany({
       select: {
         id: true,
         nome: true,
@@ -16,37 +16,39 @@ export async function GET() {
       orderBy: { certificacoes: { _count: "desc" } },
     });
 
-    const resultado = colaboradores.map(({ certificacoes, ...colaborador }) => {
-      const total_certificacoes = certificacoes.length;
-      const certificacoes_senior = certificacoes.filter(
-        (c) => c.tipo === "Certificação Senior",
-      ).length;
-      const outras_certificacoes = total_certificacoes - certificacoes_senior;
+    const result = employees.map(
+      ({ certificacoes: certifications, ...employee }) => {
+        const total_certifications = certifications.length;
+        const senior_certifications = certifications.filter(
+          (c) => c.tipo === "Certificação Senior",
+        ).length;
+        const other_certifications =
+          total_certifications - senior_certifications;
 
-      const ultima_certificacao = certificacoes.reduce<Date | null>(
-        (max, c) => (!max || c.data_obtencao > max ? c.data_obtencao : max),
-        null,
-      );
+        const last_certification = certifications.reduce<Date | null>(
+          (max, c) => (!max || c.data_obtencao > max ? c.data_obtencao : max),
+          null,
+        );
 
-      const tipos_certificacao = certificacoes.reduce<Record<string, number>>(
-        (acc, c) => {
+        const certification_types = certifications.reduce<
+          Record<string, number>
+        >((acc, c) => {
           acc[c.tipo] = (acc[c.tipo] ?? 0) + 1;
           return acc;
-        },
-        {},
-      );
+        }, {});
 
-      return {
-        ...colaborador,
-        total_certificacoes,
-        certificacoes_senior,
-        outras_certificacoes,
-        ultima_certificacao,
-        tipos_certificacao,
-      };
-    });
+        return {
+          ...employee,
+          total_certifications,
+          senior_certifications,
+          other_certifications,
+          last_certification,
+          certification_types,
+        };
+      },
+    );
 
-    return NextResponse.json(resultado);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Erro ao buscar estatísticas dos colaboradores:", error);
     return NextResponse.json(

@@ -1,0 +1,4 @@
+# ambiente isolado do gerador do relatório
+.venv/
+# gráficos regerados a cada execução de gerar_relatorio.py
+graficos/

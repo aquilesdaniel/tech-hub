@@ -16,96 +16,96 @@ import {
 } from "recharts";
 import { ChartCard } from "./chart-card";
 import type {
-  LinhaGenero,
-  LinhaItem,
-  LinhaRankingCertificacao,
-  LinhaRankingDevedor,
-  LinhaSetor,
-  PontoMensal,
+  GenreRow,
+  ItemRow,
+  CertificationRankingRow,
+  DebtorRankingRow,
+  SectorRow,
+  MonthlyPoint,
 } from "./types";
 import {
   CHROME,
-  SERIE,
-  TabelaViz,
-  VazioViz,
-  conteudoTooltip,
-  cursorBarra,
-  cursorCruz,
-  eixoBase,
-  gradeBase,
-  inteiro,
-  margemHorizontal,
-  margemVertical,
-  moeda,
-  moedaCompacta,
-  nomeCurto,
-  rotuloDireto,
+  SERIES,
+  VizTable,
+  VizEmpty,
+  tooltipContent,
+  barCursor,
+  crosshairCursor,
+  baseAxis,
+  baseGrid,
+  formatInteger,
+  horizontalMargin,
+  verticalMargin,
+  formatCurrency,
+  formatCompactCurrency,
+  shortName,
+  directLabel,
 } from "./viz";
 
-export function PainelFinanceiro({
-  serie,
-  revalidando,
+export function FinancePanel({
+  series,
+  revalidating,
 }: {
-  serie: PontoMensal[];
-  revalidando?: boolean;
+  series: MonthlyPoint[];
+  revalidating?: boolean;
 }) {
-  const temDados = serie.some((p) => p.lancado > 0 || p.quitado > 0);
+  const hasData = series.some((p) => p.issued > 0 || p.settled > 0);
 
   return (
     <ChartCard
-      titulo="Fluxo de salgados"
-      descricao="Valor lançado e valor quitado por mês, na mesma escala"
-      legenda={[
-        { nome: "Lançado", cor: SERIE.s1, forma: "linha" },
-        { nome: "Quitado", cor: SERIE.s2, forma: "linha" },
+      title="Fluxo de salgados"
+      description="Valor lançado e valor quitado por mês, na mesma escala"
+      legend={[
+        { name: "Lançado", color: SERIES.s1, shape: "line" },
+        { name: "Quitado", color: SERIES.s2, shape: "line" },
       ]}
-      altura={280}
-      revalidando={revalidando}
-      grafico={
-        temDados ? (
+      height={280}
+      revalidating={revalidating}
+      chart={
+        hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={serie} margin={margemVertical}>
-              <CartesianGrid {...gradeBase} />
-              <XAxis dataKey="label" {...eixoBase} />
+            <AreaChart data={series} margin={verticalMargin}>
+              <CartesianGrid {...baseGrid} />
+              <XAxis dataKey="label" {...baseAxis} />
               <YAxis
-                {...eixoBase}
+                {...baseAxis}
                 width={64}
-                tickFormatter={(v: number) => moedaCompacta(v)}
+                tickFormatter={(v: number) => formatCompactCurrency(v)}
               />
               <Tooltip
-                cursor={cursorCruz}
-                content={conteudoTooltip((valor) => moeda(valor))}
+                cursor={crosshairCursor}
+                content={tooltipContent((value) => formatCurrency(value))}
               />
               <Area
                 type="monotone"
-                dataKey="lancado"
+                dataKey="issued"
                 name="Lançado"
-                stroke={SERIE.s1}
+                stroke={SERIES.s1}
                 strokeWidth={2}
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 fillOpacity={0.1}
                 dot={false}
                 activeDot={{
                   r: 4,
-                  fill: SERIE.s1,
-                  stroke: CHROME.superficie,
+                  fill: SERIES.s1,
+                  stroke: CHROME.surface,
                   strokeWidth: 2,
                 }}
                 animationDuration={400}
               />
               <Area
                 type="monotone"
-                dataKey="quitado"
+                dataKey="settled"
                 name="Quitado"
-                stroke={SERIE.s2}
+                stroke={SERIES.s2}
                 strokeWidth={2}
-                fill={SERIE.s2}
+                fill={SERIES.s2}
                 fillOpacity={0.1}
                 dot={false}
                 activeDot={{
                   r: 4,
-                  fill: SERIE.s2,
-                  stroke: CHROME.superficie,
+                  fill: SERIES.s2,
+                  stroke: CHROME.surface,
                   strokeWidth: 2,
                 }}
                 animationDuration={400}
@@ -113,33 +113,33 @@ export function PainelFinanceiro({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Valor lançado e quitado de salgados por mês"
-          linhas={serie}
-          chaveLinha={(l) => l.mes}
-          colunas={[
-            { chave: "mes", titulo: "Mês", render: (l) => l.label },
+      table={
+        <VizTable
+          caption="Valor lançado e quitado de salgados por mês"
+          rows={series}
+          rowKey={(r) => r.month}
+          columns={[
+            { key: "month", title: "Mês", render: (r) => r.label },
             {
-              chave: "lancado",
-              titulo: "Lançado",
-              alinhar: "direita",
-              render: (l) => moeda(l.lancado),
+              key: "issued",
+              title: "Lançado",
+              align: "right",
+              render: (r) => formatCurrency(r.issued),
             },
             {
-              chave: "quitado",
-              titulo: "Quitado",
-              alinhar: "direita",
-              render: (l) => moeda(l.quitado),
+              key: "settled",
+              title: "Quitado",
+              align: "right",
+              render: (r) => formatCurrency(r.settled),
             },
             {
-              chave: "aberto",
-              titulo: "Diferença",
-              alinhar: "direita",
-              render: (l) => moeda(l.lancado - l.quitado),
+              key: "outstanding",
+              title: "Diferença",
+              align: "right",
+              render: (r) => formatCurrency(r.issued - r.settled),
             },
           ]}
         />
@@ -148,82 +148,82 @@ export function PainelFinanceiro({
   );
 }
 
-export function PainelCertificacoes({
-  serie,
-  revalidando,
+export function CertificationsPanel({
+  series,
+  revalidating,
 }: {
-  serie: PontoMensal[];
-  revalidando?: boolean;
+  series: MonthlyPoint[];
+  revalidating?: boolean;
 }) {
-  const temDados = serie.some((p) => p.certificacoes > 0);
-  const ultimo = serie.at(-1);
+  const hasData = series.some((p) => p.certifications > 0);
+  const last = series.at(-1);
 
   return (
     <ChartCard
-      titulo="Certificações conquistadas"
-      descricao="Certificações obtidas por mês"
-      altura={280}
-      revalidando={revalidando}
-      grafico={
-        temDados ? (
+      title="Certificações conquistadas"
+      description="Certificações obtidas por mês"
+      height={280}
+      revalidating={revalidating}
+      chart={
+        hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={serie} margin={margemVertical}>
-              <CartesianGrid {...gradeBase} />
-              <XAxis dataKey="label" {...eixoBase} />
-              <YAxis {...eixoBase} width={36} allowDecimals={false} />
+            <LineChart data={series} margin={verticalMargin}>
+              <CartesianGrid {...baseGrid} />
+              <XAxis dataKey="label" {...baseAxis} />
+              <YAxis {...baseAxis} width={36} allowDecimals={false} />
               <Tooltip
-                cursor={cursorCruz}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={crosshairCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Line
                 type="monotone"
-                dataKey="certificacoes"
+                dataKey="certifications"
                 name="Certificações"
-                stroke={SERIE.s1}
+                stroke={SERIES.s1}
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 dot={false}
                 activeDot={{
                   r: 4,
-                  fill: SERIE.s1,
-                  stroke: CHROME.superficie,
+                  fill: SERIES.s1,
+                  stroke: CHROME.surface,
                   strokeWidth: 2,
                 }}
                 animationDuration={400}
               >
                 <LabelList
-                  dataKey="certificacoes"
+                  dataKey="certifications"
                   position="top"
                   offset={10}
-                  {...rotuloDireto}
+                  {...directLabel}
                   formatter={(
-                    valor: number,
-                    _entrada: unknown,
-                    indice: number,
+                    value: number,
+                    _entry: unknown,
+                    index: number,
                   ) =>
-                    indice === serie.length - 1 && ultimo ? inteiro(valor) : ""
+                    index === series.length - 1 && last ? formatInteger(value) : ""
                   }
                 />
               </Line>
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Certificações obtidas por mês"
-          linhas={serie}
-          chaveLinha={(l) => l.mes}
-          colunas={[
-            { chave: "mes", titulo: "Mês", render: (l) => l.label },
+      table={
+        <VizTable
+          caption="Certificações obtidas por mês"
+          rows={series}
+          rowKey={(r) => r.month}
+          columns={[
+            { key: "month", title: "Mês", render: (r) => r.label },
             {
-              chave: "certificacoes",
-              titulo: "Certificações",
-              alinhar: "direita",
-              render: (l) => inteiro(l.certificacoes),
+              key: "certifications",
+              title: "Certificações",
+              align: "right",
+              render: (r) => formatInteger(r.certifications),
             },
           ]}
         />
@@ -232,48 +232,48 @@ export function PainelCertificacoes({
   );
 }
 
-export function PainelGiroBiblioteca({
-  serie,
-  revalidando,
+export function LibraryTurnoverPanel({
+  series,
+  revalidating,
 }: {
-  serie: PontoMensal[];
-  revalidando?: boolean;
+  series: MonthlyPoint[];
+  revalidating?: boolean;
 }) {
-  const temDados = serie.some((p) => p.emprestimos > 0 || p.devolucoes > 0);
+  const hasData = series.some((p) => p.loans > 0 || p.returns > 0);
 
   return (
     <ChartCard
-      titulo="Giro da biblioteca"
-      descricao="Empréstimos e devoluções por mês"
-      legenda={[
-        { nome: "Empréstimos", cor: SERIE.s1 },
-        { nome: "Devoluções", cor: SERIE.s2 },
+      title="Giro da biblioteca"
+      description="Empréstimos e devoluções por mês"
+      legend={[
+        { name: "Empréstimos", color: SERIES.s1 },
+        { name: "Devoluções", color: SERIES.s2 },
       ]}
-      altura={280}
-      revalidando={revalidando}
-      grafico={
-        temDados ? (
+      height={280}
+      revalidating={revalidating}
+      chart={
+        hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={serie} margin={margemVertical} barGap={2}>
-              <CartesianGrid {...gradeBase} />
-              <XAxis dataKey="label" {...eixoBase} />
-              <YAxis {...eixoBase} width={36} allowDecimals={false} />
+            <BarChart data={series} margin={verticalMargin} barGap={2}>
+              <CartesianGrid {...baseGrid} />
+              <XAxis dataKey="label" {...baseAxis} />
+              <YAxis {...baseAxis} width={36} allowDecimals={false} />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Bar
-                dataKey="emprestimos"
+                dataKey="loans"
                 name="Empréstimos"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
                 radius={[4, 4, 0, 0]}
                 animationDuration={400}
               />
               <Bar
-                dataKey="devolucoes"
+                dataKey="returns"
                 name="Devoluções"
-                fill={SERIE.s2}
+                fill={SERIES.s2}
                 maxBarSize={24}
                 radius={[4, 4, 0, 0]}
                 animationDuration={400}
@@ -281,27 +281,27 @@ export function PainelGiroBiblioteca({
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Empréstimos e devoluções por mês"
-          linhas={serie}
-          chaveLinha={(l) => l.mes}
-          colunas={[
-            { chave: "mes", titulo: "Mês", render: (l) => l.label },
+      table={
+        <VizTable
+          caption="Empréstimos e devoluções por mês"
+          rows={series}
+          rowKey={(r) => r.month}
+          columns={[
+            { key: "month", title: "Mês", render: (r) => r.label },
             {
-              chave: "emprestimos",
-              titulo: "Empréstimos",
-              alinhar: "direita",
-              render: (l) => inteiro(l.emprestimos),
+              key: "loans",
+              title: "Empréstimos",
+              align: "right",
+              render: (r) => formatInteger(r.loans),
             },
             {
-              chave: "devolucoes",
-              titulo: "Devoluções",
-              alinhar: "direita",
-              render: (l) => inteiro(l.devolucoes),
+              key: "returns",
+              title: "Devoluções",
+              align: "right",
+              render: (r) => formatInteger(r.returns),
             },
           ]}
         />
@@ -310,60 +310,60 @@ export function PainelGiroBiblioteca({
   );
 }
 
-export function PainelRankingCertificacoes({
-  linhas,
-  revalidando,
+export function CertificationRankingPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: LinhaRankingCertificacao[];
-  revalidando?: boolean;
+  rows: CertificationRankingRow[];
+  revalidating?: boolean;
 }) {
-  const dados = linhas.map((l) => ({ ...l, rotulo: nomeCurto(l.nome) }));
+  const chartData = rows.map((r) => ({ ...r, label: shortName(r.name) }));
 
   return (
     <ChartCard
-      titulo="Quem mais certificou"
-      descricao="Top 8 colaboradores no período"
-      legenda={[
-        { nome: "Sênior", cor: SERIE.s1 },
-        { nome: "Outras", cor: SERIE.s2 },
+      title="Quem mais certificou"
+      description="Top 8 colaboradores no período"
+      legend={[
+        { name: "Sênior", color: SERIES.s1 },
+        { name: "Outras", color: SERIES.s2 },
       ]}
-      altura={Math.max(200, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      height={Math.max(200, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
-                dataKey="rotulo"
-                {...eixoBase}
+                dataKey="label"
+                {...baseAxis}
                 width={92}
                 interval={0}
               />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Bar
                 dataKey="senior"
                 name="Sênior"
                 stackId="cert"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               />
               <Bar
-                dataKey="outras"
+                dataKey="others"
                 name="Outras"
                 stackId="cert"
-                fill={SERIE.s2}
+                fill={SERIES.s2}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               >
@@ -371,45 +371,45 @@ export function PainelRankingCertificacoes({
                   dataKey="total"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Ranking de certificações por colaborador"
-          linhas={linhas}
-          chaveLinha={(l) => String(l.id)}
-          colunas={[
-            { chave: "nome", titulo: "Colaborador", render: (l) => l.nome },
+      table={
+        <VizTable
+          caption="Ranking de certificações por colaborador"
+          rows={rows}
+          rowKey={(r) => String(r.id)}
+          columns={[
+            { key: "name", title: "Colaborador", render: (r) => r.name },
             {
-              chave: "departamento",
-              titulo: "Departamento",
-              render: (l) => l.departamento,
+              key: "department",
+              title: "Departamento",
+              render: (r) => r.department,
             },
             {
-              chave: "senior",
-              titulo: "Sênior",
-              alinhar: "direita",
-              render: (l) => inteiro(l.senior),
+              key: "senior",
+              title: "Sênior",
+              align: "right",
+              render: (r) => formatInteger(r.senior),
             },
             {
-              chave: "outras",
-              titulo: "Outras",
-              alinhar: "direita",
-              render: (l) => inteiro(l.outras),
+              key: "others",
+              title: "Outras",
+              align: "right",
+              render: (r) => formatInteger(r.others),
             },
             {
-              chave: "total",
-              titulo: "Total",
-              alinhar: "direita",
-              render: (l) => inteiro(l.total),
+              key: "total",
+              title: "Total",
+              align: "right",
+              render: (r) => formatInteger(r.total),
             },
           ]}
         />
@@ -418,87 +418,87 @@ export function PainelRankingCertificacoes({
   );
 }
 
-export function PainelDevedores({
-  linhas,
-  revalidando,
+export function DebtorsPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: LinhaRankingDevedor[];
-  revalidando?: boolean;
+  rows: DebtorRankingRow[];
+  revalidating?: boolean;
 }) {
-  const dados = linhas.map((l) => ({ ...l, rotulo: nomeCurto(l.nome) }));
+  const chartData = rows.map((r) => ({ ...r, label: shortName(r.name) }));
 
   return (
     <ChartCard
-      titulo="Maiores saldos em aberto"
-      descricao="Valor de salgados ainda não quitado, por colaborador"
-      altura={Math.max(200, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      title="Maiores saldos em aberto"
+      description="Valor de salgados ainda não quitado, por colaborador"
+      height={Math.max(200, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
               <XAxis
                 type="number"
-                {...eixoBase}
-                tickFormatter={(v: number) => moedaCompacta(v)}
+                {...baseAxis}
+                tickFormatter={(v: number) => formatCompactCurrency(v)}
               />
               <YAxis
                 type="category"
-                dataKey="rotulo"
-                {...eixoBase}
+                dataKey="label"
+                {...baseAxis}
                 width={92}
                 interval={0}
               />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => moeda(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatCurrency(value))}
               />
               <Bar
-                dataKey="valor"
+                dataKey="amount"
                 name="Em aberto"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
                 animationDuration={400}
               >
                 <LabelList
-                  dataKey="valor"
+                  dataKey="amount"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => moedaCompacta(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatCompactCurrency(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz mensagem="Nenhum saldo em aberto." />
+          <VizEmpty message="Nenhum saldo em aberto." />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Saldos de salgados em aberto por colaborador"
-          linhas={linhas}
-          chaveLinha={(l) => String(l.id)}
-          colunas={[
-            { chave: "nome", titulo: "Colaborador", render: (l) => l.nome },
+      table={
+        <VizTable
+          caption="Saldos de salgados em aberto por colaborador"
+          rows={rows}
+          rowKey={(r) => String(r.id)}
+          columns={[
+            { key: "name", title: "Colaborador", render: (r) => r.name },
             {
-              chave: "departamento",
-              titulo: "Departamento",
-              render: (l) => l.departamento,
+              key: "department",
+              title: "Departamento",
+              render: (r) => r.department,
             },
             {
-              chave: "itens",
-              titulo: "Itens",
-              alinhar: "direita",
-              render: (l) => inteiro(l.itens),
+              key: "items",
+              title: "Itens",
+              align: "right",
+              render: (r) => formatInteger(r.items),
             },
             {
-              chave: "valor",
-              titulo: "Em aberto",
-              alinhar: "direita",
-              render: (l) => moeda(l.valor),
+              key: "amount",
+              title: "Em aberto",
+              align: "right",
+              render: (r) => formatCurrency(r.amount),
             },
           ]}
         />
@@ -507,42 +507,42 @@ export function PainelDevedores({
   );
 }
 
-export function PainelSetores({
-  linhas,
-  revalidando,
+export function SectorsPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: LinhaSetor[];
-  revalidando?: boolean;
+  rows: SectorRow[];
+  revalidating?: boolean;
 }) {
-  const dados = linhas.slice(0, 8);
+  const chartData = rows.slice(0, 8);
 
   return (
     <ChartCard
-      titulo="Certificações por setor"
-      descricao="Total conquistado no período em cada setor"
-      altura={Math.max(200, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      title="Certificações por setor"
+      description="Total conquistado no período em cada setor"
+      height={Math.max(200, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
-                dataKey="setor"
-                {...eixoBase}
+                dataKey="sector"
+                {...baseAxis}
                 width={110}
                 interval={0}
               />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Bar
                 dataKey="total"
                 name="Certificações"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
                 animationDuration={400}
@@ -551,46 +551,46 @@ export function PainelSetores({
                   dataKey="total"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Certificações e colaboradores por setor"
-          linhas={linhas}
-          chaveLinha={(l) => String(l.setorId)}
-          colunas={[
-            { chave: "setor", titulo: "Setor", render: (l) => l.setor },
+      table={
+        <VizTable
+          caption="Certificações e colaboradores por setor"
+          rows={rows}
+          rowKey={(r) => String(r.sectorId)}
+          columns={[
+            { key: "sector", title: "Setor", render: (r) => r.sector },
             {
-              chave: "colaboradores",
-              titulo: "Pessoas",
-              alinhar: "direita",
-              render: (l) => inteiro(l.colaboradores),
+              key: "employees",
+              title: "Pessoas",
+              align: "right",
+              render: (r) => formatInteger(r.employees),
             },
             {
-              chave: "senior",
-              titulo: "Sênior",
-              alinhar: "direita",
-              render: (l) => inteiro(l.senior),
+              key: "senior",
+              title: "Sênior",
+              align: "right",
+              render: (r) => formatInteger(r.senior),
             },
             {
-              chave: "total",
-              titulo: "Certificações",
-              alinhar: "direita",
-              render: (l) => inteiro(l.total),
+              key: "total",
+              title: "Certificações",
+              align: "right",
+              render: (r) => formatInteger(r.total),
             },
             {
-              chave: "gasto",
-              titulo: "Gasto salgados",
-              alinhar: "direita",
-              render: (l) => moeda(l.gasto),
+              key: "spent",
+              title: "Gasto salgados",
+              align: "right",
+              render: (r) => formatCurrency(r.spent),
             },
           ]}
         />
@@ -599,63 +599,63 @@ export function PainelSetores({
   );
 }
 
-export function PainelGeneros({
-  linhas,
-  revalidando,
+export function GenresPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: LinhaGenero[];
-  revalidando?: boolean;
+  rows: GenreRow[];
+  revalidating?: boolean;
 }) {
-  const dados = linhas.map((l) => ({
-    ...l,
-    disponiveis: Math.max(0, l.total - l.emprestados),
+  const chartData = rows.map((r) => ({
+    ...r,
+    available: Math.max(0, r.total - r.loaned),
   }));
 
   return (
     <ChartCard
-      titulo="Acervo por gênero"
-      descricao="Quanto de cada gênero está na estante e quanto está emprestado"
-      legenda={[
-        { nome: "Disponíveis", cor: SERIE.s1 },
-        { nome: "Emprestados", cor: SERIE.s2 },
+      title="Acervo por gênero"
+      description="Quanto de cada gênero está na estante e quanto está emprestado"
+      legend={[
+        { name: "Disponíveis", color: SERIES.s1 },
+        { name: "Emprestados", color: SERIES.s2 },
       ]}
-      altura={Math.max(200, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      height={Math.max(200, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
-                dataKey="genero"
-                {...eixoBase}
+                dataKey="genre"
+                {...baseAxis}
                 width={110}
                 interval={0}
               />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Bar
-                dataKey="disponiveis"
+                dataKey="available"
                 name="Disponíveis"
-                stackId="acervo"
-                fill={SERIE.s1}
+                stackId="collection"
+                fill={SERIES.s1}
                 maxBarSize={24}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               />
               <Bar
-                dataKey="emprestados"
+                dataKey="loaned"
                 name="Emprestados"
-                stackId="acervo"
-                fill={SERIE.s2}
+                stackId="collection"
+                fill={SERIES.s2}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               >
@@ -663,40 +663,40 @@ export function PainelGeneros({
                   dataKey="total"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz mensagem="Nenhum livro cadastrado no acervo." />
+          <VizEmpty message="Nenhum livro cadastrado no acervo." />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Livros disponíveis e emprestados por gênero"
-          linhas={dados}
-          chaveLinha={(l) => l.genero}
-          colunas={[
-            { chave: "genero", titulo: "Gênero", render: (l) => l.genero },
+      table={
+        <VizTable
+          caption="Livros disponíveis e emprestados por gênero"
+          rows={chartData}
+          rowKey={(r) => r.genre}
+          columns={[
+            { key: "genre", title: "Gênero", render: (r) => r.genre },
             {
-              chave: "disponiveis",
-              titulo: "Disponíveis",
-              alinhar: "direita",
-              render: (l) => inteiro(l.disponiveis),
+              key: "available",
+              title: "Disponíveis",
+              align: "right",
+              render: (r) => formatInteger(r.available),
             },
             {
-              chave: "emprestados",
-              titulo: "Emprestados",
-              alinhar: "direita",
-              render: (l) => inteiro(l.emprestados),
+              key: "loaned",
+              title: "Emprestados",
+              align: "right",
+              render: (r) => formatInteger(r.loaned),
             },
             {
-              chave: "total",
-              titulo: "Total",
-              alinhar: "direita",
-              render: (l) => inteiro(l.total),
+              key: "total",
+              title: "Total",
+              align: "right",
+              render: (r) => formatInteger(r.total),
             },
           ]}
         />
@@ -705,76 +705,76 @@ export function PainelGeneros({
   );
 }
 
-export function PainelItens({
-  linhas,
-  revalidando,
+export function ItemsPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: LinhaItem[];
-  revalidando?: boolean;
+  rows: ItemRow[];
+  revalidating?: boolean;
 }) {
   return (
     <ChartCard
-      titulo="Itens mais lançados"
-      descricao="Salgados por número de lançamentos no período"
-      altura={Math.max(200, linhas.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        linhas.length > 0 ? (
+      title="Itens mais lançados"
+      description="Salgados por número de lançamentos no período"
+      height={Math.max(200, rows.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        rows.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={linhas} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={rows} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
                 dataKey="item"
-                {...eixoBase}
+                {...baseAxis}
                 width={110}
                 interval={0}
               />
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
               <Bar
-                dataKey="quantidade"
+                dataKey="count"
                 name="Lançamentos"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
                 animationDuration={400}
               >
                 <LabelList
-                  dataKey="quantidade"
+                  dataKey="count"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz />
+          <VizEmpty />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Itens de salgados mais lançados no período"
-          linhas={linhas}
-          chaveLinha={(l) => l.item}
-          colunas={[
-            { chave: "item", titulo: "Item", render: (l) => l.item },
+      table={
+        <VizTable
+          caption="Itens de salgados mais lançados no período"
+          rows={rows}
+          rowKey={(r) => r.item}
+          columns={[
+            { key: "item", title: "Item", render: (r) => r.item },
             {
-              chave: "quantidade",
-              titulo: "Lançamentos",
-              alinhar: "direita",
-              render: (l) => inteiro(l.quantidade),
+              key: "count",
+              title: "Lançamentos",
+              align: "right",
+              render: (r) => formatInteger(r.count),
             },
             {
-              chave: "valor",
-              titulo: "Valor total",
-              alinhar: "direita",
-              render: (l) => moeda(l.valor),
+              key: "amount",
+              title: "Valor total",
+              align: "right",
+              render: (r) => formatCurrency(r.amount),
             },
           ]}
         />

@@ -1,9 +1,9 @@
-import { consultarCobrancaPix, statusInterno } from "@/lib/abacatepay";
+import { getPixCharge, toInternalStatus } from "@/lib/abacatepay";
 import { prisma } from "@/lib/prisma";
 
-export interface ResultadoBaixa {
-  encontrado: boolean;
-  atualizado: boolean;
+export interface SettlementResult {
+  found: boolean;
+  updated: boolean;
   divida_id: number | null;
   status: string;
 }
@@ -13,24 +13,24 @@ export interface ResultadoBaixa {
  * (`pix_char_...`) ou do `externalId` que enviamos na criação, no formato
  * `divida-<id>-pagamento-<id>`.
  */
-export async function localizarPagamento(
+export async function findPayment(
   pixId?: string | null,
   externalId?: string | null,
 ) {
   if (pixId?.trim()) {
-    const porPixId = await prisma.pagamentos.findFirst({
+    const byPixId = await prisma.pagamentos.findFirst({
       where: { pix_id: pixId.trim() },
       orderBy: { created_at: "desc" },
     });
-    if (porPixId) return porPixId;
+    if (byPixId) return byPixId;
   }
 
-  const pagamentoId = Number(
+  const paymentId = Number(
     /^divida-\d+-pagamento-(\d+)$/.exec(externalId?.trim() ?? "")?.[1],
   );
 
-  if (Number.isFinite(pagamentoId)) {
-    return prisma.pagamentos.findUnique({ where: { id: pagamentoId } });
+  if (Number.isFinite(paymentId)) {
+    return prisma.pagamentos.findUnique({ where: { id: paymentId } });
   }
 
   return null;
@@ -41,71 +41,71 @@ export async function localizarPagamento(
  * dívida e acumula o valor no total gasto do devedor. É idempotente — chamadas
  * repetidas (webhook + polling) não somam o valor duas vezes.
  */
-export async function aplicarPagamentoConfirmado(
-  pagamentoId: number,
-): Promise<ResultadoBaixa> {
+export async function applyConfirmedPayment(
+  paymentId: number,
+): Promise<SettlementResult> {
   return prisma.$transaction(async (tx) => {
-    const pagamento = await tx.pagamentos.findUnique({
-      where: { id: pagamentoId },
+    const payment = await tx.pagamentos.findUnique({
+      where: { id: paymentId },
       select: { id: true, divida_id: true, status: true },
     });
 
-    if (!pagamento) {
+    if (!payment) {
       return {
-        encontrado: false,
-        atualizado: false,
+        found: false,
+        updated: false,
         divida_id: null,
         status: "failed",
       };
     }
 
-    if (pagamento.status === "paid") {
+    if (payment.status === "paid") {
       return {
-        encontrado: true,
-        atualizado: false,
-        divida_id: pagamento.divida_id,
+        found: true,
+        updated: false,
+        divida_id: payment.divida_id,
         status: "paid",
       };
     }
 
     await tx.pagamentos.update({
-      where: { id: pagamento.id },
+      where: { id: payment.id },
       data: { status: "paid", updated_at: new Date() },
     });
 
-    if (!pagamento.divida_id) {
+    if (!payment.divida_id) {
       return {
-        encontrado: true,
-        atualizado: true,
+        found: true,
+        updated: true,
         divida_id: null,
         status: "paid",
       };
     }
 
-    const divida = await tx.dividas.findUnique({
-      where: { id: pagamento.divida_id },
+    const debt = await tx.dividas.findUnique({
+      where: { id: payment.divida_id },
       select: { id: true, pago: true, valor: true, colaborador_id: true },
     });
 
-    if (divida && !divida.pago) {
+    if (debt && !debt.pago) {
       await tx.dividas.update({
-        where: { id: divida.id },
+        where: { id: debt.id },
         data: { pago: true, updated_at: new Date() },
       });
 
       await tx.colaboradores.update({
-        where: { id: divida.colaborador_id },
+        where: { id: debt.colaborador_id },
         data: {
-          total_gasto_salgados: { increment: divida.valor },
+          total_gasto_salgados: { increment: debt.valor },
           updated_at: new Date(),
         },
       });
     }
 
     return {
-      encontrado: true,
-      atualizado: true,
-      divida_id: pagamento.divida_id,
+      found: true,
+      updated: true,
+      divida_id: payment.divida_id,
       status: "paid",
     };
   });
@@ -116,31 +116,31 @@ export async function aplicarPagamentoConfirmado(
  * de segurança para quando o webhook não chega — em desenvolvimento, por
  * exemplo, a AbacatePay não alcança o localhost.
  */
-export async function reconciliarPagamento(pagamento: {
+export async function reconcilePayment(payment: {
   id: number;
   pix_id: string | null;
   status: string | null;
 }) {
-  if (!pagamento.pix_id) return null;
+  if (!payment.pix_id) return null;
 
   try {
-    const cobranca = await consultarCobrancaPix(pagamento.pix_id);
-    const status = statusInterno(cobranca.status);
+    const charge = await getPixCharge(payment.pix_id);
+    const status = toInternalStatus(charge.status);
 
     if (status === "paid") {
-      return aplicarPagamentoConfirmado(pagamento.id);
+      return applyConfirmedPayment(payment.id);
     }
 
-    if (status !== pagamento.status) {
+    if (status !== payment.status) {
       await prisma.pagamentos.update({
-        where: { id: pagamento.id },
+        where: { id: payment.id },
         data: { status, updated_at: new Date() },
       });
     }
 
     return null;
-  } catch (erro) {
-    console.error("Não foi possível reconciliar o pagamento na AbacatePay:", erro);
+  } catch (error) {
+    console.error("Não foi possível reconciliar o pagamento na AbacatePay:", error);
     return null;
   }
 }

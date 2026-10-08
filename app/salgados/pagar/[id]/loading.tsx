@@ -1,5 +1,5 @@
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 
 export default function Loading() {
-  return <SpinnerTela />;
+  return <ScreenSpinner />;
 }

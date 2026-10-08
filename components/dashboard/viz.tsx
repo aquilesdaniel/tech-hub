@@ -3,7 +3,7 @@
 import { Button } from "@heroui/react";
 import type { ReactNode } from "react";
 
-export const SERIE = {
+export const SERIES = {
   s1: "var(--viz-1)",
   s2: "var(--viz-2)",
   s3: "var(--viz-3)",
@@ -15,38 +15,38 @@ export const SERIE = {
 } as const;
 
 export const CHROME = {
-  grade: "var(--viz-grid)",
-  eixo: "var(--viz-axis)",
-  texto: "var(--muted)",
-  superficie: "var(--surface)",
-  atenuado: "var(--viz-de-emphasis)",
+  grid: "var(--viz-grid)",
+  axis: "var(--viz-axis)",
+  text: "var(--muted)",
+  surface: "var(--surface)",
+  deEmphasis: "var(--viz-de-emphasis)",
 } as const;
 
-export function moeda(valor: number) {
-  return valor.toLocaleString("pt-BR", {
+export function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
     maximumFractionDigits: 2,
   });
 }
 
-export function moedaCompacta(valor: number) {
-  if (Math.abs(valor) >= 1_000_000)
-    return `R$ ${(valor / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
-  if (Math.abs(valor) >= 1_000)
-    return `R$ ${(valor / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
-  return moeda(valor);
+export function formatCompactCurrency(value: number) {
+  if (Math.abs(value) >= 1_000_000)
+    return `R$ ${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  if (Math.abs(value) >= 1_000)
+    return `R$ ${(value / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return formatCurrency(value);
 }
 
-export function inteiro(valor: number) {
-  return valor.toLocaleString("pt-BR");
+export function formatInteger(value: number) {
+  return value.toLocaleString("pt-BR");
 }
 
-export function percentual(valor: number, casas = 1) {
-  return `${valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
+export function formatPercent(value: number, decimals = 1) {
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}%`;
 }
 
-export function dataCurta(iso: string | null) {
+export function formatShortDate(iso: string | null) {
   if (!iso) {
     return "-";
   }
@@ -58,76 +58,76 @@ export function dataCurta(iso: string | null) {
   });
 }
 
-export const eixoBase = {
-  stroke: CHROME.eixo,
+export const baseAxis = {
+  stroke: CHROME.axis,
   strokeWidth: 1,
   tickLine: false,
   tick: {
-    fill: CHROME.texto,
+    fill: CHROME.text,
     fontSize: 11,
     fontVariantNumeric: "tabular-nums" as const,
   },
 } as const;
 
-export const gradeBase = {
-  stroke: CHROME.grade,
+export const baseGrid = {
+  stroke: CHROME.grid,
   strokeWidth: 1,
   strokeDasharray: undefined,
   vertical: false,
 } as const;
 
-export const rotuloDireto = {
-  fill: CHROME.texto,
+export const directLabel = {
+  fill: CHROME.text,
   fontSize: 11,
   fontVariantNumeric: "tabular-nums" as const,
 };
 
-export const cursorCruz = { stroke: CHROME.eixo, strokeWidth: 1 };
+export const crosshairCursor = { stroke: CHROME.axis, strokeWidth: 1 };
 
-export const margemHorizontal = { top: 4, right: 56, bottom: 4, left: 0 };
-export const margemVertical = { top: 8, right: 12, bottom: 0, left: 0 };
+export const horizontalMargin = { top: 4, right: 56, bottom: 4, left: 0 };
+export const verticalMargin = { top: 8, right: 12, bottom: 0, left: 0 };
 
-export function diasAte(iso: string | null | undefined) {
+export function daysUntil(iso: string | null | undefined) {
   if (!iso) return null;
-  const alvo = new Date(iso).getTime();
-  if (Number.isNaN(alvo)) return null;
-  return Math.ceil((alvo - Date.now()) / 86_400_000);
+  const target = new Date(iso).getTime();
+  if (Number.isNaN(target)) return null;
+  return Math.ceil((target - Date.now()) / 86_400_000);
 }
 
-export function nomeCurto(nome: string) {
-  const partes = nome.trim().split(/\s+/);
-  if (partes.length === 1) return partes[0];
-  return `${partes[0]} ${partes[partes.length - 1][0]}.`;
+export function shortName(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
-type LinhaTooltip = {
-  nome: string;
-  valor: string;
-  cor: string;
+type TooltipRow = {
+  name: string;
+  value: string;
+  color: string;
 };
 
-export function TooltipViz({
-  titulo,
-  linhas,
+export function VizTooltip({
+  title,
+  rows,
 }: {
-  titulo: string;
-  linhas: LinhaTooltip[];
+  title: string;
+  rows: TooltipRow[];
 }) {
   return (
     <div className="pointer-events-none min-w-40 rounded-lg border border-border bg-overlay px-3 py-2 shadow-overlay">
-      <p className="mb-1.5 text-xs text-muted">{titulo}</p>
+      <p className="mb-1.5 text-xs text-muted">{title}</p>
       <ul className="flex flex-col gap-1">
-        {linhas.map((linha) => (
-          <li key={linha.nome} className="flex items-center gap-2">
+        {rows.map((row) => (
+          <li key={row.name} className="flex items-center gap-2">
             <span
               aria-hidden
               className="h-0.5 w-3 shrink-0 rounded-full"
-              style={{ backgroundColor: linha.cor }}
+              style={{ backgroundColor: row.color }}
             />
             <span className="text-sm font-semibold tabular-nums text-overlay-foreground">
-              {linha.valor}
+              {row.value}
             </span>
-            <span className="ml-auto text-xs text-muted">{linha.nome}</span>
+            <span className="ml-auto text-xs text-muted">{row.name}</span>
           </li>
         ))}
       </ul>
@@ -135,111 +135,113 @@ export function TooltipViz({
   );
 }
 
-export function conteudoTooltip(
-  formato: (valor: number, chave: string) => string,
+export function tooltipContent(
+  format: (value: number, key: string) => string,
 ) {
-  return function Conteudo({ active, payload, label }: any) {
+  return function Content({ active, payload, label }: any) {
     if (!active || !payload?.length) return null;
     return (
-      <TooltipViz
-        titulo={String(label ?? "")}
-        linhas={payload.map((item: any) => ({
-          nome: String(item.name ?? item.dataKey),
-          valor: formato(Number(item.value ?? 0), String(item.dataKey)),
-          cor: item.color ?? item.fill ?? CHROME.atenuado,
-        }))}
+      <VizTooltip
+        title={String(label ?? "")}
+        rows={payload.map(
+          (item: any): TooltipRow => ({
+            name: String(item.name ?? item.dataKey),
+            value: format(Number(item.value ?? 0), String(item.dataKey)),
+            color: item.color ?? item.fill ?? CHROME.deEmphasis,
+          }),
+        )}
       />
     );
   };
 }
 
-export const cursorBarra = {
+export const barCursor = {
   fill: "var(--surface-secondary)",
   radius: 6,
 };
 
-export type ItemLegenda = {
-  nome: string;
-  cor: string;
-  forma?: "linha" | "area";
+export type LegendItem = {
+  name: string;
+  color: string;
+  shape?: "line" | "area";
 };
 
-export function Legenda({ itens }: { itens: ItemLegenda[] }) {
-  if (itens.length < 2) return null;
+export function Legend({ items }: { items: LegendItem[] }) {
+  if (items.length < 2) return null;
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-      {itens.map((item) => (
-        <li key={item.nome} className="flex items-center gap-2">
+      {items.map((item) => (
+        <li key={item.name} className="flex items-center gap-2">
           <span
             aria-hidden
             className={
-              item.forma === "linha"
+              item.shape === "line"
                 ? "h-0.5 w-3.5 shrink-0 rounded-full"
                 : "h-2.5 w-2.5 shrink-0 rounded-md"
             }
-            style={{ backgroundColor: item.cor }}
+            style={{ backgroundColor: item.color }}
           />
-          <span className="text-xs text-muted">{item.nome}</span>
+          <span className="text-xs text-muted">{item.name}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-export type ColunaTabela<T> = {
-  chave: string;
-  titulo: string;
-  alinhar?: "esquerda" | "direita";
-  render: (linha: T) => ReactNode;
+export type TableColumn<T> = {
+  key: string;
+  title: string;
+  align?: "left" | "right";
+  render: (row: T) => ReactNode;
 };
 
-export function TabelaViz<T>({
-  colunas,
-  linhas,
-  chaveLinha,
-  legenda,
+export function VizTable<T>({
+  columns,
+  rows,
+  rowKey,
+  caption,
 }: {
-  colunas: ColunaTabela<T>[];
-  linhas: T[];
-  chaveLinha: (linha: T, indice: number) => string;
-  legenda: string;
+  columns: TableColumn<T>[];
+  rows: T[];
+  rowKey: (row: T, index: number) => string;
+  caption: string;
 }) {
-  if (linhas.length === 0) return <VazioViz />;
+  if (rows.length === 0) return <VizEmpty />;
   return (
     <div className="max-h-75 overflow-auto">
       <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">{legenda}</caption>
+        <caption className="sr-only">{caption}</caption>
         <thead className="sticky top-0 bg-surface">
           <tr className="border-b border-border">
-            {colunas.map((coluna) => (
+            {columns.map((column) => (
               <th
-                key={coluna.chave}
+                key={column.key}
                 scope="col"
                 className={`whitespace-nowrap px-2 py-2 text-xs font-medium text-muted ${
-                  coluna.alinhar === "direita" ? "text-right" : "text-left"
+                  column.align === "right" ? "text-right" : "text-left"
                 }`}
               >
-                {coluna.titulo}
+                {column.title}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {linhas.map((linha, indice) => (
+          {rows.map((row, index) => (
             <tr
-              key={chaveLinha(linha, indice)}
+              key={rowKey(row, index)}
               className="border-b border-separator last:border-0"
             >
-              {colunas.map((coluna) => (
+              {columns.map((column) => (
                 <td
-                  key={coluna.chave}
+                  key={column.key}
                   className={`px-2 py-2 ${
-                    coluna.alinhar === "direita"
+                    column.align === "right"
                       ? "text-right tabular-nums"
                       : "text-left"
                   }`}
                 >
-                  {coluna.render(linha)}
+                  {column.render(row)}
                 </td>
               ))}
             </tr>
@@ -250,14 +252,14 @@ export function TabelaViz<T>({
   );
 }
 
-export function VazioViz({
-  mensagem = "Sem dados no período selecionado",
+export function VizEmpty({
+  message = "Sem dados no período selecionado",
 }: {
-  mensagem?: string;
+  message?: string;
 }) {
   return (
     <div className="flex h-55 flex-col items-center justify-center gap-1 text-center">
-      <p className="text-sm text-muted">{mensagem}</p>
+      <p className="text-sm text-muted">{message}</p>
       <p className="text-xs text-muted/70">
         Tente ampliar o período ou limpar o filtro de setor.
       </p>
@@ -265,31 +267,31 @@ export function VazioViz({
   );
 }
 
-export type Visao = "grafico" | "tabela";
+export type View = "chart" | "table";
 
-export function AlternadorVisao({
-  visao,
+export function ViewToggle({
+  view,
   onChange,
-  rotulo,
+  label,
 }: {
-  visao: Visao;
-  onChange: (visao: Visao) => void;
-  rotulo: string;
+  view: View;
+  onChange: (view: View) => void;
+  label: string;
 }) {
-  const proxima: Visao = visao === "grafico" ? "tabela" : "grafico";
+  const next: View = view === "chart" ? "table" : "chart";
   return (
     <Button
       size="sm"
       variant="ghost"
-      onPress={() => onChange(proxima)}
+      onPress={() => onChange(next)}
       aria-label={
-        proxima === "tabela"
-          ? `Ver ${rotulo} como tabela`
-          : `Ver ${rotulo} como gráfico`
+        next === "table"
+          ? `Ver ${label} como tabela`
+          : `Ver ${label} como gráfico`
       }
       className="text-xs text-muted"
     >
-      {proxima === "tabela" ? "Ver tabela" : "Ver gráfico"}
+      {next === "table" ? "Ver tabela" : "Ver gráfico"}
     </Button>
   );
 }

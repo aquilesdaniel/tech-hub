@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
-    const emprestimo = await prisma.emprestimos.findUnique({
+    const loan = await prisma.emprestimos.findUnique({
       where: { id },
       include: {
         livros: { select: { titulo: true, autor: true } },
@@ -17,19 +17,19 @@ export async function GET(
       },
     });
 
-    if (!emprestimo) {
+    if (!loan) {
       return NextResponse.json(
         { error: "Empréstimo não encontrado" },
         { status: 404 },
       );
     }
 
-    const { livros, colaboradores, ...rest } = emprestimo;
+    const { livros, colaboradores, ...rest } = loan;
     return NextResponse.json({
       ...rest,
-      livro_titulo: livros.titulo,
-      livro_autor: livros.autor,
-      colaborador_nome: colaboradores.nome,
+      book_title: livros.titulo,
+      book_author: livros.autor,
+      employee_name: colaboradores.nome,
     });
   } catch (error) {
     console.error("Erro ao buscar empréstimo:", error);
@@ -48,24 +48,22 @@ export async function PATCH(
     const { id: idParam } = await params;
     const id = Number(idParam);
     const body = await req.json();
-    const { data_real_devolucao, status } = body;
+    const { data_real_devolucao: returnDate, status } = body;
 
-    const emprestimo = await prisma.$transaction(async (tx) => {
-      const existente = await tx.emprestimos.findUnique({
+    const loan = await prisma.$transaction(async (tx) => {
+      const existing = await tx.emprestimos.findUnique({
         where: { id },
         select: { livro_id: true },
       });
 
-      if (!existente) {
-        throw new Error("EMPRESTIMO_NAO_ENCONTRADO");
+      if (!existing) {
+        throw new Error("LOAN_NOT_FOUND");
       }
 
-      const atualizado = await tx.emprestimos.update({
+      const updated = await tx.emprestimos.update({
         where: { id },
         data: {
-          data_real_devolucao: data_real_devolucao
-            ? new Date(data_real_devolucao)
-            : null,
+          data_real_devolucao: returnDate ? new Date(returnDate) : null,
           status: status || "devolvido",
           updated_at: new Date(),
         },
@@ -73,18 +71,18 @@ export async function PATCH(
 
       if (status === "devolvido" || !status) {
         await tx.livros.update({
-          where: { id: existente.livro_id },
+          where: { id: existing.livro_id },
           data: { disponivel: true, updated_at: new Date() },
         });
       }
 
-      return atualizado;
+      return updated;
     });
 
     revalidatePath("/biblioteca");
-    return NextResponse.json(emprestimo);
+    return NextResponse.json(loan);
   } catch (error) {
-    if (error instanceof Error && error.message === "EMPRESTIMO_NAO_ENCONTRADO") {
+    if (error instanceof Error && error.message === "LOAN_NOT_FOUND") {
       return NextResponse.json(
         { error: "Empréstimo não encontrado" },
         { status: 404 },

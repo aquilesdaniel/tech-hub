@@ -15,7 +15,7 @@ jest.mock("@/lib/prisma", () => ({
 
 const transaction = prisma.$transaction as unknown as jest.Mock;
 
-function criarTx() {
+function createTx() {
   return {
     livros: {
       findUnique: jest.fn(),
@@ -29,31 +29,31 @@ function criarTx() {
   };
 }
 
-function usarTx(tx: ReturnType<typeof criarTx>) {
+function setupTx(tx: ReturnType<typeof createTx>) {
   transaction.mockImplementation((callback: (t: unknown) => unknown) =>
     callback(tx),
   );
   return tx;
 }
 
-function postEmprestimo(corpo: unknown) {
+function postLoan(body: unknown) {
   return new NextRequest("http://localhost/api/biblioteca/emprestimos", {
     method: "POST",
-    body: JSON.stringify(corpo),
+    body: JSON.stringify(body),
   });
 }
 
-function patchEmprestimo(id: string, corpo: unknown) {
+function patchLoan(id: string, body: unknown) {
   return {
     req: new NextRequest(`http://localhost/api/biblioteca/emprestimos/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(corpo),
+      body: JSON.stringify(body),
     }),
     ctx: { params: Promise.resolve({ id }) },
   };
 }
 
-const CORPO_VALIDO = {
+const VALID_BODY = {
   livro_id: 5,
   colaborador_id: 3,
   data_emprestimo: "2026-01-10",
@@ -70,25 +70,25 @@ afterEach(() => {
 
 describe("POST /api/biblioteca/emprestimos", () => {
   it("recusa quando falta algum campo obrigatório", async () => {
-    const resposta = await POST(
-      postEmprestimo({ ...CORPO_VALIDO, livro_id: undefined }),
+    const response = await POST(
+      postLoan({ ...VALID_BODY, livro_id: undefined }),
     );
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "Todos os campos são obrigatórios",
     });
     expect(transaction).not.toHaveBeenCalled();
   });
 
   it("bloqueia o empréstimo de um livro já emprestado", async () => {
-    const tx = usarTx(criarTx());
+    const tx = setupTx(createTx());
     tx.livros.findUnique.mockResolvedValue({ disponivel: false });
 
-    const resposta = await POST(postEmprestimo(CORPO_VALIDO));
+    const response = await POST(postLoan(VALID_BODY));
 
-    expect(resposta.status).toBe(400);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
       error: "Este livro não está disponível para empréstimo",
     });
     expect(tx.emprestimos.create).not.toHaveBeenCalled();
@@ -96,13 +96,13 @@ describe("POST /api/biblioteca/emprestimos", () => {
   });
 
   it("cria o empréstimo e marca o livro como indisponível", async () => {
-    const tx = usarTx(criarTx());
+    const tx = setupTx(createTx());
     tx.livros.findUnique.mockResolvedValue({ disponivel: true });
     tx.emprestimos.create.mockResolvedValue({ id: 99, status: "emprestado" });
 
-    const resposta = await POST(postEmprestimo(CORPO_VALIDO));
+    const response = await POST(postLoan(VALID_BODY));
 
-    expect(resposta.status).toBe(201);
+    expect(response.status).toBe(201);
     expect(tx.emprestimos.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         livro_id: 5,
@@ -121,17 +121,17 @@ describe("POST /api/biblioteca/emprestimos", () => {
 
 describe("PATCH /api/biblioteca/emprestimos/[id]", () => {
   it("devolve o livro: fecha o empréstimo e libera o exemplar", async () => {
-    const tx = usarTx(criarTx());
+    const tx = setupTx(createTx());
     tx.emprestimos.findUnique.mockResolvedValue({ livro_id: 5 });
     tx.emprestimos.update.mockResolvedValue({ id: 99, status: "devolvido" });
 
-    const { req, ctx } = patchEmprestimo("99", {
+    const { req, ctx } = patchLoan("99", {
       data_real_devolucao: "2026-01-20",
       status: "devolvido",
     });
-    const resposta = await PATCH(req, ctx);
+    const response = await PATCH(req, ctx);
 
-    expect(resposta.status).toBe(200);
+    expect(response.status).toBe(200);
     expect(tx.livros.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 5 },
@@ -141,14 +141,14 @@ describe("PATCH /api/biblioteca/emprestimos/[id]", () => {
   });
 
   it("responde 404 quando o empréstimo não existe", async () => {
-    const tx = usarTx(criarTx());
+    const tx = setupTx(createTx());
     tx.emprestimos.findUnique.mockResolvedValue(null);
 
-    const { req, ctx } = patchEmprestimo("404", { status: "devolvido" });
-    const resposta = await PATCH(req, ctx);
+    const { req, ctx } = patchLoan("404", { status: "devolvido" });
+    const response = await PATCH(req, ctx);
 
-    expect(resposta.status).toBe(404);
-    expect(await resposta.json()).toEqual({
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
       error: "Empréstimo não encontrado",
     });
     expect(tx.emprestimos.update).not.toHaveBeenCalled();

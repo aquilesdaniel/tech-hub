@@ -1,16 +1,16 @@
 import {
-  aplicarPagamentoConfirmado,
-  localizarPagamento,
-} from "@/lib/pagamentos";
+  applyConfirmedPayment,
+  findPayment,
+} from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 
 // evento: transparent.completed
-const EVENTOS_DE_PAGAMENTO = new Set(["transparent.completed", "billing.paid"]);
+const PAYMENT_EVENTS = new Set(["transparent.completed", "billing.paid"]);
 
-function comparacaoSegura(a: string, b: string) {
+function safeCompare(a: string, b: string) {
   const bufferA = Buffer.from(a);
   const bufferB = Buffer.from(b);
   return (
@@ -19,48 +19,48 @@ function comparacaoSegura(a: string, b: string) {
   );
 }
 
-function assinaturaValida(corpoBruto: string, assinatura: string | null) {
-  const chavePublica = process.env.ABACATEPAY_WEBHOOK_PUBLIC_KEY?.trim();
+function isValidSignature(rawBody: string, signature: string | null) {
+  const publicKey = process.env.ABACATEPAY_WEBHOOK_PUBLIC_KEY?.trim();
 
-  if (!chavePublica) {
+  if (!publicKey) {
     return true;
   }
 
-  if (!assinatura) {
+  if (!signature) {
     return false;
   }
 
-  const esperada = crypto
-    .createHmac("sha256", chavePublica)
-    .update(Buffer.from(corpoBruto, "utf8"))
+  const expected = crypto
+    .createHmac("sha256", publicKey)
+    .update(Buffer.from(rawBody, "utf8"))
     .digest("base64");
 
-  return comparacaoSegura(esperada, assinatura);
+  return safeCompare(expected, signature);
 }
 
-function textoOuNulo(valor: unknown) {
-  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
+function textOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function extrairIdentificadores(payload: Record<string, any>) {
-  const dados = payload?.data ?? {};
-  const cobranca =
-    dados.transparent ?? dados.pixQrCode ?? dados.charge ?? dados;
+function extractIdentifiers(payload: Record<string, any>) {
+  const data = payload?.data ?? {};
+  const charge =
+    data.transparent ?? data.pixQrCode ?? data.charge ?? data;
 
   return {
     pixId:
-      textoOuNulo(cobranca?.id) ??
-      textoOuNulo(dados?.id) ??
-      textoOuNulo(dados?.pixQrCodeId),
+      textOrNull(charge?.id) ??
+      textOrNull(data?.id) ??
+      textOrNull(data?.pixQrCodeId),
     externalId:
-      textoOuNulo(cobranca?.externalId) ?? textoOuNulo(dados?.externalId),
+      textOrNull(charge?.externalId) ?? textOrNull(data?.externalId),
   };
 }
 
 export async function POST(req: NextRequest) {
-  const segredoEsperado = process.env.ABACATEPAY_WEBHOOK_SECRET?.trim();
+  const expectedSecret = process.env.ABACATEPAY_WEBHOOK_SECRET?.trim();
 
-  if (!segredoEsperado) {
+  if (!expectedSecret) {
     console.error(
       "A variável ABACATEPAY_WEBHOOK_SECRET não está configurada; webhook recusado.",
     );
@@ -70,60 +70,60 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const segredoRecebido = req.nextUrl.searchParams.get("webhookSecret") ?? "";
-  if (!comparacaoSegura(segredoRecebido, segredoEsperado)) {
+  const receivedSecret = req.nextUrl.searchParams.get("webhookSecret") ?? "";
+  if (!safeCompare(receivedSecret, expectedSecret)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const corpoBruto = await req.text();
+  const rawBody = await req.text();
 
-  if (!assinaturaValida(corpoBruto, req.headers.get("x-webhook-signature"))) {
+  if (!isValidSignature(rawBody, req.headers.get("x-webhook-signature"))) {
     return NextResponse.json({ error: "Assinatura inválida" }, { status: 401 });
   }
 
   let payload: Record<string, any>;
   try {
-    payload = JSON.parse(corpoBruto);
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
   }
 
-  const evento = String(payload?.event ?? "");
+  const event = String(payload?.event ?? "");
 
-  if (!EVENTOS_DE_PAGAMENTO.has(evento)) {
-    return NextResponse.json({ ignorado: true, evento });
+  if (!PAYMENT_EVENTS.has(event)) {
+    return NextResponse.json({ ignored: true, event });
   }
 
   try {
-    const { pixId, externalId } = extrairIdentificadores(payload);
-    const pagamento = await localizarPagamento(pixId, externalId);
+    const { pixId, externalId } = extractIdentifiers(payload);
+    const payment = await findPayment(pixId, externalId);
 
-    if (!pagamento) {
+    if (!payment) {
       console.error(
-        `Webhook ${evento} recebido sem pagamento correspondente (pixId=${pixId}, externalId=${externalId}).`,
+        `Webhook ${event} recebido sem pagamento correspondente (pixId=${pixId}, externalId=${externalId}).`,
       );
-      return NextResponse.json({ ignorado: true, motivo: "não encontrado" });
+      return NextResponse.json({ ignored: true, reason: "não encontrado" });
     }
 
-    if (pixId && !pagamento.pix_id) {
+    if (pixId && !payment.pix_id) {
       await prisma.pagamentos.update({
-        where: { id: pagamento.id },
+        where: { id: payment.id },
         data: { pix_id: pixId, updated_at: new Date() },
       });
     }
 
-    const resultado = await aplicarPagamentoConfirmado(pagamento.id);
+    const result = await applyConfirmedPayment(payment.id);
 
-    if (resultado.divida_id) {
+    if (result.divida_id) {
       revalidatePath("/salgados");
-      revalidatePath(`/salgados/pagar/${resultado.divida_id}`);
-      revalidatePath(`/salgados/detalhes/${resultado.divida_id}`);
+      revalidatePath(`/salgados/pagar/${result.divida_id}`);
+      revalidatePath(`/salgados/detalhes/${result.divida_id}`);
     }
 
-    return NextResponse.json({ recebido: true, ...resultado });
+    return NextResponse.json({ received: true, ...result });
   } catch (error) {
     console.error(
-      `Erro ao processar o webhook ${evento} da AbacatePay:`,
+      `Erro ao processar o webhook ${event} da AbacatePay:`,
       error,
     );
     return NextResponse.json(

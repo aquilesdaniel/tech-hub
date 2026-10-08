@@ -16,150 +16,150 @@ import {
 import { ChartCard } from "./chart-card";
 import {
   CHROME,
-  Legenda,
-  SERIE,
-  TabelaViz,
-  VazioViz,
-  conteudoTooltip,
-  cursorBarra,
-  dataCurta,
-  eixoBase,
-  gradeBase,
-  inteiro,
-  margemHorizontal,
-  nomeCurto,
-  percentual,
-  rotuloDireto,
+  Legend,
+  SERIES,
+  VizTable,
+  VizEmpty,
+  tooltipContent,
+  barCursor,
+  formatShortDate,
+  baseAxis,
+  baseGrid,
+  formatInteger,
+  horizontalMargin,
+  shortName,
+  formatPercent,
+  directLabel,
 } from "./viz";
 
-export type ColaboradorStats = {
+export type EmployeeStats = {
   id: number;
   nome: string;
   email: string;
   departamento: string;
-  total_certificacoes: number;
-  certificacoes_senior: number;
-  outras_certificacoes: number;
-  ultima_certificacao: string | null;
-  tipos_certificacao: Record<string, number>;
+  total_certifications: number;
+  senior_certifications: number;
+  other_certifications: number;
+  last_certification: string | null;
+  certification_types: Record<string, number>;
 };
 
-export type EstatisticasGerais = {
-  total_colaboradores: number;
-  total_certificacoes: number;
-  media_certificacoes_por_colaborador: number;
-  colaborador_mais_certificacoes: string;
-  tipo_certificacao_mais_popular: string;
-  crescimento_mensal: { mes: string; certificacoes: number }[];
+export type GeneralStats = {
+  total_employees: number;
+  total_certifications: number;
+  average_certifications_per_employee: number;
+  top_certified_employee: string;
+  most_popular_certification_type: string;
+  monthly_growth: { month: string; certifications: number }[];
 };
 
-export type FiltroTipo = "todos" | "senior" | "outras";
-export type Ordenacao = "total_desc" | "senior_desc" | "outras_desc" | "nome";
+export type CertificationFilter = "all" | "senior" | "others";
+export type SortOrder = "total_desc" | "senior_desc" | "others_desc" | "name";
 
-export const LEGENDA_CERTIFICACAO = [
-  { nome: "Sênior", cor: SERIE.s1 },
-  { nome: "Outras", cor: SERIE.s2 },
+export const CERTIFICATION_LEGEND = [
+  { name: "Sênior", color: SERIES.s1 },
+  { name: "Outras", color: SERIES.s2 },
 ];
 
-export function recortarColaboradores(
-  linhas: ColaboradorStats[],
-  filtro: FiltroTipo,
-  ordenacao: Ordenacao,
+export function filterAndSortEmployees(
+  rows: EmployeeStats[],
+  filter: CertificationFilter,
+  sortOrder: SortOrder,
 ) {
-  return linhas
-    .filter((c) => {
-      if (filtro === "senior") return c.certificacoes_senior > 0;
-      if (filtro === "outras") return c.outras_certificacoes > 0;
+  return rows
+    .filter((e) => {
+      if (filter === "senior") return e.senior_certifications > 0;
+      if (filter === "others") return e.other_certifications > 0;
       return true;
     })
     .sort((a, b) => {
-      switch (ordenacao) {
+      switch (sortOrder) {
         case "senior_desc":
-          return b.certificacoes_senior - a.certificacoes_senior;
-        case "outras_desc":
-          return b.outras_certificacoes - a.outras_certificacoes;
-        case "nome":
+          return b.senior_certifications - a.senior_certifications;
+        case "others_desc":
+          return b.other_certifications - a.other_certifications;
+        case "name":
           return a.nome.localeCompare(b.nome, "pt-BR");
         default:
-          return b.total_certificacoes - a.total_certificacoes;
+          return b.total_certifications - a.total_certifications;
       }
     });
 }
 
-export function agruparPorTipo(linhas: ColaboradorStats[]) {
-  const soma = new Map<string, number>();
-  for (const colaborador of linhas) {
-    for (const [tipo, quantidade] of Object.entries(
-      colaborador.tipos_certificacao ?? {},
+export function groupByType(rows: EmployeeStats[]) {
+  const sum = new Map<string, number>();
+  for (const employee of rows) {
+    for (const [type, count] of Object.entries(
+      employee.certification_types ?? {},
     )) {
-      soma.set(tipo, (soma.get(tipo) ?? 0) + quantidade);
+      sum.set(type, (sum.get(type) ?? 0) + count);
     }
   }
-  return Array.from(soma.entries())
-    .map(([tipo, quantidade]) => ({ tipo, quantidade }))
-    .sort((a, b) => b.quantidade - a.quantidade);
+  return Array.from(sum.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
-export function PainelTopCertificadores({
-  linhas,
-  revalidando,
+export function TopCertifiersPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: ColaboradorStats[];
-  revalidando?: boolean;
+  rows: EmployeeStats[];
+  revalidating?: boolean;
 }) {
-  const top = linhas.slice(0, 10);
-  const dados = top.map((c) => ({
-    rotulo: nomeCurto(c.nome),
-    senior: c.certificacoes_senior,
-    outras: c.outras_certificacoes,
-    total: c.total_certificacoes,
+  const top = rows.slice(0, 10);
+  const chartData = top.map((e) => ({
+    label: shortName(e.nome),
+    senior: e.senior_certifications,
+    others: e.other_certifications,
+    total: e.total_certifications,
   }));
 
   return (
     <ChartCard
-      titulo="Top 10 do ranking"
-      descricao="Certificações acumuladas por colaborador, do início ao hoje"
-      legenda={LEGENDA_CERTIFICACAO}
-      altura={Math.max(220, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      title="Top 10 do ranking"
+      description="Certificações acumuladas por colaborador, do início ao hoje"
+      legend={CERTIFICATION_LEGEND}
+      height={Math.max(220, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
-                dataKey="rotulo"
-                {...eixoBase}
+                dataKey="label"
+                {...baseAxis}
                 width={92}
                 interval={0}
               />
 
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
 
               <Bar
                 dataKey="senior"
                 name="Sênior"
                 stackId="cert"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               />
 
               <Bar
-                dataKey="outras"
+                dataKey="others"
                 name="Outras"
                 stackId="cert"
-                fill={SERIE.s2}
+                fill={SERIES.s2}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
-                stroke={CHROME.superficie}
+                stroke={CHROME.surface}
                 strokeWidth={2}
                 animationDuration={400}
               >
@@ -167,45 +167,45 @@ export function PainelTopCertificadores({
                   dataKey="total"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz mensagem="Nenhum colaborador no recorte selecionado." />
+          <VizEmpty message="Nenhum colaborador no recorte selecionado." />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Certificações acumuladas por colaborador"
-          linhas={top}
-          chaveLinha={(l) => String(l.id)}
-          colunas={[
-            { chave: "nome", titulo: "Colaborador", render: (l) => l.nome },
+      table={
+        <VizTable
+          caption="Certificações acumuladas por colaborador"
+          rows={top}
+          rowKey={(r) => String(r.id)}
+          columns={[
+            { key: "name", title: "Colaborador", render: (r) => r.nome },
             {
-              chave: "departamento",
-              titulo: "Departamento",
-              render: (l) => l.departamento,
+              key: "department",
+              title: "Departamento",
+              render: (r) => r.departamento,
             },
             {
-              chave: "senior",
-              titulo: "Sênior",
-              alinhar: "direita",
-              render: (l) => inteiro(l.certificacoes_senior),
+              key: "senior",
+              title: "Sênior",
+              align: "right",
+              render: (r) => formatInteger(r.senior_certifications),
             },
             {
-              chave: "outras",
-              titulo: "Outras",
-              alinhar: "direita",
-              render: (l) => inteiro(l.outras_certificacoes),
+              key: "others",
+              title: "Outras",
+              align: "right",
+              render: (r) => formatInteger(r.other_certifications),
             },
             {
-              chave: "total",
-              titulo: "Total",
-              alinhar: "direita",
-              render: (l) => inteiro(l.total_certificacoes),
+              key: "total",
+              title: "Total",
+              align: "right",
+              render: (r) => formatInteger(r.total_certifications),
             },
           ]}
         />
@@ -214,86 +214,86 @@ export function PainelTopCertificadores({
   );
 }
 
-export function PainelTiposCertificacao({
-  linhas,
-  revalidando,
+export function CertificationTypesPanel({
+  rows,
+  revalidating,
 }: {
-  linhas: { tipo: string; quantidade: number }[];
-  revalidando?: boolean;
+  rows: { type: string; count: number }[];
+  revalidating?: boolean;
 }) {
-  const total = linhas.reduce((soma, l) => soma + l.quantidade, 0);
-  const dados = linhas.slice(0, 8);
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  const chartData = rows.slice(0, 8);
 
   return (
     <ChartCard
-      titulo="Distribuição por tipo"
-      descricao={
-        linhas.length > 8
-          ? `8 tipos mais frequentes de ${inteiro(linhas.length)}`
+      title="Distribuição por tipo"
+      description={
+        rows.length > 8
+          ? `8 tipos mais frequentes de ${formatInteger(rows.length)}`
           : "Quantas certificações de cada tipo a empresa acumula"
       }
-      altura={Math.max(220, dados.length * 34 + 40)}
-      revalidando={revalidando}
-      grafico={
-        dados.length > 0 ? (
+      height={Math.max(220, chartData.length * 34 + 40)}
+      revalidating={revalidating}
+      chart={
+        chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dados} layout="vertical" margin={margemHorizontal}>
-              <CartesianGrid {...gradeBase} vertical horizontal={false} />
-              <XAxis type="number" {...eixoBase} allowDecimals={false} />
+            <BarChart data={chartData} layout="vertical" margin={horizontalMargin}>
+              <CartesianGrid {...baseGrid} vertical horizontal={false} />
+              <XAxis type="number" {...baseAxis} allowDecimals={false} />
               <YAxis
                 type="category"
-                dataKey="tipo"
-                {...eixoBase}
+                dataKey="type"
+                {...baseAxis}
                 width={140}
                 interval={0}
               />
 
               <Tooltip
-                cursor={cursorBarra}
-                content={conteudoTooltip((valor) => inteiro(valor))}
+                cursor={barCursor}
+                content={tooltipContent((value) => formatInteger(value))}
               />
 
               <Bar
-                dataKey="quantidade"
+                dataKey="count"
                 name="Certificações"
-                fill={SERIE.s1}
+                fill={SERIES.s1}
                 maxBarSize={24}
                 radius={[0, 4, 4, 0]}
                 animationDuration={400}
               >
                 <LabelList
-                  dataKey="quantidade"
+                  dataKey="count"
                   position="right"
                   offset={8}
-                  {...rotuloDireto}
-                  formatter={(valor: number) => inteiro(valor)}
+                  {...directLabel}
+                  formatter={(value: number) => formatInteger(value)}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <VazioViz mensagem="Nenhuma certificação registrada." />
+          <VizEmpty message="Nenhuma certificação registrada." />
         )
       }
-      tabela={
-        <TabelaViz
-          legenda="Certificações por tipo"
-          linhas={linhas}
-          chaveLinha={(l) => l.tipo}
-          colunas={[
-            { chave: "tipo", titulo: "Tipo", render: (l) => l.tipo },
+      table={
+        <VizTable
+          caption="Certificações por tipo"
+          rows={rows}
+          rowKey={(r) => r.type}
+          columns={[
+            { key: "type", title: "Tipo", render: (r) => r.type },
             {
-              chave: "quantidade",
-              titulo: "Certificações",
-              alinhar: "direita",
-              render: (l) => inteiro(l.quantidade),
+              key: "count",
+              title: "Certificações",
+              align: "right",
+              render: (r) => formatInteger(r.count),
             },
             {
-              chave: "share",
-              titulo: "Participação",
-              alinhar: "direita",
-              render: (l) =>
-                total > 0 ? percentual((l.quantidade / total) * 100, 1) : "-",
+              key: "share",
+              title: "Participação",
+              align: "right",
+              render: (r) =>
+                total > 0 ? formatPercent((r.count / total) * 100, 1) : "-",
             },
           ]}
         />
@@ -302,98 +302,98 @@ export function PainelTiposCertificacao({
   );
 }
 
-const FAIXAS: {
-  ate: number;
-  rotulo: string;
-  icone: LucideIcon;
-  cor: string;
+const TIERS: {
+  upTo: number;
+  label: string;
+  icon: LucideIcon;
+  color: string;
 }[] = [
-  { ate: 1, rotulo: "Campeão", icone: Crown, cor: SERIE.s4 },
-  { ate: 3, rotulo: "Pódio", icone: Medal, cor: SERIE.s2 },
-  { ate: 5, rotulo: "Top 5", icone: Award, cor: CHROME.atenuado },
+  { upTo: 1, label: "Campeão", icon: Crown, color: SERIES.s4 },
+  { upTo: 3, label: "Pódio", icon: Medal, color: SERIES.s2 },
+  { upTo: 5, label: "Top 5", icon: Award, color: CHROME.deEmphasis },
 ];
 
-function faixaDaPosicao(posicao: number) {
-  return FAIXAS.find((faixa) => posicao <= faixa.ate) ?? null;
+function tierForPosition(position: number) {
+  return TIERS.find((tier) => position <= tier.upTo) ?? null;
 }
 
-function Numero({
-  rotulo,
-  valor,
-  destaque,
+function StatNumber({
+  label,
+  value,
+  highlight,
 }: {
-  rotulo: string;
-  valor: number;
-  destaque?: boolean;
+  label: string;
+  value: number;
+  highlight?: boolean;
 }) {
   return (
     <div className="w-14 text-right">
       <p
         className={`tabular-nums leading-none ${
-          destaque
+          highlight
             ? "text-lg font-semibold text-foreground"
             : "text-sm text-foreground"
         }`}
       >
-        {inteiro(valor)}
+        {formatInteger(value)}
       </p>
-      <p className="mt-1 text-[0.6875rem] text-muted">{rotulo}</p>
+      <p className="mt-1 text-[0.6875rem] text-muted">{label}</p>
     </div>
   );
 }
 
-function LinhaRanking({
-  colaborador,
-  posicao,
-  maximo,
-  ehVoce,
+function RankingRow({
+  employee,
+  position,
+  max,
+  isYou,
 }: {
-  colaborador: ColaboradorStats;
-  posicao: number;
-  maximo: number;
-  ehVoce?: boolean;
+  employee: EmployeeStats;
+  position: number;
+  max: number;
+  isYou?: boolean;
 }) {
-  const faixa = faixaDaPosicao(posicao);
-  const Icone = faixa?.icone;
+  const tier = tierForPosition(position);
+  const Icon = tier?.icon;
 
   return (
     <li className={`flex flex-wrap items-center gap-x-4 gap-y-3 py-3`}>
       <span className="flex w-12 shrink-0 items-center gap-1.5">
-        {Icone ? (
-          <Icone
+        {Icon ? (
+          <Icon
             aria-hidden
             className="size-4 shrink-0"
-            style={{ color: faixa?.cor }}
+            style={{ color: tier?.color }}
           />
         ) : (
           <span aria-hidden className="size-4 shrink-0" />
         )}
         <span className="text-sm font-semibold tabular-nums text-muted">
-          {posicao}
+          {position}
         </span>
       </span>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate text-sm font-medium text-foreground">
-            {colaborador.nome}
+            {employee.nome}
           </p>
-          {ehVoce && (
+          {isYou && (
             <Chip size="sm" color="accent" variant="soft">
               <Chip.Label>Você</Chip.Label>
             </Chip>
           )}
-          {faixa && (
+          {tier && (
             <Chip size="sm" variant="soft">
-              <Chip.Label>{faixa.rotulo}</Chip.Label>
+              <Chip.Label>{tier.label}</Chip.Label>
             </Chip>
           )}
         </div>
 
         <p className="truncate text-xs text-muted">
-          {colaborador.departamento || "Sem departamento"}
-          {colaborador.ultima_certificacao
-            ? ` · última em ${dataCurta(colaborador.ultima_certificacao)}`
+          {employee.departamento || "Sem departamento"}
+          {employee.last_certification
+            ? ` · última em ${formatShortDate(employee.last_certification)}`
             : ""}
         </p>
 
@@ -404,61 +404,61 @@ function LinhaRanking({
           <span
             className="block h-full"
             style={{
-              width: `${(colaborador.certificacoes_senior / maximo) * 100}%`,
-              backgroundColor: SERIE.s1,
+              width: `${(employee.senior_certifications / max) * 100}%`,
+              backgroundColor: SERIES.s1,
             }}
           />
           <span
             className="block h-full"
             style={{
-              width: `${(colaborador.outras_certificacoes / maximo) * 100}%`,
-              backgroundColor: SERIE.s2,
+              width: `${(employee.other_certifications / max) * 100}%`,
+              backgroundColor: SERIES.s2,
             }}
           />
         </div>
       </div>
 
       <div className="flex shrink-0 items-start gap-3">
-        <Numero rotulo="Sênior" valor={colaborador.certificacoes_senior} />
-        <Numero rotulo="Outras" valor={colaborador.outras_certificacoes} />
-        <Numero
-          rotulo="Total"
-          valor={colaborador.total_certificacoes}
-          destaque
+        <StatNumber label="Sênior" value={employee.senior_certifications} />
+        <StatNumber label="Outras" value={employee.other_certifications} />
+        <StatNumber
+          label="Total"
+          value={employee.total_certifications}
+          highlight
         />
       </div>
     </li>
   );
 }
 
-export function PainelRanking({
-  linhas,
-  filtroTipo,
-  onFiltroTipoChange,
-  ordenacao,
-  onOrdenacaoChange,
-  mostrarFiltros = false,
-  destaqueId = null,
-  limite = 10,
-  revalidando,
+export function RankingPanel({
+  rows,
+  typeFilter,
+  onTypeFilterChange,
+  sortOrder,
+  onSortOrderChange,
+  showFilters = false,
+  highlightId = null,
+  limit = 10,
+  revalidating,
 }: {
-  linhas: ColaboradorStats[];
-  filtroTipo: FiltroTipo;
-  onFiltroTipoChange: (filtro: FiltroTipo) => void;
-  ordenacao: Ordenacao;
-  onOrdenacaoChange: (ordenacao: Ordenacao) => void;
-  mostrarFiltros?: boolean;
-  destaqueId?: number | null;
-  limite?: number;
-  revalidando?: boolean;
+  rows: EmployeeStats[];
+  typeFilter: CertificationFilter;
+  onTypeFilterChange: (filter: CertificationFilter) => void;
+  sortOrder: SortOrder;
+  onSortOrderChange: (sortOrder: SortOrder) => void;
+  showFilters?: boolean;
+  highlightId?: number | null;
+  limit?: number;
+  revalidating?: boolean;
 }) {
-  const maximo = Math.max(1, ...linhas.map((l) => l.total_certificacoes));
-  const top = linhas.slice(0, limite);
+  const max = Math.max(1, ...rows.map((r) => r.total_certifications));
+  const top = rows.slice(0, limit);
 
-  const indiceProprio =
-    destaqueId != null ? linhas.findIndex((l) => l.id === destaqueId) : -1;
-  const foraDoTop = indiceProprio >= limite;
-  const proprio = foraDoTop ? linhas[indiceProprio] : null;
+  const ownIndex =
+    highlightId != null ? rows.findIndex((r) => r.id === highlightId) : -1;
+  const outsideTop = ownIndex >= limit;
+  const own = outsideTop ? rows[ownIndex] : null;
 
   return (
     <Card>
@@ -468,24 +468,24 @@ export function PainelRanking({
             Ranking de certificações
           </Card.Title>
           <Card.Description className="text-xs">
-            Top {inteiro(Math.min(limite, linhas.length))} de{" "}
-            {inteiro(linhas.length)} colaborador(es)
-            {indiceProprio >= 0 ? ` · você está em ${indiceProprio + 1}º` : ""}
+            Top {formatInteger(Math.min(limit, rows.length))} de{" "}
+            {formatInteger(rows.length)} colaborador(es)
+            {ownIndex >= 0 ? ` · você está em ${ownIndex + 1}º` : ""}
           </Card.Description>
         </div>
 
-        {mostrarFiltros && (
+        {showFilters && (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <div className="flex min-w-44 flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted" id="rotulo-tipo">
+              <span className="text-xs font-medium text-muted" id="type-filter-label">
                 Certificações
               </span>
               <Select
-                selectedKey={filtroTipo}
-                onSelectionChange={(chave) =>
-                  onFiltroTipoChange(String(chave) as FiltroTipo)
+                selectedKey={typeFilter}
+                onSelectionChange={(key) =>
+                  onTypeFilterChange(String(key) as CertificationFilter)
                 }
-                aria-labelledby="rotulo-tipo"
+                aria-labelledby="type-filter-label"
                 variant="secondary"
               >
                 <Select.Trigger className="w-full">
@@ -494,13 +494,13 @@ export function PainelRanking({
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="todos" textValue="Todas">
+                    <ListBox.Item id="all" textValue="Todas">
                       Todas
                     </ListBox.Item>
                     <ListBox.Item id="senior" textValue="Com Sênior">
                       Com Sênior
                     </ListBox.Item>
-                    <ListBox.Item id="outras" textValue="Com Outras">
+                    <ListBox.Item id="others" textValue="Com Outras">
                       Com Outras
                     </ListBox.Item>
                   </ListBox>
@@ -511,16 +511,16 @@ export function PainelRanking({
             <div className="flex min-w-44 flex-col gap-1.5">
               <span
                 className="text-xs font-medium text-muted"
-                id="rotulo-ordem"
+                id="sort-order-label"
               >
                 Classificar por
               </span>
               <Select
-                selectedKey={ordenacao}
-                onSelectionChange={(chave) =>
-                  onOrdenacaoChange(String(chave) as Ordenacao)
+                selectedKey={sortOrder}
+                onSelectionChange={(key) =>
+                  onSortOrderChange(String(key) as SortOrder)
                 }
-                aria-labelledby="rotulo-ordem"
+                aria-labelledby="sort-order-label"
                 variant="secondary"
               >
                 <Select.Trigger className="w-full">
@@ -535,7 +535,7 @@ export function PainelRanking({
                     <ListBox.Item id="senior_desc" textValue="Sênior">
                       Sênior
                     </ListBox.Item>
-                    <ListBox.Item id="outras_desc" textValue="Outras">
+                    <ListBox.Item id="others_desc" textValue="Outras">
                       Outras
                     </ListBox.Item>
                   </ListBox>
@@ -547,44 +547,44 @@ export function PainelRanking({
       </Card.Header>
 
       <Card.Content className="flex flex-col gap-3">
-        <Legenda itens={LEGENDA_CERTIFICACAO} />
+        <Legend items={CERTIFICATION_LEGEND} />
 
         <div
           className={`transition-opacity duration-200 ${
-            revalidando ? "opacity-50" : "opacity-100"
+            revalidating ? "opacity-50" : "opacity-100"
           }`}
         >
-          {linhas.length === 0 ? (
-            <VazioViz mensagem="Nenhum colaborador com certificações registradas." />
+          {rows.length === 0 ? (
+            <VizEmpty message="Nenhum colaborador com certificações registradas." />
           ) : (
             <>
               <ol className="flex flex-col divide-y divide-separator">
-                {top.map((colaborador, indice) => (
-                  <LinhaRanking
-                    key={colaborador.id}
-                    colaborador={colaborador}
-                    posicao={indice + 1}
-                    maximo={maximo}
-                    ehVoce={colaborador.id === destaqueId}
+                {top.map((employee, index) => (
+                  <RankingRow
+                    key={employee.id}
+                    employee={employee}
+                    position={index + 1}
+                    max={max}
+                    isYou={employee.id === highlightId}
                   />
                 ))}
               </ol>
 
-              {proprio && (
+              {own && (
                 <div className="border-t border-dashed border-border pt-3">
                   <p className="text-xs font-medium text-muted">Sua posição</p>
                   <ol className="flex flex-col">
-                    <LinhaRanking
-                      colaborador={proprio}
-                      posicao={indiceProprio + 1}
-                      maximo={maximo}
-                      ehVoce
+                    <RankingRow
+                      employee={own}
+                      position={ownIndex + 1}
+                      max={max}
+                      isYou
                     />
                   </ol>
                 </div>
               )}
 
-              {destaqueId != null && indiceProprio < 0 && (
+              {highlightId != null && ownIndex < 0 && (
                 <p className="mt-3 border-t border-dashed border-border pt-3 text-xs text-muted">
                   Não encontramos o seu cadastro nesta classificação.
                 </p>

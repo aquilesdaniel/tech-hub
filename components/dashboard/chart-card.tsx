@@ -2,53 +2,53 @@
 
 import { Card } from "@heroui/react";
 import { useState, type ReactNode } from "react";
-import { AlternadorVisao, Legenda, type ItemLegenda, type Visao } from "./viz";
+import { Legend, ViewToggle, type LegendItem, type View } from "./viz";
 
 type Props = {
-  titulo: string;
-  descricao?: string;
-  legenda?: ItemLegenda[];
-  altura?: number;
-  grafico: ReactNode;
-  tabela: ReactNode;
-  revalidando?: boolean;
+  title: string;
+  description?: string;
+  legend?: LegendItem[];
+  height?: number;
+  chart: ReactNode;
+  table: ReactNode;
+  revalidating?: boolean;
   className?: string;
 };
 
 export function ChartCard({
-  titulo,
-  descricao,
-  legenda,
-  altura = 260,
-  grafico,
-  tabela,
-  revalidando = false,
+  title,
+  description,
+  legend,
+  height = 260,
+  chart,
+  table,
+  revalidating = false,
   className,
 }: Props) {
-  const [visao, setVisao] = useState<Visao>("grafico");
+  const [view, setView] = useState<View>("chart");
 
   return (
     <Card className={className}>
       <Card.Header className="flex flex-row items-start justify-between gap-3 pb-2">
         <div className="min-w-0">
-          <Card.Title className="text-base">{titulo}</Card.Title>
-          {descricao && (
-            <Card.Description className="text-xs">{descricao}</Card.Description>
+          <Card.Title className="text-base">{title}</Card.Title>
+          {description && (
+            <Card.Description className="text-xs">{description}</Card.Description>
           )}
         </div>
-        <AlternadorVisao visao={visao} onChange={setVisao} rotulo={titulo} />
+        <ViewToggle view={view} onChange={setView} label={title} />
       </Card.Header>
 
       <Card.Content className="flex flex-col gap-3">
-        {legenda && visao === "grafico" && <Legenda itens={legenda} />}
+        {legend && view === "chart" && <Legend items={legend} />}
 
         <div
           className={`transition-opacity duration-200 ${
-            revalidando ? "opacity-50" : "opacity-100"
+            revalidating ? "opacity-50" : "opacity-100"
           }`}
-          style={visao === "grafico" ? { height: altura } : undefined}
+          style={view === "chart" ? { height } : undefined}
         >
-          {visao === "grafico" ? grafico : tabela}
+          {view === "chart" ? chart : table}
         </div>
       </Card.Content>
     </Card>

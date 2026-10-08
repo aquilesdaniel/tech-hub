@@ -16,8 +16,8 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
-  tipos:
-    name: Verificação de tipos
+  rapidos:
+    name: Tipos, unidade e integração
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,39 +33,9 @@ jobs:
       - name: TypeScript
         run: npm run typecheck
 
-  unidade:
-    name: Testes de unidade
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Jest (unidade)
-        run: npm run test:unit
-
-  integracao:
-    name: Testes de integração
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Jest (integração)
-        run: npm run test:integration
+      - name: Jest (unidade e integração)
+        if: ${{ !cancelled() }}
+        run: npx jest --ci
 
   sistema:
     name: Testes de sistema (E2E)
@@ -99,6 +69,14 @@ jobs:
       - name: Instalar apenas as dependências de sistema do navegador
         if: steps.cache-navegadores.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
+
+      - name: Restaurar o cache do build do Next
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'contexts/**', 'lib/**') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - name: Build de produção
         run: npm run build

@@ -3,68 +3,68 @@
 import { Card, Chip, Meter } from "@heroui/react";
 import { AlertTriangle, CalendarClock, CheckCircle2 } from "lucide-react";
 import type { DashboardData } from "./types";
-import { dataCurta, inteiro, moeda, percentual } from "./viz";
+import { formatShortDate, formatInteger, formatCurrency, formatPercent } from "./viz";
 
-type CorMeter = "accent" | "success" | "warning" | "danger";
+type MeterColor = "accent" | "success" | "warning" | "danger";
 
-function Indicador({
-  rotulo,
-  valor,
-  cor,
-  detalhe,
+function Indicator({
+  label,
+  value,
+  color,
+  detail,
 }: {
-  rotulo: string;
-  valor: number;
-  cor: CorMeter;
-  detalhe: string;
+  label: string;
+  value: number;
+  color: MeterColor;
+  detail: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <Meter
-        value={valor}
+        value={value}
         minValue={0}
         maxValue={100}
-        color={cor}
+        color={color}
         size="md"
-        aria-label={rotulo}
+        aria-label={label}
       >
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm text-foreground">{rotulo}</span>
+          <span className="text-sm text-foreground">{label}</span>
           <span className="text-sm font-semibold tabular-nums text-foreground">
-            {percentual(valor, 0)}
+            {formatPercent(value, 0)}
           </span>
         </div>
         <Meter.Track className="mt-1.5">
           <Meter.Fill />
         </Meter.Track>
       </Meter>
-      <p className="text-xs text-muted">{detalhe}</p>
+      <p className="text-xs text-muted">{detail}</p>
     </div>
   );
 }
 
-function faixa(
-  valor: number,
-  bomAcima: number,
-  atencaoAcima: number,
-): CorMeter {
-  if (valor >= bomAcima) return "success";
-  if (valor >= atencaoAcima) return "warning";
+function colorBand(
+  value: number,
+  goodAbove: number,
+  warningAbove: number,
+): MeterColor {
+  if (value >= goodAbove) return "success";
+  if (value >= warningAbove) return "warning";
   return "danger";
 }
 
-export function PainelIndicadores({ dados }: { dados: DashboardData }) {
-  const { kpis } = dados;
+export function IndicatorsPanel({ data }: { data: DashboardData }) {
+  const { kpis } = data;
 
-  const taxaDevolucao =
-    kpis.emprestimosAtivos > 0
-      ? ((kpis.emprestimosAtivos - kpis.emprestimosAtrasados) /
-          kpis.emprestimosAtivos) *
+  const onTimeRate =
+    kpis.activeLoans > 0
+      ? ((kpis.activeLoans - kpis.overdueLoans) /
+          kpis.activeLoans) *
         100
       : 100;
 
-  const houveLancamento = kpis.valorLancado > 0;
-  const houveAcervo = kpis.livrosTotal > 0;
+  const hasIssued = kpis.issuedAmount > 0;
+  const hasBooks = kpis.totalBooks > 0;
 
   return (
     <Card className="h-full">
@@ -75,33 +75,33 @@ export function PainelIndicadores({ dados }: { dados: DashboardData }) {
         </Card.Description>
       </Card.Header>
       <Card.Content className="flex flex-col gap-5">
-        <Indicador
-          rotulo="Quitação de salgados"
-          valor={kpis.taxaQuitacao}
-          cor={houveLancamento ? faixa(kpis.taxaQuitacao, 80, 50) : "accent"}
-          detalhe={
-            houveLancamento
-              ? `${moeda(kpis.valorQuitado)} de ${moeda(kpis.valorLancado)} lançados no período`
+        <Indicator
+          label="Quitação de salgados"
+          value={kpis.settlementRate}
+          color={hasIssued ? colorBand(kpis.settlementRate, 80, 50) : "accent"}
+          detail={
+            hasIssued
+              ? `${formatCurrency(kpis.settledAmount)} de ${formatCurrency(kpis.issuedAmount)} lançados no período`
               : "Nenhum lançamento no período"
           }
         />
-        <Indicador
-          rotulo="Acervo disponível"
-          valor={kpis.taxaDisponibilidade}
-          cor={houveAcervo ? faixa(kpis.taxaDisponibilidade, 60, 30) : "accent"}
-          detalhe={
-            houveAcervo
-              ? `${inteiro(kpis.livrosDisponiveis)} de ${inteiro(kpis.livrosTotal)} livros na estante`
+        <Indicator
+          label="Acervo disponível"
+          value={kpis.availabilityRate}
+          color={hasBooks ? colorBand(kpis.availabilityRate, 60, 30) : "accent"}
+          detail={
+            hasBooks
+              ? `${formatInteger(kpis.availableBooks)} de ${formatInteger(kpis.totalBooks)} livros na estante`
               : "Nenhum livro cadastrado"
           }
         />
-        <Indicador
-          rotulo="Empréstimos em dia"
-          valor={taxaDevolucao}
-          cor={faixa(taxaDevolucao, 90, 70)}
-          detalhe={
-            kpis.emprestimosAtrasados > 0
-              ? `${inteiro(kpis.emprestimosAtrasados)} empréstimo(s) em atraso`
+        <Indicator
+          label="Empréstimos em dia"
+          value={onTimeRate}
+          color={colorBand(onTimeRate, 90, 70)}
+          detail={
+            kpis.overdueLoans > 0
+              ? `${formatInteger(kpis.overdueLoans)} empréstimo(s) em atraso`
               : "Nenhum empréstimo em atraso"
           }
         />
@@ -110,10 +110,10 @@ export function PainelIndicadores({ dados }: { dados: DashboardData }) {
   );
 }
 
-export function PainelAlertas({ dados }: { dados: DashboardData }) {
-  const { emprestimosAtrasados, certificacoesVencendo } = dados.alertas;
-  const semAlertas =
-    emprestimosAtrasados.length === 0 && certificacoesVencendo.length === 0;
+export function AlertsPanel({ data }: { data: DashboardData }) {
+  const { overdueLoans, expiringCertifications } = data.alerts;
+  const noAlerts =
+    overdueLoans.length === 0 && expiringCertifications.length === 0;
 
   return (
     <Card className="h-full">
@@ -124,7 +124,7 @@ export function PainelAlertas({ dados }: { dados: DashboardData }) {
         </Card.Description>
       </Card.Header>
       <Card.Content>
-        {semAlertas ? (
+        {noAlerts ? (
           <div className="flex items-center gap-2 py-2">
             <CheckCircle2
               aria-hidden
@@ -136,9 +136,9 @@ export function PainelAlertas({ dados }: { dados: DashboardData }) {
           </div>
         ) : (
           <ul className="flex max-h-80 flex-col divide-y divide-separator overflow-auto">
-            {emprestimosAtrasados.map((item) => (
+            {overdueLoans.map((item) => (
               <li
-                key={`atraso-${item.id}`}
+                key={`overdue-${item.id}`}
                 className="flex items-start gap-2.5 py-2.5"
               >
                 <AlertTriangle
@@ -147,22 +147,22 @@ export function PainelAlertas({ dados }: { dados: DashboardData }) {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-foreground">
-                    {item.livro}
+                    {item.book}
                   </p>
                   <p className="text-xs text-muted">
-                    {item.colaborador} · previsto {dataCurta(item.previsto)}
+                    {item.employee} · previsto {formatShortDate(item.dueDate)}
                   </p>
                 </div>
                 <Chip size="sm" color="danger" variant="soft">
                   <Chip.Label>
-                    {inteiro(item.diasAtraso)} d de atraso
+                    {formatInteger(item.daysOverdue)} d de atraso
                   </Chip.Label>
                 </Chip>
               </li>
             ))}
-            {certificacoesVencendo.map((item) => (
+            {expiringCertifications.map((item) => (
               <li
-                key={`vence-${item.id}`}
+                key={`expiring-${item.id}`}
                 className="flex items-start gap-2.5 py-2.5"
               >
                 <CalendarClock
@@ -171,15 +171,15 @@ export function PainelAlertas({ dados }: { dados: DashboardData }) {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-foreground">
-                    {item.nome}
+                    {item.name}
                   </p>
                   <p className="text-xs text-muted">
-                    {item.colaborador} · vence {dataCurta(item.vencimento)}
+                    {item.employee} · vence {formatShortDate(item.expiresAt)}
                   </p>
                 </div>
                 <Chip size="sm" color="warning" variant="soft">
                   <Chip.Label>
-                    vence em {inteiro(item.diasRestantes ?? 0)} d
+                    vence em {formatInteger(item.daysRemaining ?? 0)} d
                   </Chip.Label>
                 </Chip>
               </li>
