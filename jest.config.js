@@ -14,7 +14,7 @@ const base = {
   clearMocks: true,
 };
 
-const esmDeNodeModules = [
+const esmNodeModules = [
   "@heroui",
   "react-aria",
   "react-stately",
@@ -27,14 +27,14 @@ const esmDeNodeModules = [
 ].join("|");
 
 module.exports = async () => {
-  const unidade = await createJestConfig({
+  const unitProject = await createJestConfig({
     ...base,
     displayName: "unit",
     testEnvironment: "node",
     testMatch: ["<rootDir>/tests/unit/**/*.test.{ts,tsx}"],
   })();
 
-  const integracao = await createJestConfig({
+  const integrationProject = await createJestConfig({
     ...base,
     displayName: "integration",
     testEnvironment: "jsdom",
@@ -44,15 +44,15 @@ module.exports = async () => {
 
   return {
     projects: [
-      unidade,
+      unitProject,
       {
-        ...integracao,
+        ...integrationProject,
         transformIgnorePatterns: [
-          `/node_modules/(?!.pnpm)(?!(${esmDeNodeModules})/)`,
+          `/node_modules/(?!.pnpm)(?!(${esmNodeModules})/)`,
           "^.+\\.module\\.(css|sass|scss)$",
         ],
         moduleNameMapper: {
-          ...integracao.moduleNameMapper,
+          ...integrationProject.moduleNameMapper,
           "^@heroui/react$":
             "<rootDir>/node_modules/@heroui/react/dist/index.js",
         },

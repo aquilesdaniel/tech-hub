@@ -1,13 +1,13 @@
 "use client";
 
-import { useConfirmacao } from "@/components/confirmacao";
+import { useConfirmation } from "@/components/confirmation";
 import { StatTile } from "@/components/dashboard/stat-tile";
-import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { daysUntil, formatInteger, formatPercent } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
-import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { ModalField, FieldRow, ModalForm } from "@/components/modal-form";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -32,17 +32,17 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface Colaborador {
+interface Employee {
   id: number;
   nome: string;
   email: string;
   departamento: string;
 }
 
-interface Certificacao {
+interface Certification {
   id: number;
   colaborador_id: number;
-  colaborador_nome: string;
+  employee_name: string;
   nome: string;
   tipo: string;
   instituicao: string;
@@ -52,7 +52,7 @@ interface Certificacao {
   observacoes?: string | null;
 }
 
-const CERTIFICACAO_VAZIA = {
+const EMPTY_CERTIFICATION = {
   colaborador_id: "",
   nome: "",
   tipo: "",
@@ -63,40 +63,41 @@ const CERTIFICACAO_VAZIA = {
   observacoes: "",
 };
 
-const paraCampoData = (valor?: string | null) =>
-  valor ? String(valor).slice(0, 10) : "";
+const toDateInputValue = (value?: string | null) =>
+  value ? String(value).slice(0, 10) : "";
 
-export default function CertificacoesPage() {
+export default function CertificationsPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const confirmar = useConfirmacao();
-  const [certificacoes, setCertificacoes] = useState<Certificacao[]>([]);
-  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
-  const [buscaAplicada, setBuscaAplicada] = useState("");
-  const [filterTipo, setFilterTipo] = useState("todos");
+  const confirm = useConfirmation();
+  const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
 
-  const [pagina, setPagina] = useState(1);
-  const [itensPorPagina, setItensPorPagina] = useState(10);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [totalFiltrado, setTotalFiltrado] = useState(0);
-  const [tiposDisponiveis, setTiposDisponiveis] = useState<string[]>([]);
-  const [resumo, setResumo] = useState({
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filteredTotal, setFilteredTotal] = useState(0);
+  const [availableTypes, setAvailableTypes] = useState<string[]>([]);
+  const [summary, setSummary] = useState({
     total: 0,
     senior: 0,
-    vencendo90: 0,
-    vencidas: 0,
-    colaboradoresCertificados: 0,
-    instituicoes: 0,
+    expiringIn90: 0,
+    expired: 0,
+    certifiedEmployees: 0,
+    institutions: 0,
   });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedCertificacao, setSelectedCertificacao] =
-    useState<Certificacao | null>(null);
-  const [newCertificacao, setNewCertificacao] = useState(CERTIFICACAO_VAZIA);
-  const [editandoCertificacao, setEditandoCertificacao] =
-    useState(CERTIFICACAO_VAZIA);
+  const [selectedCertification, setSelectedCertification] =
+    useState<Certification | null>(null);
+  const [newCertification, setNewCertification] =
+    useState(EMPTY_CERTIFICATION);
+  const [editingCertification, setEditingCertification] =
+    useState(EMPTY_CERTIFICATION);
 
-  const tiposCertificacao = [
+  const certificationTypes = [
     "Certificação Senior",
     "AWS",
     "Azure",
@@ -120,11 +121,11 @@ export default function CertificacoesPage() {
     }
 
     fetchData();
-  }, [user, pagina, itensPorPagina, buscaAplicada, filterTipo]);
+  }, [user, page, itemsPerPage, appliedSearch, filterType]);
 
   useEffect(() => {
     if (user?.tipo !== "admin" && user?.id) {
-      setNewCertificacao((prev) => ({
+      setNewCertification((prev) => ({
         ...prev,
         colaborador_id: user.id.toString(),
       }));
@@ -134,33 +135,33 @@ export default function CertificacoesPage() {
   const fetchData = async () => {
     try {
       const params = new URLSearchParams({
-        page: String(pagina),
-        limit: String(itensPorPagina),
+        page: String(page),
+        limit: String(itemsPerPage),
       });
 
-      const meuId = Number(user?.id);
-      if (user?.tipo !== "admin" && Number.isFinite(meuId))
-        params.set("colaborador_id", String(meuId));
-      if (buscaAplicada) params.set("search", buscaAplicada);
-      if (filterTipo !== "todos") params.set("tipo", filterTipo);
+      const myId = Number(user?.id);
+      if (user?.tipo !== "admin" && Number.isFinite(myId))
+        params.set("colaborador_id", String(myId));
+      if (appliedSearch) params.set("search", appliedSearch);
+      if (filterType !== "all") params.set("tipo", filterType);
 
-      const [certificacoesRes, colaboradoresRes] = await Promise.all([
+      const [certificationsRes, employeesRes] = await Promise.all([
         fetch(`/api/certificacoes?${params}`),
         fetch("/api/colaboradores"),
       ]);
 
-      if (certificacoesRes.ok && colaboradoresRes.ok) {
-        const certificacoesData = await certificacoesRes.json();
-        const colaboradoresData = await colaboradoresRes.json();
+      if (certificationsRes.ok && employeesRes.ok) {
+        const certificationsData = await certificationsRes.json();
+        const employeesData = await employeesRes.json();
 
-        setCertificacoes(certificacoesData.data ?? []);
-        setTotalPaginas(certificacoesData.totalPages ?? 1);
-        setTotalFiltrado(certificacoesData.total ?? 0);
-        if (certificacoesData.resumo) setResumo(certificacoesData.resumo);
-        if (certificacoesData.tipos)
-          setTiposDisponiveis(certificacoesData.tipos);
+        setCertifications(certificationsData.data ?? []);
+        setTotalPages(certificationsData.totalPages ?? 1);
+        setFilteredTotal(certificationsData.total ?? 0);
+        if (certificationsData.summary) setSummary(certificationsData.summary);
+        if (certificationsData.types)
+          setAvailableTypes(certificationsData.types);
 
-        setColaboradores(colaboradoresData);
+        setEmployees(employeesData);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -172,13 +173,13 @@ export default function CertificacoesPage() {
     }
   };
 
-  const adicionarCertificacao = async () => {
+  const addCertification = async () => {
     if (
-      !newCertificacao.colaborador_id ||
-      !newCertificacao.nome ||
-      !newCertificacao.tipo ||
-      !newCertificacao.instituicao ||
-      !newCertificacao.data_obtencao
+      !newCertification.colaborador_id ||
+      !newCertification.nome ||
+      !newCertification.tipo ||
+      !newCertification.instituicao ||
+      !newCertification.data_obtencao
     ) {
       toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
@@ -191,14 +192,14 @@ export default function CertificacoesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          colaborador_id: parseInt(newCertificacao.colaborador_id),
-          nome: newCertificacao.nome,
-          tipo: newCertificacao.tipo,
-          instituicao: newCertificacao.instituicao,
-          data_obtencao: newCertificacao.data_obtencao,
-          data_vencimento: newCertificacao.data_vencimento || null,
-          url_credencial: newCertificacao.url_credencial || null,
-          observacoes: newCertificacao.observacoes || null,
+          colaborador_id: parseInt(newCertification.colaborador_id),
+          nome: newCertification.nome,
+          tipo: newCertification.tipo,
+          instituicao: newCertification.instituicao,
+          data_obtencao: newCertification.data_obtencao,
+          data_vencimento: newCertification.data_vencimento || null,
+          url_credencial: newCertification.url_credencial || null,
+          observacoes: newCertification.observacoes || null,
         }),
       });
 
@@ -208,7 +209,7 @@ export default function CertificacoesPage() {
         });
 
         setIsAddDialogOpen(false);
-        limparFormularioNovaCertificacao();
+        resetNewCertificationForm();
 
         window.location.reload();
       }
@@ -220,14 +221,14 @@ export default function CertificacoesPage() {
     }
   };
 
-  const editarCertificacao = async () => {
-    if (!selectedCertificacao) return;
+  const editCertification = async () => {
+    if (!selectedCertification) return;
 
     if (
-      !editandoCertificacao.nome ||
-      !editandoCertificacao.tipo ||
-      !editandoCertificacao.instituicao ||
-      !editandoCertificacao.data_obtencao
+      !editingCertification.nome ||
+      !editingCertification.tipo ||
+      !editingCertification.instituicao ||
+      !editingCertification.data_obtencao
     ) {
       toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
@@ -237,34 +238,34 @@ export default function CertificacoesPage() {
 
     try {
       const response = await fetch(
-        `/api/certificacoes/${selectedCertificacao.id}`,
+        `/api/certificacoes/${selectedCertification.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nome: editandoCertificacao.nome,
-            tipo: editandoCertificacao.tipo,
-            instituicao: editandoCertificacao.instituicao,
-            data_obtencao: editandoCertificacao.data_obtencao,
-            data_vencimento: editandoCertificacao.data_vencimento || null,
-            url_credencial: editandoCertificacao.url_credencial || null,
-            observacoes: editandoCertificacao.observacoes || null,
+            nome: editingCertification.nome,
+            tipo: editingCertification.tipo,
+            instituicao: editingCertification.instituicao,
+            data_obtencao: editingCertification.data_obtencao,
+            data_vencimento: editingCertification.data_vencimento || null,
+            url_credencial: editingCertification.url_credencial || null,
+            observacoes: editingCertification.observacoes || null,
           }),
         },
       );
 
       if (response.ok) {
         fetchData();
-        fecharDialogEdicao();
+        closeEditDialog();
 
         toast("Certificação atualizada!", {
           description: "As informações da certificação foram atualizadas.",
         });
       } else {
-        const erro = await response.json().catch(() => null);
+        const errorData = await response.json().catch(() => null);
         toast.danger("Erro", {
           description:
-            erro?.error || "Não foi possível atualizar a certificação.",
+            errorData?.error || "Não foi possível atualizar a certificação.",
         });
       }
     } catch (error) {
@@ -275,15 +276,15 @@ export default function CertificacoesPage() {
     }
   };
 
-  const removerCertificacao = async (id: number) => {
-    const confirmado = await confirmar({
-      titulo: "Remover certificação",
-      descricao:
+  const removeCertification = async (id: number) => {
+    const confirmed = await confirm({
+      title: "Remover certificação",
+      description:
         "Tem certeza que deseja remover esta certificação? Essa ação não pode ser desfeita.",
-      rotuloConfirmar: "Remover",
-      destrutivo: true,
+      confirmLabel: "Remover",
+      destructive: true,
     });
-    if (!confirmado) return;
+    if (!confirmed) return;
 
     try {
       const response = await fetch(`/api/certificacoes/${id}`, {
@@ -304,44 +305,44 @@ export default function CertificacoesPage() {
     }
   };
 
-  const abrirDialogEdicao = (certificacao: Certificacao) => {
-    setSelectedCertificacao(certificacao);
-    setEditandoCertificacao({
-      colaborador_id: certificacao.colaborador_id.toString(),
-      nome: certificacao.nome,
-      tipo: certificacao.tipo,
-      instituicao: certificacao.instituicao,
-      data_obtencao: paraCampoData(certificacao.data_obtencao),
-      data_vencimento: paraCampoData(certificacao.data_vencimento),
-      url_credencial: certificacao.url_credencial || "",
-      observacoes: certificacao.observacoes || "",
+  const openEditDialog = (certification: Certification) => {
+    setSelectedCertification(certification);
+    setEditingCertification({
+      colaborador_id: certification.colaborador_id.toString(),
+      nome: certification.nome,
+      tipo: certification.tipo,
+      instituicao: certification.instituicao,
+      data_obtencao: toDateInputValue(certification.data_obtencao),
+      data_vencimento: toDateInputValue(certification.data_vencimento),
+      url_credencial: certification.url_credencial || "",
+      observacoes: certification.observacoes || "",
     });
     setIsEditDialogOpen(true);
   };
 
-  const fecharDialogEdicao = () => {
+  const closeEditDialog = () => {
     setIsEditDialogOpen(false);
-    setSelectedCertificacao(null);
-    setEditandoCertificacao(CERTIFICACAO_VAZIA);
+    setSelectedCertification(null);
+    setEditingCertification(EMPTY_CERTIFICATION);
   };
 
-  const limparFormularioNovaCertificacao = () => {
-    setNewCertificacao({
-      ...CERTIFICACAO_VAZIA,
+  const resetNewCertificationForm = () => {
+    setNewCertification({
+      ...EMPTY_CERTIFICATION,
       colaborador_id:
         user?.tipo !== "admin" && user?.id ? user.id.toString() : "",
     });
   };
 
-  const podeEditarCertificacao = (certificacao: Certificacao) => {
-    return user?.tipo === "admin" || certificacao.colaborador_id === user?.id;
+  const canEditCertification = (certification: Certification) => {
+    return user?.tipo === "admin" || certification.colaborador_id === user?.id;
   };
 
-  const ehAdmin = user?.tipo === "admin";
-  const participacaoSenior =
-    resumo.total > 0 ? (resumo.senior / resumo.total) * 100 : 0;
+  const isAdmin = user?.tipo === "admin";
+  const seniorShare =
+    summary.total > 0 ? (summary.senior / summary.total) * 100 : 0;
 
-  const colunasCertificacoes: ColumnDef<Certificacao, any>[] = [
+  const certificationColumns: ColumnDef<Certification, any>[] = [
     {
       accessorKey: "nome",
       header: "Certificação",
@@ -359,21 +360,21 @@ export default function CertificacoesPage() {
       ),
     },
     {
-      accessorKey: "colaborador_nome",
+      accessorKey: "employee_name",
       header: "Colaborador",
-      meta: { classe: "hidden lg:table-cell text-muted" },
+      meta: { className: "hidden lg:table-cell text-muted" },
     },
     {
       accessorKey: "instituicao",
       header: "Instituição",
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
     {
       accessorKey: "data_obtencao",
       header: "Obtida em",
       cell: (info) =>
         new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
       accessorKey: "data_vencimento",
@@ -381,20 +382,20 @@ export default function CertificacoesPage() {
       cell: ({ row, getValue }) => {
         if (!getValue())
           return <span className="text-muted">Sem validade</span>;
-        const dias = diasAte(row.original.data_vencimento);
+        const days = daysUntil(row.original.data_vencimento);
         return (
           <div className="flex items-center gap-2">
             <span>
               {new Date(String(getValue())).toLocaleDateString("pt-BR")}
             </span>
-            {dias !== null && dias < 0 && (
+            {days !== null && days < 0 && (
               <Chip size="sm" color="danger">
                 Vencida
               </Chip>
             )}
-            {dias !== null && dias >= 0 && dias <= 90 && (
+            {days !== null && days >= 0 && days <= 90 && (
               <Chip size="sm" color="warning">
-                {inteiro(dias)} d
+                {formatInteger(days)} d
               </Chip>
             )}
           </div>
@@ -402,31 +403,31 @@ export default function CertificacoesPage() {
       },
     },
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => {
-        const certificacao = row.original;
+        const certification = row.original;
         return (
           <div className="flex justify-end gap-2">
-            {certificacao.url_credencial && (
+            {certification.url_credencial && (
               <Button
                 isIconOnly
                 variant="outline"
                 aria-label="Ver credencial"
                 onPress={() =>
-                  window.open(certificacao.url_credencial!, "_blank")
+                  window.open(certification.url_credencial!, "_blank")
                 }
               >
                 <ExternalLink />
               </Button>
             )}
-            {podeEditarCertificacao(certificacao) && (
+            {canEditCertification(certification) && (
               <>
                 <Button
                   isIconOnly
                   variant="outline"
                   aria-label="Editar certificação"
-                  onPress={() => abrirDialogEdicao(certificacao)}
+                  onPress={() => openEditDialog(certification)}
                 >
                   <Edit />
                 </Button>
@@ -434,7 +435,7 @@ export default function CertificacoesPage() {
                   isIconOnly
                   variant="danger"
                   aria-label="Remover certificação"
-                  onPress={() => removerCertificacao(certificacao.id)}
+                  onPress={() => removeCertification(certification.id)}
                 >
                   <Trash2 />
                 </Button>
@@ -443,16 +444,16 @@ export default function CertificacoesPage() {
           </div>
         );
       },
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const filtroTipoCertificacao = (
+  const certificationTypeFilter = (
     <Select
-      selectedKey={filterTipo}
-      onSelectionChange={(chave) => {
-        setFilterTipo(String(chave));
-        setPagina(1);
+      selectedKey={filterType}
+      onSelectionChange={(key) => {
+        setFilterType(String(key));
+        setPage(1);
       }}
       variant="secondary"
       aria-label="Filtrar por tipo"
@@ -463,12 +464,12 @@ export default function CertificacoesPage() {
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          <ListBox.Item id="todos" textValue="Todos os tipos">
+          <ListBox.Item id="all" textValue="Todos os tipos">
             Todos os tipos
           </ListBox.Item>
-          {tiposDisponiveis.map((tipo) => (
-            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
-              {tipo}
+          {availableTypes.map((type) => (
+            <ListBox.Item key={type} id={type} textValue={type}>
+              {type}
             </ListBox.Item>
           ))}
         </ListBox>
@@ -479,18 +480,18 @@ export default function CertificacoesPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Controle de Certificações"
-          descricao="Gerencie certificações dos colaboradores"
-          voltarHref="/"
+      <PageLayout>
+        <PageHeader
+          title="Controle de Certificações"
+          description="Gerencie certificações dos colaboradores"
+          backHref="/"
         />
 
         <section
@@ -498,44 +499,44 @@ export default function CertificacoesPage() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
           <StatTile
-            rotulo={ehAdmin ? "Certificações" : "Suas certificações"}
-            valor={inteiro(resumo.total)}
-            icone={Award}
-            deltaLegenda={
-              tiposDisponiveis.length > 0
-                ? `${inteiro(tiposDisponiveis.length)} tipo(s) diferentes`
+            label={isAdmin ? "Certificações" : "Suas certificações"}
+            value={formatInteger(summary.total)}
+            icon={Award}
+            deltaLabel={
+              availableTypes.length > 0
+                ? `${formatInteger(availableTypes.length)} tipo(s) diferentes`
                 : "nenhuma registrada ainda"
             }
           />
           <StatTile
-            rotulo="Certificações Sênior"
-            valor={inteiro(resumo.senior)}
-            icone={BadgeCheck}
-            deltaLegenda={
-              resumo.total > 0
-                ? `${percentual(participacaoSenior, 0)} do total`
+            label="Certificações Sênior"
+            value={formatInteger(summary.senior)}
+            icon={BadgeCheck}
+            deltaLabel={
+              summary.total > 0
+                ? `${formatPercent(seniorShare, 0)} do total`
                 : "-"
             }
           />
           <StatTile
-            rotulo={ehAdmin ? "Colaboradores certificados" : "Instituições"}
-            valor={inteiro(
-              ehAdmin ? resumo.colaboradoresCertificados : resumo.instituicoes,
+            label={isAdmin ? "Colaboradores certificados" : "Instituições"}
+            value={formatInteger(
+              isAdmin ? summary.certifiedEmployees : summary.institutions,
             )}
-            icone={Calendar}
-            deltaLegenda={
-              ehAdmin
-                ? `de ${inteiro(colaboradores.length)} cadastrados`
+            icon={Calendar}
+            deltaLabel={
+              isAdmin
+                ? `de ${formatInteger(employees.length)} cadastrados`
                 : "emissoras das suas credenciais"
             }
           />
           <StatTile
-            rotulo="Vencendo em 90 dias"
-            valor={inteiro(resumo.vencendo90)}
-            icone={CalendarClock}
-            deltaLegenda={
-              resumo.vencidas > 0
-                ? `${inteiro(resumo.vencidas)} já vencida(s)`
+            label="Vencendo em 90 dias"
+            value={formatInteger(summary.expiringIn90)}
+            icon={CalendarClock}
+            deltaLabel={
+              summary.expired > 0
+                ? `${formatInteger(summary.expired)} já vencida(s)`
                 : "nenhuma vencida"
             }
           />
@@ -554,30 +555,30 @@ export default function CertificacoesPage() {
               </div>
               <ModalForm
                 isOpen={isAddDialogOpen}
-                onOpenChange={(aberto) => {
-                  setIsAddDialogOpen(aberto);
-                  if (!aberto) limparFormularioNovaCertificacao();
+                onOpenChange={(isOpen) => {
+                  setIsAddDialogOpen(isOpen);
+                  if (!isOpen) resetNewCertificationForm();
                 }}
-                titulo="Adicionar Nova Certificação"
-                descricao="Registre uma nova certificação"
-                gatilho={
+                title="Adicionar Nova Certificação"
+                description="Registre uma nova certificação"
+                trigger={
                   <Button>
                     <Plus />
                     Nova Certificação
                   </Button>
                 }
-                rotuloConfirmar="Adicionar Certificação"
-                onConfirmar={adicionarCertificacao}
+                confirmLabel="Adicionar Certificação"
+                onConfirm={addCertification}
               >
                 {user?.tipo === "admin" && (
-                  <CampoModal rotulo="Colaborador" htmlFor="colaborador">
+                  <ModalField label="Colaborador" htmlFor="employee">
                     <Select
                       aria-label="Colaborador"
-                      value={newCertificacao.colaborador_id || null}
-                      onChange={(chave) =>
-                        setNewCertificacao({
-                          ...newCertificacao,
-                          colaborador_id: chave ? String(chave) : "",
+                      value={newCertification.colaborador_id || null}
+                      onChange={(key) =>
+                        setNewCertification({
+                          ...newCertification,
+                          colaborador_id: key ? String(key) : "",
                         })
                       }
                       variant="secondary"
@@ -589,45 +590,45 @@ export default function CertificacoesPage() {
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          {colaboradores.map((colaborador) => (
+                          {employees.map((employee) => (
                             <ListBox.Item
-                              key={colaborador.id}
-                              id={colaborador.id.toString()}
-                              textValue={colaborador.nome}
+                              key={employee.id}
+                              id={employee.id.toString()}
+                              textValue={employee.nome}
                             >
-                              {colaborador.nome}
+                              {employee.nome}
                             </ListBox.Item>
                           ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>
-                  </CampoModal>
+                  </ModalField>
                 )}
 
-                <LinhaCampos>
-                  <CampoModal rotulo="Nome da Certificação" htmlFor="nome">
+                <FieldRow>
+                  <ModalField label="Nome da Certificação" htmlFor="name">
                     <Input
-                      id="nome"
-                      value={newCertificacao.nome}
+                      id="name"
+                      value={newCertification.nome}
                       onChange={(e) =>
-                        setNewCertificacao({
-                          ...newCertificacao,
+                        setNewCertification({
+                          ...newCertification,
                           nome: e.target.value,
                         })
                       }
                       variant="secondary"
                       placeholder="Ex: AWS Solutions Architect"
                     />
-                  </CampoModal>
+                  </ModalField>
 
-                  <CampoModal rotulo="Tipo" htmlFor="tipo">
+                  <ModalField label="Tipo" htmlFor="type">
                     <Select
                       aria-label="Tipo"
-                      value={newCertificacao.tipo || null}
-                      onChange={(chave) =>
-                        setNewCertificacao({
-                          ...newCertificacao,
-                          tipo: chave ? String(chave) : "",
+                      value={newCertification.tipo || null}
+                      onChange={(key) =>
+                        setNewCertification({
+                          ...newCertification,
+                          tipo: key ? String(key) : "",
                         })
                       }
                       variant="secondary"
@@ -639,167 +640,167 @@ export default function CertificacoesPage() {
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          {tiposCertificacao.map((tipo) => (
-                            <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
-                              {tipo}
+                          {certificationTypes.map((type) => (
+                            <ListBox.Item key={type} id={type} textValue={type}>
+                              {type}
                             </ListBox.Item>
                           ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>
-                  </CampoModal>
-                </LinhaCampos>
+                  </ModalField>
+                </FieldRow>
 
-                <CampoModal rotulo="Instituição" htmlFor="instituicao">
+                <ModalField label="Instituição" htmlFor="institution">
                   <Input
-                    id="instituicao"
-                    value={newCertificacao.instituicao}
+                    id="institution"
+                    value={newCertification.instituicao}
                     onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
+                      setNewCertification({
+                        ...newCertification,
                         instituicao: e.target.value,
                       })
                     }
                     variant="secondary"
                     placeholder="Ex: Amazon Web Services"
                   />
-                </CampoModal>
+                </ModalField>
 
-                <LinhaCampos>
-                  <CampoModal rotulo="Data de Obtenção" htmlFor="data_obtencao">
+                <FieldRow>
+                  <ModalField label="Data de Obtenção" htmlFor="obtained_date">
                     <Input
-                      id="data_obtencao"
+                      id="obtained_date"
                       type="date"
-                      value={newCertificacao.data_obtencao}
+                      value={newCertification.data_obtencao}
                       onChange={(e) =>
-                        setNewCertificacao({
-                          ...newCertificacao,
+                        setNewCertification({
+                          ...newCertification,
                           data_obtencao: e.target.value,
                         })
                       }
                       variant="secondary"
                     />
-                  </CampoModal>
+                  </ModalField>
 
-                  <CampoModal
-                    rotulo="Data de Vencimento (Opcional)"
-                    htmlFor="data_vencimento"
+                  <ModalField
+                    label="Data de Vencimento (Opcional)"
+                    htmlFor="expiration_date"
                   >
                     <Input
-                      id="data_vencimento"
+                      id="expiration_date"
                       type="date"
-                      value={newCertificacao.data_vencimento}
+                      value={newCertification.data_vencimento}
                       onChange={(e) =>
-                        setNewCertificacao({
-                          ...newCertificacao,
+                        setNewCertification({
+                          ...newCertification,
                           data_vencimento: e.target.value,
                         })
                       }
                       variant="secondary"
                     />
-                  </CampoModal>
-                </LinhaCampos>
+                  </ModalField>
+                </FieldRow>
 
-                <CampoModal
-                  rotulo="URL da Credencial (Opcional)"
-                  htmlFor="url_credencial"
+                <ModalField
+                  label="URL da Credencial (Opcional)"
+                  htmlFor="credential_url"
                 >
                   <Input
-                    id="url_credencial"
+                    id="credential_url"
                     type="url"
-                    value={newCertificacao.url_credencial}
+                    value={newCertification.url_credencial}
                     onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
+                      setNewCertification({
+                        ...newCertification,
                         url_credencial: e.target.value,
                       })
                     }
                     variant="secondary"
                     placeholder="https://..."
                   />
-                </CampoModal>
+                </ModalField>
 
-                <CampoModal
-                  rotulo="Observações (Opcional)"
-                  htmlFor="observacoes"
+                <ModalField
+                  label="Observações (Opcional)"
+                  htmlFor="notes"
                 >
                   <TextArea
-                    id="observacoes"
-                    value={newCertificacao.observacoes}
+                    id="notes"
+                    value={newCertification.observacoes}
                     onChange={(e) =>
-                      setNewCertificacao({
-                        ...newCertificacao,
+                      setNewCertification({
+                        ...newCertification,
                         observacoes: e.target.value,
                       })
                     }
                     variant="secondary"
                     placeholder="Informações adicionais..."
                   />
-                </CampoModal>
+                </ModalField>
               </ModalForm>
             </div>
           </Card.Header>
           <Card.Content>
             <DataTable
-              colunas={colunasCertificacoes}
-              dados={certificacoes}
-              rotulo="Certificações"
-              vazio="Nenhuma certificação encontrada"
-              total={totalFiltrado}
-              pagina={pagina}
-              totalPaginas={totalPaginas}
-              onMudarPagina={setPagina}
-              itensPorPagina={itensPorPagina}
-              onMudarItensPorPagina={(itens) => {
-                setItensPorPagina(itens);
-                setPagina(1);
+              columns={certificationColumns}
+              data={certifications}
+              label="Certificações"
+              emptyMessage="Nenhuma certificação encontrada"
+              total={filteredTotal}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              itemsPerPage={itemsPerPage}
+              onItemsPerPageChange={(count) => {
+                setItemsPerPage(count);
+                setPage(1);
               }}
-              busca={buscaAplicada}
-              onMudarBusca={(valor) => {
-                setBuscaAplicada(valor);
-                setPagina(1);
+              search={appliedSearch}
+              onSearchChange={(value) => {
+                setAppliedSearch(value);
+                setPage(1);
               }}
-              placeholderBusca="Pesquisar por certificação, colaborador ou instituição..."
-              filtros={filtroTipoCertificacao}
+              searchPlaceholder="Pesquisar por certificação, colaborador ou instituição..."
+              filters={certificationTypeFilter}
             />
           </Card.Content>
         </Card>
 
         <ModalForm
           isOpen={isEditDialogOpen}
-          onOpenChange={(aberto) => {
-            if (aberto) setIsEditDialogOpen(true);
-            else fecharDialogEdicao();
+          onOpenChange={(isOpen) => {
+            if (isOpen) setIsEditDialogOpen(true);
+            else closeEditDialog();
           }}
-          titulo="Editar Certificação"
-          descricao="Atualize as informações da certificação"
-          rotuloConfirmar="Atualizar Certificação"
-          onConfirmar={editarCertificacao}
+          title="Editar Certificação"
+          description="Atualize as informações da certificação"
+          confirmLabel="Atualizar Certificação"
+          onConfirm={editCertification}
         >
-          <LinhaCampos>
-            <CampoModal rotulo="Nome da Certificação" htmlFor="edit_nome">
+          <FieldRow>
+            <ModalField label="Nome da Certificação" htmlFor="edit_name">
               <Input
-                id="edit_nome"
-                value={editandoCertificacao.nome}
+                id="edit_name"
+                value={editingCertification.nome}
                 onChange={(e) =>
-                  setEditandoCertificacao({
-                    ...editandoCertificacao,
+                  setEditingCertification({
+                    ...editingCertification,
                     nome: e.target.value,
                   })
                 }
                 variant="secondary"
                 placeholder="Ex: AWS Solutions Architect"
               />
-            </CampoModal>
+            </ModalField>
 
-            <CampoModal rotulo="Tipo" htmlFor="edit_tipo">
+            <ModalField label="Tipo" htmlFor="edit_type">
               <Select
                 aria-label="Tipo"
-                value={editandoCertificacao.tipo || null}
-                onChange={(chave) =>
-                  setEditandoCertificacao({
-                    ...editandoCertificacao,
-                    tipo: chave ? String(chave) : "",
+                value={editingCertification.tipo || null}
+                onChange={(key) =>
+                  setEditingCertification({
+                    ...editingCertification,
+                    tipo: key ? String(key) : "",
                   })
                 }
                 variant="secondary"
@@ -811,105 +812,105 @@ export default function CertificacoesPage() {
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    {tiposCertificacao.map((tipo) => (
-                      <ListBox.Item key={tipo} id={tipo} textValue={tipo}>
-                        {tipo}
+                    {certificationTypes.map((type) => (
+                      <ListBox.Item key={type} id={type} textValue={type}>
+                        {type}
                       </ListBox.Item>
                     ))}
                   </ListBox>
                 </Select.Popover>
               </Select>
-            </CampoModal>
-          </LinhaCampos>
+            </ModalField>
+          </FieldRow>
 
-          <CampoModal rotulo="Instituição" htmlFor="edit_instituicao">
+          <ModalField label="Instituição" htmlFor="edit_institution">
             <Input
-              id="edit_instituicao"
-              value={editandoCertificacao.instituicao}
+              id="edit_institution"
+              value={editingCertification.instituicao}
               onChange={(e) =>
-                setEditandoCertificacao({
-                  ...editandoCertificacao,
+                setEditingCertification({
+                  ...editingCertification,
                   instituicao: e.target.value,
                 })
               }
               variant="secondary"
               placeholder="Ex: Amazon Web Services"
             />
-          </CampoModal>
+          </ModalField>
 
-          <LinhaCampos>
-            <CampoModal rotulo="Data de Obtenção" htmlFor="edit_data_obtencao">
+          <FieldRow>
+            <ModalField label="Data de Obtenção" htmlFor="edit_obtained_date">
               <Input
-                id="edit_data_obtencao"
+                id="edit_obtained_date"
                 type="date"
-                value={editandoCertificacao.data_obtencao}
+                value={editingCertification.data_obtencao}
                 onChange={(e) =>
-                  setEditandoCertificacao({
-                    ...editandoCertificacao,
+                  setEditingCertification({
+                    ...editingCertification,
                     data_obtencao: e.target.value,
                   })
                 }
                 variant="secondary"
               />
-            </CampoModal>
+            </ModalField>
 
-            <CampoModal
-              rotulo="Data de Vencimento (Opcional)"
-              htmlFor="edit_data_vencimento"
+            <ModalField
+              label="Data de Vencimento (Opcional)"
+              htmlFor="edit_expiration_date"
             >
               <Input
-                id="edit_data_vencimento"
+                id="edit_expiration_date"
                 type="date"
-                value={editandoCertificacao.data_vencimento}
+                value={editingCertification.data_vencimento}
                 onChange={(e) =>
-                  setEditandoCertificacao({
-                    ...editandoCertificacao,
+                  setEditingCertification({
+                    ...editingCertification,
                     data_vencimento: e.target.value,
                   })
                 }
                 variant="secondary"
               />
-            </CampoModal>
-          </LinhaCampos>
+            </ModalField>
+          </FieldRow>
 
-          <CampoModal
-            rotulo="URL da Credencial (Opcional)"
-            htmlFor="edit_url_credencial"
+          <ModalField
+            label="URL da Credencial (Opcional)"
+            htmlFor="edit_credential_url"
           >
             <Input
-              id="edit_url_credencial"
+              id="edit_credential_url"
               type="url"
-              value={editandoCertificacao.url_credencial}
+              value={editingCertification.url_credencial}
               onChange={(e) =>
-                setEditandoCertificacao({
-                  ...editandoCertificacao,
+                setEditingCertification({
+                  ...editingCertification,
                   url_credencial: e.target.value,
                 })
               }
               variant="secondary"
               placeholder="https://..."
             />
-          </CampoModal>
+          </ModalField>
 
-          <CampoModal
-            rotulo="Observações (Opcional)"
-            htmlFor="edit_observacoes"
+          <ModalField
+            label="Observações (Opcional)"
+            htmlFor="edit_notes"
           >
             <TextArea
-              id="edit_observacoes"
-              value={editandoCertificacao.observacoes}
+              id="edit_notes"
+              value={editingCertification.observacoes}
               onChange={(e) =>
-                setEditandoCertificacao({
-                  ...editandoCertificacao,
+                setEditingCertification({
+                  ...editingCertification,
                   observacoes: e.target.value,
                 })
               }
               variant="secondary"
               placeholder="Informações adicionais..."
             />
-          </CampoModal>
+          </ModalField>
         </ModalForm>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

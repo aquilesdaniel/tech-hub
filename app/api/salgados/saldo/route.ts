@@ -1,12 +1,12 @@
-import { consultarSaldoLoja, ErroAbacatePay } from "@/lib/abacatepay";
+import { getStoreBalance, AbacatePayError } from "@/lib/abacatepay";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const saldo = await consultarSaldoLoja();
-    return NextResponse.json(saldo);
+    const balance = await getStoreBalance();
+    return NextResponse.json(balance);
   } catch (error) {
-    if (error instanceof ErroAbacatePay) {
+    if (error instanceof AbacatePayError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

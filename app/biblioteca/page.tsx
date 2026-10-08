@@ -1,13 +1,13 @@
 "use client";
 
-import { useConfirmacao } from "@/components/confirmacao";
+import { useConfirmation } from "@/components/confirmation";
 import { StatTile } from "@/components/dashboard/stat-tile";
-import { diasAte, inteiro, percentual } from "@/components/dashboard/viz";
+import { daysUntil, formatInteger, formatPercent } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
-import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { ModalField, FieldRow, ModalForm } from "@/components/modal-form";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -35,7 +35,7 @@ import {
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
-interface Livro {
+interface Book {
   id: number;
   titulo: string;
   autor: string;
@@ -45,14 +45,14 @@ interface Livro {
   capa: string;
 }
 
-interface Colaborador {
+interface Employee {
   id: number;
   nome: string;
   email: string;
   departamento: string;
 }
 
-interface Emprestimo {
+interface Loan {
   id: number;
   livro_id: number;
   colaborador_id: number;
@@ -60,49 +60,49 @@ interface Emprestimo {
   data_prevista_devolucao: string;
   data_real_devolucao: string | null;
   status: string;
-  livro_titulo?: string;
-  colaborador_nome?: string;
+  book_title?: string;
+  employee_name?: string;
 }
 
-export default function BibliotecaPage() {
+export default function LibraryPage() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const confirmar = useConfirmacao();
-  const [livros, setLivros] = useState<Livro[]>([]);
-  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const confirm = useConfirmation();
+  const [books, setBooks] = useState<Book[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
-  const [emprestimosAtivos, setEmprestimosAtivos] = useState<Emprestimo[]>([]);
-  const [historico, setHistorico] = useState<Emprestimo[]>([]);
-  const [paginaAtivos, setPaginaAtivos] = useState(1);
-  const [paginaHistorico, setPaginaHistorico] = useState(1);
-  const [totalPaginasAtivos, setTotalPaginasAtivos] = useState(1);
-  const [totalPaginasHistorico, setTotalPaginasHistorico] = useState(1);
-  const [totalAtivos, setTotalAtivos] = useState(0);
-  const [totalHistorico, setTotalHistorico] = useState(0);
-  const [buscaEmprestimos, setBuscaEmprestimos] = useState("");
-  const [itensPorPagina, setItensPorPagina] = useState(10);
-  const [resumo, setResumo] = useState({
+  const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
+  const [history, setHistory] = useState<Loan[]>([]);
+  const [activePage, setActivePage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [activeTotalPages, setActiveTotalPages] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [activeTotal, setActiveTotal] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [loanSearch, setLoanSearch] = useState("");
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [summary, setSummary] = useState({
     total: 0,
-    ativos: 0,
-    atrasados: 0,
-    devolvidos: 0,
+    active: 0,
+    overdue: 0,
+    returned: 0,
   });
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterGenero, setFilterGenero] = useState("todos");
-  const [isAddLivroOpen, setIsAddLivroOpen] = useState(false);
-  const [isEmprestimoOpen, setIsEmprestimoOpen] = useState(false);
-  const [selectedLivro, setSelectedLivro] = useState<Livro | null>(null);
-  const [newLivro, setNewLivro] = useState({
+  const [filterGenre, setFilterGenre] = useState("all");
+  const [isAddBookOpen, setIsAddBookOpen] = useState(false);
+  const [isLoanOpen, setIsLoanOpen] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [newBook, setNewBook] = useState({
     titulo: "",
     autor: "",
     genero: "",
     isbn: "",
     capa: "",
   });
-  const [capaLoading, setCapaLoading] = useState(false);
-  const [newEmprestimo, setNewEmprestimo] = useState({
-    colaboradorId: "",
-    dias: "14",
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [newLoan, setNewLoan] = useState({
+    employeeId: "",
+    days: "14",
   });
 
   useEffect(() => {
@@ -111,47 +111,47 @@ export default function BibliotecaPage() {
     }
 
     fetchData();
-  }, [user, paginaAtivos, paginaHistorico, itensPorPagina, buscaEmprestimos]);
+  }, [user, activePage, historyPage, itemsPerPage, loanSearch]);
 
   const fetchData = async () => {
     try {
-      const base = new URLSearchParams({ limit: String(itensPorPagina) });
-      if (buscaEmprestimos) base.set("search", buscaEmprestimos);
-      const meuId = Number(user?.id);
-      if (user?.tipo !== "admin" && Number.isFinite(meuId))
-        base.set("colaborador_id", String(meuId));
+      const base = new URLSearchParams({ limit: String(itemsPerPage) });
+      if (loanSearch) base.set("search", loanSearch);
+      const myId = Number(user?.id);
+      if (user?.tipo !== "admin" && Number.isFinite(myId))
+        base.set("colaborador_id", String(myId));
 
-      const paramsAtivos = new URLSearchParams(base);
-      paramsAtivos.set("status", "emprestado");
-      paramsAtivos.set("page", String(paginaAtivos));
+      const activeParams = new URLSearchParams(base);
+      activeParams.set("status", "emprestado");
+      activeParams.set("page", String(activePage));
 
-      const paramsHistorico = new URLSearchParams(base);
-      paramsHistorico.set("page", String(paginaHistorico));
+      const historyParams = new URLSearchParams(base);
+      historyParams.set("page", String(historyPage));
 
-      const [livrosRes, colaboradoresRes, ativosRes, historicoRes] =
+      const [booksRes, employeesRes, activeRes, historyRes] =
         await Promise.all([
           fetch("/api/biblioteca/livros"),
           fetch("/api/colaboradores"),
-          fetch(`/api/biblioteca/emprestimos?${paramsAtivos}`),
-          fetch(`/api/biblioteca/emprestimos?${paramsHistorico}`),
+          fetch(`/api/biblioteca/emprestimos?${activeParams}`),
+          fetch(`/api/biblioteca/emprestimos?${historyParams}`),
         ]);
 
-      const livrosData = await livrosRes.json();
-      const colaboradoresData = await colaboradoresRes.json();
-      const ativosData = await ativosRes.json();
-      const historicoData = await historicoRes.json();
+      const booksData = await booksRes.json();
+      const employeesData = await employeesRes.json();
+      const activeData = await activeRes.json();
+      const historyData = await historyRes.json();
 
-      setLivros(livrosData);
-      setColaboradores(colaboradoresData);
+      setBooks(booksData);
+      setEmployees(employeesData);
 
-      setEmprestimosAtivos(ativosData.data ?? []);
-      setTotalPaginasAtivos(ativosData.totalPages ?? 1);
-      setTotalAtivos(ativosData.total ?? 0);
+      setActiveLoans(activeData.data ?? []);
+      setActiveTotalPages(activeData.totalPages ?? 1);
+      setActiveTotal(activeData.total ?? 0);
 
-      setHistorico(historicoData.data ?? []);
-      setTotalPaginasHistorico(historicoData.totalPages ?? 1);
-      setTotalHistorico(historicoData.total ?? 0);
-      if (historicoData.resumo) setResumo(historicoData.resumo);
+      setHistory(historyData.data ?? []);
+      setHistoryTotalPages(historyData.totalPages ?? 1);
+      setHistoryTotal(historyData.total ?? 0);
+      if (historyData.summary) setSummary(historyData.summary);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
     } finally {
@@ -159,28 +159,28 @@ export default function BibliotecaPage() {
     }
   };
 
-  const getColaboradorNome = (id: number) => {
-    const colaborador = colaboradores.find((c) => c.id === id);
-    return colaborador?.nome || "Desconhecido";
+  const getEmployeeName = (id: number) => {
+    const employee = employees.find((c) => c.id === id);
+    return employee?.nome || "Desconhecido";
   };
 
-  const getLivroTitulo = (id: number) => {
-    const livro = livros.find((l) => l.id === id);
-    return livro?.titulo || "Desconhecido";
+  const getBookTitle = (id: number) => {
+    const book = books.find((l) => l.id === id);
+    return book?.titulo || "Desconhecido";
   };
 
-  const filteredLivros = livros.filter((livro) => {
+  const filteredBooks = books.filter((book) => {
     const matchesSearch =
-      livro.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      livro.autor.toLowerCase().includes(searchTerm.toLowerCase());
+      book.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      book.autor.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter =
-      filterGenero === "todos" || livro.genero === filterGenero;
+      filterGenre === "all" || book.genero === filterGenre;
 
     return matchesSearch && matchesFilter;
   });
 
-  const adicionarLivro = async () => {
-    if (!newLivro.titulo || !newLivro.autor || !newLivro.genero) {
+  const addBook = async () => {
+    if (!newBook.titulo || !newBook.autor || !newBook.genero) {
       toast.danger("Erro", {
         description: "Preencha todos os campos obrigatórios.",
       });
@@ -192,20 +192,20 @@ export default function BibliotecaPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...newLivro,
+          ...newBook,
           disponivel: true,
           capa:
-            newLivro.capa ||
+            newBook.capa ||
             `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(
-              newLivro.titulo + " book",
+              newBook.titulo + " book",
             )}`,
         }),
       });
 
       if (response.ok) {
         fetchData();
-        setIsAddLivroOpen(false);
-        setNewLivro({ titulo: "", autor: "", genero: "", isbn: "", capa: "" });
+        setIsAddBookOpen(false);
+        setNewBook({ titulo: "", autor: "", genero: "", isbn: "", capa: "" });
 
         toast("Livro adicionado!", {
           description: "Novo livro foi adicionado ao catálogo.",
@@ -216,8 +216,8 @@ export default function BibliotecaPage() {
     }
   };
 
-  const emprestarLivro = async () => {
-    if (!selectedLivro || !newEmprestimo.colaboradorId) {
+  const lendBook = async () => {
+    if (!selectedBook || !newLoan.employeeId) {
       toast.danger("Erro", {
         description: "Selecione um colaborador.",
       });
@@ -225,34 +225,34 @@ export default function BibliotecaPage() {
     }
 
     try {
-      const dataEmprestimo = new Date();
-      const dataPrevista = new Date();
-      dataPrevista.setDate(
-        dataPrevista.getDate() + Number.parseInt(newEmprestimo.dias),
+      const loanDate = new Date();
+      const dueDate = new Date();
+      dueDate.setDate(
+        dueDate.getDate() + Number.parseInt(newLoan.days),
       );
 
       await fetch("/api/biblioteca/emprestimos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          livro_id: selectedLivro.id,
-          colaborador_id: Number.parseInt(newEmprestimo.colaboradorId),
-          data_emprestimo: dataEmprestimo.toISOString().split("T")[0],
-          data_prevista_devolucao: dataPrevista.toISOString().split("T")[0],
+          livro_id: selectedBook.id,
+          colaborador_id: Number.parseInt(newLoan.employeeId),
+          data_emprestimo: loanDate.toISOString().split("T")[0],
+          data_prevista_devolucao: dueDate.toISOString().split("T")[0],
           status: "emprestado",
         }),
       });
 
-      await fetch(`/api/biblioteca/livros/${selectedLivro.id}`, {
+      await fetch(`/api/biblioteca/livros/${selectedBook.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disponivel: false }),
       });
 
       fetchData();
-      setIsEmprestimoOpen(false);
-      setSelectedLivro(null);
-      setNewEmprestimo({ colaboradorId: "", dias: "14" });
+      setIsLoanOpen(false);
+      setSelectedBook(null);
+      setNewLoan({ employeeId: "", days: "14" });
 
       toast("Empréstimo realizado!", {
         description: "Livro emprestado com sucesso.",
@@ -262,16 +262,16 @@ export default function BibliotecaPage() {
     }
   };
 
-  const devolverLivro = async (emprestimoId: number, livroId: number) => {
-    const confirmado = await confirmar({
-      titulo: "Devolver livro",
-      descricao: `Confirmar a devolução de "${getLivroTitulo(livroId)}"? O livro voltará para o catálogo como disponível.`,
-      rotuloConfirmar: "Devolver",
+  const returnBook = async (loanId: number, bookId: number) => {
+    const confirmed = await confirm({
+      title: "Devolver livro",
+      description: `Confirmar a devolução de "${getBookTitle(bookId)}"? O livro voltará para o catálogo como disponível.`,
+      confirmLabel: "Devolver",
     });
-    if (!confirmado) return;
+    if (!confirmed) return;
 
     try {
-      await fetch(`/api/biblioteca/emprestimos/${emprestimoId}`, {
+      await fetch(`/api/biblioteca/emprestimos/${loanId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -280,7 +280,7 @@ export default function BibliotecaPage() {
         }),
       });
 
-      await fetch(`/api/biblioteca/livros/${livroId}`, {
+      await fetch(`/api/biblioteca/livros/${bookId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disponivel: true }),
@@ -296,42 +296,42 @@ export default function BibliotecaPage() {
     }
   };
 
-  const generosUnicos = [...new Set(livros.map((l) => l.genero))];
+  const uniqueGenres = [...new Set(books.map((l) => l.genero))];
 
-  const abrirModalEmprestimo = (livro: Livro) => {
-    setSelectedLivro(livro);
-    setIsEmprestimoOpen(true);
+  const openLoanModal = (book: Book) => {
+    setSelectedBook(book);
+    setIsLoanOpen(true);
 
     if (user) {
-      setNewEmprestimo({
-        colaboradorId: user.id.toString(),
-        dias: "14",
+      setNewLoan({
+        employeeId: user.id.toString(),
+        days: "14",
       });
     }
   };
 
-  const fecharModalEmprestimo = () => {
-    setIsEmprestimoOpen(false);
-    setSelectedLivro(null);
-    setNewEmprestimo({
-      colaboradorId: "",
-      dias: "14",
+  const closeLoanModal = () => {
+    setIsLoanOpen(false);
+    setSelectedBook(null);
+    setNewLoan({
+      employeeId: "",
+      days: "14",
     });
   };
 
-  const buscarCapa = async () => {
-    if (!newLivro.titulo) {
+  const fetchCover = async () => {
+    if (!newBook.titulo) {
       toast.danger("Erro", {
         description: "Digite o título do livro para buscar a capa",
       });
       return;
     }
 
-    setCapaLoading(true);
+    setCoverLoading(true);
     try {
-      const params = new URLSearchParams({ titulo: newLivro.titulo });
-      if (newLivro.autor) {
-        params.set("autor", newLivro.autor);
+      const params = new URLSearchParams({ titulo: newBook.titulo });
+      if (newBook.autor) {
+        params.set("autor", newBook.autor);
       }
 
       const response = await fetch(
@@ -353,11 +353,11 @@ export default function BibliotecaPage() {
         return;
       }
 
-      setNewLivro({
-        ...newLivro,
+      setNewBook({
+        ...newBook,
         capa: data.capa,
-        autor: newLivro.autor || data.autor || "",
-        isbn: newLivro.isbn || data.isbn || "",
+        autor: newBook.autor || data.autor || "",
+        isbn: newBook.isbn || data.isbn || "",
       });
 
       toast("Capa encontrada!", {
@@ -369,58 +369,58 @@ export default function BibliotecaPage() {
         description: "Não foi possível buscar a capa do livro.",
       });
     } finally {
-      setCapaLoading(false);
+      setCoverLoading(false);
     }
   };
 
-  const ehAdmin = user?.tipo === "admin";
+  const isAdmin = user?.tipo === "admin";
 
-  const reiniciarPaginas = () => {
-    setPaginaAtivos(1);
-    setPaginaHistorico(1);
+  const resetPages = () => {
+    setActivePage(1);
+    setHistoryPage(1);
   };
 
-  const colunasEmprestimoBase: ColumnDef<Emprestimo, any>[] = [
+  const baseLoanColumns: ColumnDef<Loan, any>[] = [
     {
-      id: "livro",
+      id: "book",
       header: "Livro",
-      accessorFn: (linha) =>
-        linha.livro_titulo ?? getLivroTitulo(linha.livro_id),
+      accessorFn: (row) =>
+        row.book_title ?? getBookTitle(row.livro_id),
       cell: (info) => (
         <span className="font-medium">{String(info.getValue() ?? "")}</span>
       ),
     },
     {
-      id: "colaborador",
+      id: "employee",
       header: "Colaborador",
-      accessorFn: (linha) =>
-        linha.colaborador_nome ?? getColaboradorNome(linha.colaborador_id),
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      accessorFn: (row) =>
+        row.employee_name ?? getEmployeeName(row.colaborador_id),
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
       accessorKey: "data_emprestimo",
       header: "Empréstimo",
       cell: (info) =>
         new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
   ];
 
-  const colunasAtivos: ColumnDef<Emprestimo, any>[] = [
-    ...colunasEmprestimoBase,
+  const activeColumns: ColumnDef<Loan, any>[] = [
+    ...baseLoanColumns,
     {
       accessorKey: "data_prevista_devolucao",
       header: "Devolução prevista",
       cell: ({ row, getValue }) => {
-        const dias = diasAte(row.original.data_prevista_devolucao);
+        const days = daysUntil(row.original.data_prevista_devolucao);
         return (
           <div className="flex flex-wrap items-center gap-2">
             <span className="whitespace-nowrap">
               {new Date(String(getValue())).toLocaleDateString("pt-BR")}
             </span>
-            {dias !== null && dias < 0 && (
+            {days !== null && days < 0 && (
               <Chip size="sm" color="danger">
-                {inteiro(Math.abs(dias))} d de atraso
+                {formatInteger(Math.abs(days))} d de atraso
               </Chip>
             )}
           </div>
@@ -428,17 +428,17 @@ export default function BibliotecaPage() {
       },
     },
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) =>
-        ehAdmin || row.original.colaborador_id === user?.id ? (
+        isAdmin || row.original.colaborador_id === user?.id ? (
           <div className="flex justify-end">
             <Button
               size="sm"
               variant="outline"
               aria-label="Devolver livro"
               onPress={() =>
-                devolverLivro(row.original.id, row.original.livro_id)
+                returnBook(row.original.id, row.original.livro_id)
               }
             >
               <RotateCcw />
@@ -446,12 +446,12 @@ export default function BibliotecaPage() {
             </Button>
           </div>
         ) : null,
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const colunasHistorico: ColumnDef<Emprestimo, any>[] = [
-    ...colunasEmprestimoBase,
+  const historyColumns: ColumnDef<Loan, any>[] = [
+    ...baseLoanColumns,
     {
       accessorKey: "data_real_devolucao",
       header: "Devolvido em",
@@ -459,7 +459,7 @@ export default function BibliotecaPage() {
         info.getValue()
           ? new Date(String(info.getValue())).toLocaleDateString("pt-BR")
           : "-",
-      meta: { classe: "text-muted" },
+      meta: { className: "text-muted" },
     },
     {
       accessorKey: "status",
@@ -469,28 +469,28 @@ export default function BibliotecaPage() {
           {info.getValue() === "emprestado" ? "Emprestado" : "Devolvido"}
         </Chip>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
-  const livrosDisponiveis = livros.filter((l) => l.disponivel).length;
-  const taxaDisponibilidade =
-    livros.length > 0 ? (livrosDisponiveis / livros.length) * 100 : 0;
+  const availableBooks = books.filter((l) => l.disponivel).length;
+  const availabilityRate =
+    books.length > 0 ? (availableBooks / books.length) * 100 : 0;
 
   if (loading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Biblioteca"
-          descricao="Gerencie empréstimos e catálogo de livros"
-          voltarHref="/"
+      <PageLayout>
+        <PageHeader
+          title="Biblioteca"
+          description="Gerencie empréstimos e catálogo de livros"
+          backHref="/"
         />
 
         <section
@@ -498,58 +498,58 @@ export default function BibliotecaPage() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
           <StatTile
-            rotulo="Acervo"
-            valor={inteiro(livros.length)}
-            icone={BookOpen}
-            deltaLegenda={`${inteiro(livrosDisponiveis)} título(s) na estante agora`}
+            label="Acervo"
+            value={formatInteger(books.length)}
+            icon={BookOpen}
+            deltaLabel={`${formatInteger(availableBooks)} título(s) na estante agora`}
           />
           <StatTile
-            rotulo="Disponibilidade"
-            valor={percentual(taxaDisponibilidade, 0)}
-            icone={Library}
-            deltaLegenda={
-              livros.length > 0
-                ? `${inteiro(livrosDisponiveis)} de ${inteiro(livros.length)} livros`
+            label="Disponibilidade"
+            value={formatPercent(availabilityRate, 0)}
+            icon={Library}
+            deltaLabel={
+              books.length > 0
+                ? `${formatInteger(availableBooks)} de ${formatInteger(books.length)} livros`
                 : "nenhum livro cadastrado"
             }
           />
           <StatTile
-            rotulo={ehAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
-            valor={inteiro(resumo.ativos)}
-            icone={Users}
-            deltaLegenda={
-              resumo.atrasados > 0
-                ? `${inteiro(resumo.atrasados)} em atraso`
+            label={isAdmin ? "Empréstimos ativos" : "Seus empréstimos"}
+            value={formatInteger(summary.active)}
+            icon={Users}
+            deltaLabel={
+              summary.overdue > 0
+                ? `${formatInteger(summary.overdue)} em atraso`
                 : "nenhum em atraso"
             }
           />
           <StatTile
-            rotulo={ehAdmin ? "Empréstimos no histórico" : "Seu histórico"}
-            valor={inteiro(resumo.total)}
-            icone={RotateCcw}
-            deltaLegenda={`${inteiro(resumo.devolvidos)} já devolvido(s)`}
+            label={isAdmin ? "Empréstimos no histórico" : "Seu histórico"}
+            value={formatInteger(summary.total)}
+            icon={RotateCcw}
+            deltaLabel={`${formatInteger(summary.returned)} já devolvido(s)`}
           />
         </section>
 
-        <Tabs defaultSelectedKey="catalogo" className="gap-4">
+        <Tabs defaultSelectedKey="catalog" className="gap-4">
           <Tabs.ListContainer>
             <Tabs.List className="grid w-full grid-cols-1 sm:grid-cols-3">
-              <Tabs.Tab id="catalogo">
+              <Tabs.Tab id="catalog">
                 Catálogo
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="emprestimos">
+              <Tabs.Tab id="loans">
                 Empréstimos Ativos
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="historico">
+              <Tabs.Tab id="history">
                 Histórico
                 <Tabs.Indicator />
               </Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
 
-          <Tabs.Panel className="p-0" id="catalogo">
+          <Tabs.Panel className="p-0" id="catalog">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -561,100 +561,100 @@ export default function BibliotecaPage() {
                   </div>
                   {user?.tipo === "admin" && (
                     <ModalForm
-                      isOpen={isAddLivroOpen}
-                      onOpenChange={setIsAddLivroOpen}
-                      titulo="Adicionar Novo Livro"
-                      descricao="Adicione um novo livro ao catálogo da biblioteca"
-                      gatilho={
+                      isOpen={isAddBookOpen}
+                      onOpenChange={setIsAddBookOpen}
+                      title="Adicionar Novo Livro"
+                      description="Adicione um novo livro ao catálogo da biblioteca"
+                      trigger={
                         <Button>
                           <Plus />
                           Novo Livro
                         </Button>
                       }
-                      rotuloConfirmar="Adicionar Livro"
-                      onConfirmar={adicionarLivro}
+                      confirmLabel="Adicionar Livro"
+                      onConfirm={addBook}
                     >
-                      <LinhaCampos>
-                        <CampoModal rotulo="Título" htmlFor="titulo">
+                      <FieldRow>
+                        <ModalField label="Título" htmlFor="title">
                           <Input
-                            id="titulo"
-                            value={newLivro.titulo}
+                            id="title"
+                            value={newBook.titulo}
                             onChange={(e) =>
-                              setNewLivro({
-                                ...newLivro,
+                              setNewBook({
+                                ...newBook,
                                 titulo: e.target.value,
                               })
                             }
                             variant="secondary"
                             placeholder="Título do livro"
                           />
-                        </CampoModal>
+                        </ModalField>
 
-                        <CampoModal rotulo="Autor" htmlFor="autor">
+                        <ModalField label="Autor" htmlFor="author">
                           <Input
-                            id="autor"
-                            value={newLivro.autor}
+                            id="author"
+                            value={newBook.autor}
                             onChange={(e) =>
-                              setNewLivro({
-                                ...newLivro,
+                              setNewBook({
+                                ...newBook,
                                 autor: e.target.value,
                               })
                             }
                             variant="secondary"
                             placeholder="Nome do autor"
                           />
-                        </CampoModal>
-                      </LinhaCampos>
+                        </ModalField>
+                      </FieldRow>
 
-                      <LinhaCampos>
-                        <CampoModal rotulo="Gênero" htmlFor="genero">
+                      <FieldRow>
+                        <ModalField label="Gênero" htmlFor="genre">
                           <Input
-                            id="genero"
-                            value={newLivro.genero}
+                            id="genre"
+                            value={newBook.genero}
                             onChange={(e) =>
-                              setNewLivro({
-                                ...newLivro,
+                              setNewBook({
+                                ...newBook,
                                 genero: e.target.value,
                               })
                             }
                             variant="secondary"
                             placeholder="Gênero do livro"
                           />
-                        </CampoModal>
+                        </ModalField>
 
-                        <CampoModal rotulo="ISBN (opcional)" htmlFor="isbn">
+                        <ModalField label="ISBN (opcional)" htmlFor="isbn">
                           <Input
                             id="isbn"
-                            value={newLivro.isbn}
+                            value={newBook.isbn}
                             onChange={(e) =>
-                              setNewLivro({
-                                ...newLivro,
+                              setNewBook({
+                                ...newBook,
                                 isbn: e.target.value,
                               })
                             }
                             variant="secondary"
                             placeholder="ISBN do livro"
                           />
-                        </CampoModal>
-                      </LinhaCampos>
+                        </ModalField>
+                      </FieldRow>
 
-                      <CampoModal rotulo="Capa do Livro">
+                      <ModalField label="Capa do Livro">
                         <Button
                           type="button"
                           variant="outline"
-                          onPress={buscarCapa}
-                          isDisabled={!newLivro.titulo || capaLoading}
+                          onPress={fetchCover}
+                          isDisabled={!newBook.titulo || coverLoading}
                           fullWidth
                         >
-                          {capaLoading
+                          {coverLoading
                             ? "Buscando..."
                             : "Buscar Capa Automaticamente"}
                         </Button>
 
-                        {newLivro.capa && (
+                        {newBook.capa && (
                           <div className="mt-2 flex gap-4">
                             <Image
-                              src={newLivro.capa}
+                              src={newBook.capa}
                               alt="Prévia da capa"
                               width={80}
                               height={120}
@@ -669,8 +669,8 @@ export default function BibliotecaPage() {
                                 variant="outline"
                                 size="sm"
                                 onPress={() =>
-                                  setNewLivro({
-                                    ...newLivro,
+                                  setNewBook({
+                                    ...newBook,
                                     capa: "",
                                   })
                                 }
@@ -680,7 +680,7 @@ export default function BibliotecaPage() {
                             </div>
                           </div>
                         )}
-                      </CampoModal>
+                      </ModalField>
                     </ModalForm>
                   )}
                 </div>
@@ -701,8 +701,8 @@ export default function BibliotecaPage() {
                   </TextField>
 
                   <Select
-                    value={filterGenero}
-                    onChange={(value) => setFilterGenero(value as string)}
+                    value={filterGenre}
+                    onChange={(value) => setFilterGenre(value as string)}
                     placeholder="Filtrar por gênero"
                     variant="secondary"
                   >
@@ -712,16 +712,16 @@ export default function BibliotecaPage() {
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        <ListBox.Item id="todos" textValue="Todos os gêneros">
+                        <ListBox.Item id="all" textValue="Todos os gêneros">
                           Todos os gêneros
                         </ListBox.Item>
-                        {generosUnicos.map((genero) => (
+                        {uniqueGenres.map((genre) => (
                           <ListBox.Item
-                            key={genero}
-                            id={genero}
-                            textValue={genero}
+                            key={genre}
+                            id={genre}
+                            textValue={genre}
                           >
-                            {genero}
+                            {genre}
                           </ListBox.Item>
                         ))}
                       </ListBox>
@@ -730,12 +730,12 @@ export default function BibliotecaPage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredLivros.map((livro) => (
-                    <Card variant="secondary" key={livro.id}>
+                  {filteredBooks.map((book) => (
+                    <Card variant="secondary" key={book.id}>
                       <Card.Content className="flex gap-4">
                         <Image
-                          src={livro.capa || "/placeholder.svg"}
-                          alt={livro.titulo}
+                          src={book.capa || "/placeholder.svg"}
+                          alt={book.titulo}
                           width={80}
                           height={120}
                           className="h-30 w-20 shrink-0 rounded-lg object-cover"
@@ -744,36 +744,36 @@ export default function BibliotecaPage() {
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                           <div className="min-w-0">
                             <Card.Title className="truncate">
-                              {livro.titulo}
+                              {book.titulo}
                             </Card.Title>
                             <Typography
                               className="truncate"
                               color="muted"
                               type="body-sm"
                             >
-                              {livro.autor}
+                              {book.autor}
                             </Typography>
                           </div>
 
                           <div className="flex flex-wrap gap-2">
                             <Chip
-                              color={livro.disponivel ? "success" : "danger"}
+                              color={book.disponivel ? "success" : "danger"}
                               variant="soft"
                               size="sm"
                             >
-                              {livro.disponivel ? "Disponível" : "Emprestado"}
+                              {book.disponivel ? "Disponível" : "Emprestado"}
                             </Chip>
 
                             <Chip color="accent" variant="soft" size="sm">
-                              {livro.genero}
+                              {book.genero}
                             </Chip>
                           </div>
 
-                          {livro.disponivel && (
+                          {book.disponivel && (
                             <Button
                               size="sm"
                               className="mt-auto max-sm:w-full sm:w-fit"
-                              onPress={() => abrirModalEmprestimo(livro)}
+                              onPress={() => openLoanModal(book)}
                             >
                               <Hand />
                               Emprestar
@@ -788,7 +788,7 @@ export default function BibliotecaPage() {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel className="p-0" id="emprestimos">
+          <Tabs.Panel className="p-0" id="loans">
             <Card>
               <Card.Header>
                 <Card.Title>
@@ -804,35 +804,35 @@ export default function BibliotecaPage() {
               </Card.Header>
               <Card.Content>
                 <DataTable
-                  colunas={colunasAtivos}
-                  dados={emprestimosAtivos}
-                  rotulo="Empréstimos ativos"
-                  vazio={
-                    ehAdmin
+                  columns={activeColumns}
+                  data={activeLoans}
+                  label="Empréstimos ativos"
+                  emptyMessage={
+                    isAdmin
                       ? "Nenhum empréstimo ativo"
                       : "Você não possui empréstimos ativos"
                   }
-                  total={totalAtivos}
-                  pagina={paginaAtivos}
-                  totalPaginas={totalPaginasAtivos}
-                  onMudarPagina={setPaginaAtivos}
-                  itensPorPagina={itensPorPagina}
-                  onMudarItensPorPagina={(itens) => {
-                    setItensPorPagina(itens);
-                    reiniciarPaginas();
+                  total={activeTotal}
+                  page={activePage}
+                  totalPages={activeTotalPages}
+                  onPageChange={setActivePage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(count) => {
+                    setItemsPerPage(count);
+                    resetPages();
                   }}
-                  busca={buscaEmprestimos}
-                  onMudarBusca={(valor) => {
-                    setBuscaEmprestimos(valor);
-                    reiniciarPaginas();
+                  search={loanSearch}
+                  onSearchChange={(value) => {
+                    setLoanSearch(value);
+                    resetPages();
                   }}
-                  placeholderBusca="Pesquisar por livro ou colaborador..."
+                  searchPlaceholder="Pesquisar por livro ou colaborador..."
                 />
               </Card.Content>
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel className="p-0" id="historico">
+          <Tabs.Panel className="p-0" id="history">
             <Card>
               <Card.Header>
                 <Card.Title>Histórico de Empréstimos</Card.Title>
@@ -842,25 +842,25 @@ export default function BibliotecaPage() {
               </Card.Header>
               <Card.Content>
                 <DataTable
-                  colunas={colunasHistorico}
-                  dados={historico}
-                  rotulo="Histórico de empréstimos"
-                  vazio="Nenhum empréstimo registrado"
-                  total={totalHistorico}
-                  pagina={paginaHistorico}
-                  totalPaginas={totalPaginasHistorico}
-                  onMudarPagina={setPaginaHistorico}
-                  itensPorPagina={itensPorPagina}
-                  onMudarItensPorPagina={(itens) => {
-                    setItensPorPagina(itens);
-                    reiniciarPaginas();
+                  columns={historyColumns}
+                  data={history}
+                  label="Histórico de empréstimos"
+                  emptyMessage="Nenhum empréstimo registrado"
+                  total={historyTotal}
+                  page={historyPage}
+                  totalPages={historyTotalPages}
+                  onPageChange={setHistoryPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(count) => {
+                    setItemsPerPage(count);
+                    resetPages();
                   }}
-                  busca={buscaEmprestimos}
-                  onMudarBusca={(valor) => {
-                    setBuscaEmprestimos(valor);
-                    reiniciarPaginas();
+                  search={loanSearch}
+                  onSearchChange={(value) => {
+                    setLoanSearch(value);
+                    resetPages();
                   }}
-                  placeholderBusca="Pesquisar por livro ou colaborador..."
+                  searchPlaceholder="Pesquisar por livro ou colaborador..."
                 />
               </Card.Content>
             </Card>
@@ -868,24 +868,24 @@ export default function BibliotecaPage() {
         </Tabs>
 
         <ModalForm
-          isOpen={isEmprestimoOpen}
-          onOpenChange={fecharModalEmprestimo}
-          titulo="Emprestar Livro"
-          descricao={
-            selectedLivro
-              ? `Emprestar "${selectedLivro.titulo}" para um colaborador`
+          isOpen={isLoanOpen}
+          onOpenChange={closeLoanModal}
+          title="Emprestar Livro"
+          description={
+            selectedBook
+              ? `Emprestar "${selectedBook.titulo}" para um colaborador`
               : undefined
           }
-          rotuloConfirmar="Confirmar Empréstimo"
-          onConfirmar={emprestarLivro}
+          confirmLabel="Confirmar Empréstimo"
+          onConfirm={lendBook}
         >
-          <CampoModal rotulo="Colaborador" htmlFor="colaborador-emprestimo">
+          <ModalField label="Colaborador" htmlFor="loan-employee">
             <Select
-              value={newEmprestimo.colaboradorId}
+              value={newLoan.employeeId}
               onChange={(value) =>
-                setNewEmprestimo({
-                  ...newEmprestimo,
-                  colaboradorId: value as string,
+                setNewLoan({
+                  ...newLoan,
+                  employeeId: value as string,
                 })
               }
               variant="secondary"
@@ -899,15 +899,15 @@ export default function BibliotecaPage() {
               <Select.Popover>
                 <ListBox>
                   {(user?.tipo === "admin"
-                    ? colaboradores
-                    : colaboradores.filter((c) => c.id === user?.id)
-                  ).map((colaborador) => (
+                    ? employees
+                    : employees.filter((c) => c.id === user?.id)
+                  ).map((employee) => (
                     <ListBox.Item
-                      key={colaborador.id}
-                      id={colaborador.id.toString()}
-                      textValue={`${colaborador.nome} - ${colaborador.departamento}`}
+                      key={employee.id}
+                      id={employee.id.toString()}
+                      textValue={`${employee.nome} - ${employee.departamento}`}
                     >
-                      {colaborador.nome} - {colaborador.departamento}
+                      {employee.nome} - {employee.departamento}
                     </ListBox.Item>
                   ))}
                 </ListBox>
@@ -919,15 +919,15 @@ export default function BibliotecaPage() {
                 Você pode emprestar livros apenas para si mesmo
               </p>
             )}
-          </CampoModal>
+          </ModalField>
 
-          <CampoModal rotulo="Período (dias)" htmlFor="dias">
+          <ModalField label="Período (dias)" htmlFor="days">
             <Select
-              value={newEmprestimo.dias}
+              value={newLoan.days}
               onChange={(value) =>
-                setNewEmprestimo({
-                  ...newEmprestimo,
-                  dias: value as string,
+                setNewLoan({
+                  ...newLoan,
+                  days: value as string,
                 })
               }
               variant="secondary"
@@ -953,9 +953,9 @@ export default function BibliotecaPage() {
                 </ListBox>
               </Select.Popover>
             </Select>
-          </CampoModal>
+          </ModalField>
         </ModalForm>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

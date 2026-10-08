@@ -1,8 +1,8 @@
 import type { Prisma } from "@/generated/prisma/client";
 import {
-  COLABORADOR_SELECT_SEGURO,
-  sanitizarColaborador,
-} from "@/lib/colaboradores";
+  SAFE_EMPLOYEE_SELECT,
+  sanitizeEmployee,
+} from "@/lib/employees";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
 import { revalidatePath } from "next/cache";
@@ -11,7 +11,7 @@ import { type NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
-    const departamento = searchParams.get("departamento");
+    const department = searchParams.get("departamento");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
     const page = searchParams.get("page");
@@ -19,11 +19,11 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.colaboradoresWhereInput = {};
 
-    if (departamento && departamento !== "todos") {
-      where.departamento = departamento;
+    if (department && department !== "all") {
+      where.departamento = department;
     }
 
-    if (status && status !== "todos") {
+    if (status && status !== "all") {
       where.status = status;
     }
 
@@ -34,31 +34,31 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const selecao = {
-      ...COLABORADOR_SELECT_SEGURO,
+    const employeeSelect = {
+      ...SAFE_EMPLOYEE_SELECT,
       setores: { select: { nome: true } },
     };
 
-    type LinhaColaborador = { setores: { nome: string } | null } & Record<
+    type EmployeeRow = { setores: { nome: string } | null } & Record<
       string,
       unknown
     >;
 
-    const formatar = (linhas: LinhaColaborador[]) =>
-      linhas.map(({ setores, ...colaborador }) => ({
-        ...sanitizarColaborador(colaborador as never),
-        setor_nome: setores?.nome ?? null,
+    const formatRows = (rows: EmployeeRow[]) =>
+      rows.map(({ setores: sector, ...employee }) => ({
+        ...sanitizeEmployee(employee as never),
+        sector_name: sector?.nome ?? null,
       }));
 
     if (page && limit) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
 
-      const [colaboradores, total, ativos, departamentos] =
+      const [employees, total, activeCount, departments] =
         await prisma.$transaction([
           prisma.colaboradores.findMany({
             where,
-            select: selecao,
+            select: employeeSelect,
             orderBy: { nome: "asc" },
             skip: (pageNum - 1) * limitNum,
             take: limitNum,
@@ -72,32 +72,32 @@ export async function GET(req: NextRequest) {
           }),
         ]);
 
-      const totalGeral = await prisma.colaboradores.count();
+      const overallTotal = await prisma.colaboradores.count();
 
       return NextResponse.json({
-        data: serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+        data: serializeDecimals(formatRows(employees as EmployeeRow[])),
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
-        resumo: {
-          total: totalGeral,
-          ativos,
-          inativos: totalGeral - ativos,
-          departamentos: departamentos
+        summary: {
+          total: overallTotal,
+          active: activeCount,
+          inactive: overallTotal - activeCount,
+          departments: departments
             .map((d) => d.departamento)
             .filter((d): d is string => Boolean(d)),
         },
       });
     }
 
-    const colaboradores = await prisma.colaboradores.findMany({
+    const employees = await prisma.colaboradores.findMany({
       where,
-      select: selecao,
+      select: employeeSelect,
       orderBy: { nome: "asc" },
     });
 
     return NextResponse.json(
-      serializeDecimals(formatar(colaboradores as LinhaColaborador[])),
+      serializeDecimals(formatRows(employees as EmployeeRow[])),
     );
   } catch (error) {
     console.error("Erro ao buscar colaboradores:", error);
@@ -111,9 +111,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { nome, email, departamento, cargo, setor_id } = body;
+    const {
+      nome: name,
+      email,
+      departamento: department,
+      cargo: jobTitle,
+      setor_id: sectorId,
+    } = body;
 
-    if (!nome || !email || !departamento) {
+    if (!name || !email || !department) {
       return NextResponse.json(
         { error: "Nome, email e departamento são obrigatórios" },
         { status: 400 },
@@ -131,22 +137,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const colaborador = await prisma.colaboradores.create({
+    const employee = await prisma.colaboradores.create({
       data: {
-        nome,
+        nome: name,
         email,
-        departamento,
-        cargo: cargo || "Colaborador",
+        departamento: department,
+        cargo: jobTitle || "Colaborador",
         data_admissao: new Date(),
         status: "ativo",
-        setor_id: setor_id ? Number(setor_id) : null,
+        setor_id: sectorId ? Number(sectorId) : null,
       },
-      select: COLABORADOR_SELECT_SEGURO,
+      select: SAFE_EMPLOYEE_SELECT,
     });
 
     revalidatePath("/admin");
     return NextResponse.json(
-      serializeDecimals(sanitizarColaborador(colaborador)),
+      serializeDecimals(sanitizeEmployee(employee)),
       { status: 201 },
     );
   } catch (error) {

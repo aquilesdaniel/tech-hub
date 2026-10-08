@@ -5,16 +5,16 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const colaborador_id = searchParams.get("colaborador_id");
-    const tipo = searchParams.get("tipo");
+    const employeeId = searchParams.get("colaborador_id");
+    const type = searchParams.get("tipo");
     const search = searchParams.get("search");
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
 
     const where: Prisma.certificacoesWhereInput = {};
 
-    if (colaborador_id) where.colaborador_id = Number(colaborador_id);
-    if (tipo && tipo !== "todos") where.tipo = tipo;
+    if (employeeId) where.colaborador_id = Number(employeeId);
+    if (type && type !== "all") where.tipo = type;
 
     if (search) {
       where.OR = [
@@ -29,24 +29,24 @@ export async function GET(request: NextRequest) {
       const limitNum = parseInt(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
 
-      const escopo: Prisma.certificacoesWhereInput = colaborador_id
-        ? { colaborador_id: Number(colaborador_id) }
+      const scope: Prisma.certificacoesWhereInput = employeeId
+        ? { colaborador_id: Number(employeeId) }
         : {};
 
-      const hoje = new Date();
-      const em90Dias = new Date(hoje);
-      em90Dias.setDate(em90Dias.getDate() + 90);
+      const today = new Date();
+      const in90Days = new Date(today);
+      in90Days.setDate(in90Days.getDate() + 90);
 
       const [
-        certificacoes,
+        pageRows,
         total,
-        totalEscopo,
+        scopeTotal,
         senior,
-        vencendo90,
-        vencidas,
-        porColaborador,
-        instituicoes,
-        tipos,
+        expiringIn90,
+        expired,
+        byEmployee,
+        institutions,
+        types,
       ] = await prisma.$transaction([
         prisma.certificacoes.findMany({
           where,
@@ -56,37 +56,37 @@ export async function GET(request: NextRequest) {
           take: limitNum,
         }),
         prisma.certificacoes.count({ where }),
-        prisma.certificacoes.count({ where: escopo }),
+        prisma.certificacoes.count({ where: scope }),
         prisma.certificacoes.count({
-          where: { ...escopo, tipo: "Certificação Senior" },
+          where: { ...scope, tipo: "Certificação Senior" },
         }),
         prisma.certificacoes.count({
-          where: { ...escopo, data_vencimento: { gte: hoje, lte: em90Dias } },
+          where: { ...scope, data_vencimento: { gte: today, lte: in90Days } },
         }),
         prisma.certificacoes.count({
-          where: { ...escopo, data_vencimento: { lt: hoje } },
+          where: { ...scope, data_vencimento: { lt: today } },
         }),
         prisma.certificacoes.groupBy({
           by: ["colaborador_id"],
-          where: escopo,
+          where: scope,
           orderBy: { colaborador_id: "asc" },
         }),
         prisma.certificacoes.findMany({
-          where: escopo,
+          where: scope,
           distinct: ["instituicao"],
           select: { instituicao: true },
         }),
         prisma.certificacoes.findMany({
-          where: escopo,
+          where: scope,
           distinct: ["tipo"],
           select: { tipo: true },
           orderBy: { tipo: "asc" },
         }),
       ]);
 
-      const data = certificacoes.map(({ colaboradores, ...cert }) => ({
+      const data = pageRows.map(({ colaboradores, ...cert }) => ({
         ...cert,
-        colaborador_nome: colaboradores.nome,
+        employee_name: colaboradores.nome,
       }));
 
       return NextResponse.json({
@@ -94,27 +94,27 @@ export async function GET(request: NextRequest) {
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
-        resumo: {
-          total: totalEscopo,
+        summary: {
+          total: scopeTotal,
           senior,
-          vencendo90,
-          vencidas,
-          colaboradoresCertificados: porColaborador.length,
-          instituicoes: instituicoes.filter((i) => i.instituicao).length,
+          expiringIn90,
+          expired,
+          certifiedEmployees: byEmployee.length,
+          institutions: institutions.filter((i) => i.instituicao).length,
         },
-        tipos: tipos.map((t) => t.tipo),
+        types: types.map((t) => t.tipo),
       });
     }
 
-    const certificacoes = await prisma.certificacoes.findMany({
+    const certifications = await prisma.certificacoes.findMany({
       where,
       include: { colaboradores: { select: { nome: true } } },
       orderBy: { data_obtencao: "desc" },
     });
 
-    const data = certificacoes.map(({ colaboradores, ...cert }) => ({
+    const data = certifications.map(({ colaboradores, ...cert }) => ({
       ...cert,
-      colaborador_nome: colaboradores.nome,
+      employee_name: colaboradores.nome,
     }));
 
     return NextResponse.json(data);
@@ -131,17 +131,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      colaborador_id,
-      nome,
-      tipo,
-      instituicao,
-      data_obtencao,
-      data_vencimento,
-      url_credencial,
-      observacoes,
+      colaborador_id: employeeId,
+      nome: name,
+      tipo: type,
+      instituicao: institution,
+      data_obtencao: obtainedDate,
+      data_vencimento: expirationDate,
+      url_credencial: credentialUrl,
+      observacoes: notes,
     } = body;
 
-    if (!colaborador_id || !nome || !tipo || !instituicao || !data_obtencao) {
+    if (!employeeId || !name || !type || !institution || !obtainedDate) {
       return NextResponse.json(
         {
           error:
@@ -151,22 +151,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const certificacao = await prisma.certificacoes.create({
+    const certification = await prisma.certificacoes.create({
       data: {
-        colaborador_id: Number(colaborador_id),
-        nome,
-        tipo,
-        instituicao,
-        data_obtencao: new Date(data_obtencao),
-        data_vencimento: data_vencimento ? new Date(data_vencimento) : null,
-        url_credencial: url_credencial || null,
-        observacoes: observacoes || null,
+        colaborador_id: Number(employeeId),
+        nome: name,
+        tipo: type,
+        instituicao: institution,
+        data_obtencao: new Date(obtainedDate),
+        data_vencimento: expirationDate ? new Date(expirationDate) : null,
+        url_credencial: credentialUrl || null,
+        observacoes: notes || null,
       },
       select: { id: true },
     });
 
     return NextResponse.json(
-      { message: "Certificação criada com sucesso", id: certificacao.id },
+      { message: "Certificação criada com sucesso", id: certification.id },
       { status: 201 },
     );
   } catch (error) {

@@ -2,12 +2,12 @@
 
 import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
-import { inteiro, moeda, moedaCompacta } from "@/components/dashboard/viz";
+import { formatInteger, formatCurrency, formatCompactCurrency } from "@/components/dashboard/viz";
 import { DataTable } from "@/components/data-table";
-import { CampoModal, LinhaCampos, ModalForm } from "@/components/modal-form";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { ModalField, FieldRow, ModalForm } from "@/components/modal-form";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Button,
@@ -33,7 +33,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-interface Colaborador {
+interface Employee {
   id: number;
   setor_id: number;
   nome: string;
@@ -49,16 +49,16 @@ interface Colaborador {
   country_code: string;
   area_code: string;
   number: string;
-  possui_documento: boolean;
-  document_mascarado: string | null;
+  has_document: boolean;
+  masked_document: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
-interface Divida {
+interface Debt {
   id: number;
   colaborador_id: number;
-  colaborador_nome: string;
+  employee_name: string;
   item: string;
   motivo: string;
   data_inicio: string;
@@ -66,15 +66,15 @@ interface Divida {
   pago: boolean;
 }
 
-const TIPOS_CHAVE_PIX = [
-  { id: "CPF", rotulo: "CPF" },
-  { id: "CNPJ", rotulo: "CNPJ" },
-  { id: "EMAIL", rotulo: "E-mail" },
-  { id: "PHONE", rotulo: "Telefone" },
-  { id: "RANDOM", rotulo: "Chave aleatória" },
+const PIX_KEY_TYPE_OPTIONS = [
+  { id: "CPF", label: "CPF" },
+  { id: "CNPJ", label: "CNPJ" },
+  { id: "EMAIL", label: "E-mail" },
+  { id: "PHONE", label: "Telefone" },
+  { id: "RANDOM", label: "Chave aleatória" },
 ] as const;
 
-const PLACEHOLDER_CHAVE_PIX: Record<string, string> = {
+const PIX_KEY_PLACEHOLDERS: Record<string, string> = {
   CPF: "00011122233",
   CNPJ: "00000000000100",
   EMAIL: "financeiro@empresa.com.br",
@@ -82,44 +82,44 @@ const PLACEHOLDER_CHAVE_PIX: Record<string, string> = {
   RANDOM: "chave aleatória (EVP)",
 };
 
-export default function SalgadosPage() {
+export default function SnacksPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [dividas, setDividas] = useState<Divida[]>([]);
-  const [salgadosPagos, setSalgadosPagos] = useState<Divida[]>([]);
-  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
+  const [paidDebts, setPaidDebts] = useState<Debt[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMotivo, setFilterMotivo] = useState("todos");
-  const [currentPagePendentes, setCurrentPagePendentes] = useState(1);
-  const [currentPagePagas, setCurrentPagePagas] = useState(1);
-  const [totalPagesPendentes, setTotalPagesPendentes] = useState(1);
-  const [totalPagesPagas, setTotalPagesPagas] = useState(1);
-  const [totalPendentes, setTotalPendentes] = useState(0);
-  const [totalPagas, setTotalPagas] = useState(0);
-  const [motivosUnicos, setMotivosUnicos] = useState<string[]>([]);
+  const [filterReason, setFilterReason] = useState("all");
+  const [currentPagePending, setCurrentPagePending] = useState(1);
+  const [currentPagePaid, setCurrentPagePaid] = useState(1);
+  const [totalPagesPending, setTotalPagesPending] = useState(1);
+  const [totalPagesPaid, setTotalPagesPaid] = useState(1);
+  const [totalPending, setTotalPending] = useState(0);
+  const [totalPaid, setTotalPaid] = useState(0);
+  const [uniqueReasons, setUniqueReasons] = useState<string[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
-  const [saldoInfo, setSaldoInfo] = useState({
-    disponivel: 0,
-    pendente: 0,
-    bloqueado: 0,
+  const [balanceInfo, setBalanceInfo] = useState({
+    available: 0,
+    pending: 0,
+    blocked: 0,
   });
 
-  const [resumo, setResumo] = useState<DashboardData | null>(null);
-  const [carregandoResumo, setCarregandoResumo] = useState(true);
+  const [summary, setSummary] = useState<DashboardData | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
   const [transferData, setTransferData] = useState({
     amount: "",
     description: "",
     pix_key: "",
     pix_key_type: "CPF",
   });
-  const [newDivida, setNewDivida] = useState({
+  const [newDebt, setNewDebt] = useState({
     colaborador_id: "",
     item: "",
-    quantidadeCentos: "1",
-    valorPorCento: "",
+    hundredCount: "1",
+    pricePerHundred: "",
     motivo: "",
     valor: "",
   });
@@ -133,56 +133,56 @@ export default function SalgadosPage() {
     fetchData();
   }, [
     user,
-    currentPagePendentes,
-    currentPagePagas,
+    currentPagePending,
+    currentPagePaid,
     itemsPerPage,
     searchTerm,
-    filterMotivo,
+    filterReason,
   ]);
 
   const fetchData = async () => {
     try {
       const searchParams = new URLSearchParams();
       if (searchTerm) searchParams.append("search", searchTerm);
-      if (filterMotivo && filterMotivo !== "todos")
-        searchParams.append("motivo", filterMotivo);
+      if (filterReason && filterReason !== "all")
+        searchParams.append("motivo", filterReason);
       searchParams.append("limit", itemsPerPage.toString());
 
-      const paramsPendentes = new URLSearchParams(searchParams);
-      paramsPendentes.append("pago", "false");
-      paramsPendentes.append("page", currentPagePendentes.toString());
+      const pendingParams = new URLSearchParams(searchParams);
+      pendingParams.append("pago", "false");
+      pendingParams.append("page", currentPagePending.toString());
 
-      const paramsPagas = new URLSearchParams(searchParams);
-      paramsPagas.append("pago", "true");
-      paramsPagas.append("page", currentPagePagas.toString());
+      const paidParams = new URLSearchParams(searchParams);
+      paidParams.append("pago", "true");
+      paidParams.append("page", currentPagePaid.toString());
 
-      const [dividasRes, salgadosPagosRes, colaboradoresRes, motivosRes] =
+      const [debtsRes, paidDebtsRes, employeesRes, reasonsRes] =
         await Promise.all([
-          fetch(`/api/salgados/dividas?${paramsPendentes.toString()}`),
-          fetch(`/api/salgados/dividas?${paramsPagas.toString()}`),
+          fetch(`/api/salgados/dividas?${pendingParams.toString()}`),
+          fetch(`/api/salgados/dividas?${paidParams.toString()}`),
           fetch("/api/colaboradores"),
-          fetch("/api/salgados/dividas?motivos_only=true"),
+          fetch("/api/salgados/dividas?reasons_only=true"),
         ]);
 
-      if (dividasRes.ok && salgadosPagosRes.ok && colaboradoresRes.ok) {
-        const dividasData = await dividasRes.json();
-        const salgadosPagosData = await salgadosPagosRes.json();
-        const colaboradoresData = await colaboradoresRes.json();
+      if (debtsRes.ok && paidDebtsRes.ok && employeesRes.ok) {
+        const debtsData = await debtsRes.json();
+        const paidDebtsData = await paidDebtsRes.json();
+        const employeesData = await employeesRes.json();
 
-        if (motivosRes.ok) {
-          const motivos = await motivosRes.json();
-          setMotivosUnicos(motivos.sort());
+        if (reasonsRes.ok) {
+          const reasons = await reasonsRes.json();
+          setUniqueReasons(reasons.sort());
         }
 
-        setDividas(dividasData.data || []);
-        setTotalPagesPendentes(dividasData.totalPages || 1);
-        setTotalPendentes(dividasData.total || 0);
+        setDebts(debtsData.data || []);
+        setTotalPagesPending(debtsData.totalPages || 1);
+        setTotalPending(debtsData.total || 0);
 
-        setSalgadosPagos(salgadosPagosData.data || []);
-        setTotalPagesPagas(salgadosPagosData.totalPages || 1);
-        setTotalPagas(salgadosPagosData.total || 0);
+        setPaidDebts(paidDebtsData.data || []);
+        setTotalPagesPaid(paidDebtsData.totalPages || 1);
+        setTotalPaid(paidDebtsData.total || 0);
 
-        setColaboradores(colaboradoresData);
+        setEmployees(employeesData);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -194,35 +194,35 @@ export default function SalgadosPage() {
     }
   };
 
-  const ehAdmin = user?.tipo === "admin";
+  const isAdmin = user?.tipo === "admin";
 
   useEffect(() => {
     if (!user) return;
 
-    fetchResumo();
-    fetchSaldo();
+    fetchSummary();
+    fetchBalance();
   }, [user]);
 
-  const fetchResumo = async () => {
+  const fetchSummary = async () => {
     try {
-      const response = await fetch("/api/dashboard?meses=0");
-      if (response.ok) setResumo((await response.json()) as DashboardData);
+      const response = await fetch("/api/dashboard?months=0");
+      if (response.ok) setSummary((await response.json()) as DashboardData);
     } catch (error) {
       console.error("Erro ao carregar o resumo de salgados:", error);
     } finally {
-      setCarregandoResumo(false);
+      setLoadingSummary(false);
     }
   };
 
-  const fetchSaldo = async () => {
+  const fetchBalance = async () => {
     try {
       const response = await fetch("/api/salgados/saldo");
       if (response.ok) {
         const data = await response.json();
-        setSaldoInfo({
-          disponivel: Number(data.disponivel) || 0,
-          pendente: Number(data.pendente) || 0,
-          bloqueado: Number(data.bloqueado) || 0,
+        setBalanceInfo({
+          available: Number(data.available) || 0,
+          pending: Number(data.pending) || 0,
+          blocked: Number(data.blocked) || 0,
         });
       }
     } catch (error) {
@@ -230,18 +230,18 @@ export default function SalgadosPage() {
     }
   };
 
-  const abrirConfirmacaoPagamento = (divida: Divida) => {
-    router.push(`/salgados/pagar/${divida.id}`);
+  const openPaymentConfirmation = (debt: Debt) => {
+    router.push(`/salgados/pagar/${debt.id}`);
   };
 
-  const reiniciarPaginas = () => {
-    setCurrentPagePendentes(1);
-    setCurrentPagePagas(1);
+  const resetPages = () => {
+    setCurrentPagePending(1);
+    setCurrentPagePaid(1);
   };
 
-  const colunasBase: ColumnDef<Divida, any>[] = [
+  const baseColumns: ColumnDef<Debt, any>[] = [
     {
-      accessorKey: "colaborador_nome",
+      accessorKey: "employee_name",
       header: "Colaborador",
       cell: (info) => (
         <span className="font-medium">{String(info.getValue() ?? "")}</span>
@@ -256,45 +256,45 @@ export default function SalgadosPage() {
       accessorKey: "motivo",
       header: "Motivo",
       cell: (info) => String(info.getValue() || "-"),
-      meta: { classe: "hidden md:table-cell text-muted" },
+      meta: { className: "hidden md:table-cell text-muted" },
     },
     {
       accessorKey: "data_inicio",
       header: "Data",
       cell: (info) =>
         new Date(String(info.getValue())).toLocaleDateString("pt-BR"),
-      meta: { classe: "hidden sm:table-cell text-muted" },
+      meta: { className: "hidden sm:table-cell text-muted" },
     },
     {
       accessorKey: "valor",
       header: "Valor",
-      cell: (info) => moeda(Number(info.getValue())),
-      meta: { alinhar: "direita", classe: "font-semibold tabular-nums" },
+      cell: (info) => formatCurrency(Number(info.getValue())),
+      meta: { align: "right", className: "font-semibold tabular-nums" },
     },
   ];
 
-  const colunasPendentes: ColumnDef<Divida, any>[] = [
-    ...colunasBase,
+  const pendingColumns: ColumnDef<Debt, any>[] = [
+    ...baseColumns,
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => (
         <Button
           size="sm"
-          onPress={() => abrirConfirmacaoPagamento(row.original)}
+          onPress={() => openPaymentConfirmation(row.original)}
         >
           <Check />
           Pagar
         </Button>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const colunasPagas: ColumnDef<Divida, any>[] = [
-    ...colunasBase,
+  const paidColumns: ColumnDef<Debt, any>[] = [
+    ...baseColumns,
     {
-      id: "acoes",
+      id: "actions",
       header: "Ações",
       cell: ({ row }) => (
         <Link href={`/salgados/detalhes/${row.original.id}`}>
@@ -303,16 +303,16 @@ export default function SalgadosPage() {
           </Button>
         </Link>
       ),
-      meta: { alinhar: "direita" },
+      meta: { align: "right" },
     },
   ];
 
-  const filtroMotivo = (
+  const reasonFilter = (
     <Select
-      selectedKey={filterMotivo}
-      onSelectionChange={(chave) => {
-        setFilterMotivo(String(chave));
-        reiniciarPaginas();
+      selectedKey={filterReason}
+      onSelectionChange={(key) => {
+        setFilterReason(String(key));
+        resetPages();
       }}
       variant="secondary"
       aria-label="Filtrar por motivo"
@@ -323,12 +323,12 @@ export default function SalgadosPage() {
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          <ListBox.Item id="todos" textValue="Todos os motivos">
+          <ListBox.Item id="all" textValue="Todos os motivos">
             Todos os motivos
           </ListBox.Item>
-          {motivosUnicos.map((motivo) => (
-            <ListBox.Item key={motivo} id={motivo} textValue={motivo}>
-              {motivo}
+          {uniqueReasons.map((reason) => (
+            <ListBox.Item key={reason} id={reason} textValue={reason}>
+              {reason}
             </ListBox.Item>
           ))}
         </ListBox>
@@ -336,53 +336,53 @@ export default function SalgadosPage() {
     </Select>
   );
 
-  const calcularValorTotal = (): number => {
-    const quantidade = parseInt(newDivida.quantidadeCentos) || 1;
-    const valorPorCento =
-      parseFloat(String(newDivida.valorPorCento).replace(",", ".")) || 0;
-    return quantidade * valorPorCento;
+  const calculateTotalAmount = (): number => {
+    const count = parseInt(newDebt.hundredCount) || 1;
+    const pricePerHundred =
+      parseFloat(String(newDebt.pricePerHundred).replace(",", ".")) || 0;
+    return count * pricePerHundred;
   };
 
   useEffect(() => {
-    if (newDivida.item === "1 cento" || newDivida.item === "2 centos") {
-      const valorTotal = calcularValorTotal();
-      setNewDivida((prev) => ({
+    if (newDebt.item === "1 cento" || newDebt.item === "2 centos") {
+      const totalAmount = calculateTotalAmount();
+      setNewDebt((prev) => ({
         ...prev,
-        valor: valorTotal.toFixed(2),
+        valor: totalAmount.toFixed(2),
       }));
     }
-  }, [newDivida.quantidadeCentos, newDivida.valorPorCento, newDivida.item]);
+  }, [newDebt.hundredCount, newDebt.pricePerHundred, newDebt.item]);
 
-  const adicionarDivida = async () => {
-    let valorFinalDoBanco = 0;
+  const addDebt = async () => {
+    let finalAmount = 0;
 
-    if (newDivida.item === "1 cento" || newDivida.item === "2 centos") {
-      const valorPorCentoFloat = parseFloat(
-        String(newDivida.valorPorCento).replace(",", "."),
+    if (newDebt.item === "1 cento" || newDebt.item === "2 centos") {
+      const pricePerHundredFloat = parseFloat(
+        String(newDebt.pricePerHundred).replace(",", "."),
       );
       if (
-        !newDivida.colaborador_id ||
-        !newDivida.item ||
-        !newDivida.motivo ||
-        !newDivida.valorPorCento ||
-        isNaN(valorPorCentoFloat) ||
-        valorPorCentoFloat <= 0
+        !newDebt.colaborador_id ||
+        !newDebt.item ||
+        !newDebt.motivo ||
+        !newDebt.pricePerHundred ||
+        isNaN(pricePerHundredFloat) ||
+        pricePerHundredFloat <= 0
       ) {
         toast.danger("Erro", {
           description: "Preencha todos os campos obrigatórios.",
         });
         return;
       }
-      valorFinalDoBanco = parseFloat(String(newDivida.valor).replace(",", "."));
+      finalAmount = parseFloat(String(newDebt.valor).replace(",", "."));
     } else {
-      valorFinalDoBanco = parseFloat(String(newDivida.valor).replace(",", "."));
+      finalAmount = parseFloat(String(newDebt.valor).replace(",", "."));
       if (
-        !newDivida.colaborador_id ||
-        !newDivida.item ||
-        !newDivida.motivo ||
-        !newDivida.valor ||
-        isNaN(valorFinalDoBanco) ||
-        valorFinalDoBanco <= 0
+        !newDebt.colaborador_id ||
+        !newDebt.item ||
+        !newDebt.motivo ||
+        !newDebt.valor ||
+        isNaN(finalAmount) ||
+        finalAmount <= 0
       ) {
         toast.danger("Erro", {
           description: "Preencha todos os campos obrigatórios.",
@@ -396,21 +396,21 @@ export default function SalgadosPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          colaborador_id: parseInt(newDivida.colaborador_id),
-          item: newDivida.item,
-          motivo: newDivida.motivo,
-          valor: valorFinalDoBanco,
+          colaborador_id: parseInt(newDebt.colaborador_id),
+          item: newDebt.item,
+          motivo: newDebt.motivo,
+          valor: finalAmount,
         }),
       });
 
       if (response.ok) {
         fetchData();
         setIsAddDialogOpen(false);
-        setNewDivida({
+        setNewDebt({
           colaborador_id: "",
           item: "",
-          quantidadeCentos: "1",
-          valorPorCento: "",
+          hundredCount: "1",
+          pricePerHundred: "",
           motivo: "",
           valor: "",
         });
@@ -427,21 +427,27 @@ export default function SalgadosPage() {
     }
   };
 
-  const handleTransferirDinheiro = async () => {
+  const handleTransferMoney = async () => {
     if (!user) {
       return;
     }
 
-    const valor = parseFloat(String(transferData.amount).replace(",", "."));
+    const withdrawalAmount = parseFloat(
+      String(transferData.amount).replace(",", "."),
+    );
 
-    if (!transferData.amount || isNaN(valor) || valor <= 0) {
+    if (
+      !transferData.amount ||
+      isNaN(withdrawalAmount) ||
+      withdrawalAmount <= 0
+    ) {
       toast.danger("Erro", {
         description: "Informe um valor de saque válido.",
       });
       return;
     }
 
-    if (valor > saldoInfo.disponivel) {
+    if (withdrawalAmount > balanceInfo.available) {
       toast.danger("Erro", {
         description: "O valor solicitado excede o saldo disponível para saque.",
       });
@@ -462,7 +468,7 @@ export default function SalgadosPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           colaborador_id: user.id,
-          amount: valor,
+          amount: withdrawalAmount,
           description: transferData.description,
           pix_key: transferData.pix_key,
           pix_key_type: transferData.pix_key_type,
@@ -488,7 +494,7 @@ export default function SalgadosPage() {
         pix_key: "",
         pix_key_type: "CPF",
       });
-      fetchSaldo();
+      fetchBalance();
     } catch (error) {
       console.error("Erro ao solicitar transferência:", error);
       toast.danger("Erro", {
@@ -499,21 +505,21 @@ export default function SalgadosPage() {
     }
   };
 
-  if (loading || carregandoResumo) {
+  if (loading || loadingSummary) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Controle de Salgados"
-          descricao="Gerencie dívidas de salgados dos colaboradores"
-          voltarHref="/"
+      <PageLayout>
+        <PageHeader
+          title="Controle de Salgados"
+          description="Gerencie dívidas de salgados dos colaboradores"
+          backHref="/"
         />
 
         <section
@@ -521,51 +527,51 @@ export default function SalgadosPage() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
           <StatTile
-            rotulo="Em aberto"
-            valor={moedaCompacta(resumo?.kpis.valorEmAberto ?? 0)}
-            icone={Calendar}
-            deltaLegenda={`${inteiro(resumo?.kpis.dividasEmAberto ?? 0)} lançamento(s) aguardando pagamento`}
+            label="Em aberto"
+            value={formatCompactCurrency(summary?.kpis.openAmount ?? 0)}
+            icon={Calendar}
+            deltaLabel={`${formatInteger(summary?.kpis.openDebts ?? 0)} lançamento(s) aguardando pagamento`}
           />
           <StatTile
-            rotulo="Total quitado"
-            valor={moedaCompacta(resumo?.kpis.valorQuitado ?? 0)}
-            icone={Check}
-            deltaLegenda={`${inteiro(resumo?.kpis.dividasQuitadas ?? 0)} lançamento(s) já pagos`}
+            label="Total quitado"
+            value={formatCompactCurrency(summary?.kpis.settledAmount ?? 0)}
+            icon={Check}
+            deltaLabel={`${formatInteger(summary?.kpis.settledDebts ?? 0)} lançamento(s) já pagos`}
           />
           <StatTile
-            rotulo="Ticket médio"
-            valor={moeda(resumo?.kpis.ticketMedio ?? 0)}
-            icone={DollarSign}
-            deltaLegenda="valor médio por lançamento"
+            label="Ticket médio"
+            value={formatCurrency(summary?.kpis.averageTicket ?? 0)}
+            icon={DollarSign}
+            deltaLabel="valor médio por lançamento"
           />
 
           <StatTile
-            rotulo="Disponível para saque"
-            valor={moeda(saldoInfo.disponivel)}
-            icone={Wallet}
-            deltaLegenda={
-              saldoInfo.pendente > 0
-                ? `${moeda(saldoInfo.pendente)} ainda a liberar`
+            label="Disponível para saque"
+            value={formatCurrency(balanceInfo.available)}
+            icon={Wallet}
+            deltaLabel={
+              balanceInfo.pending > 0
+                ? `${formatCurrency(balanceInfo.pending)} ainda a liberar`
                 : "nada pendente de liberação"
             }
           />
         </section>
 
-        <Tabs defaultSelectedKey="pendentes" className="gap-4">
+        <Tabs defaultSelectedKey="pending" className="gap-4">
           <Tabs.ListContainer>
             <Tabs.List className="grid w-full grid-cols-1 sm:grid-cols-2">
-              <Tabs.Tab id="pendentes">
+              <Tabs.Tab id="pending">
                 Pendentes
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="pagas">
+              <Tabs.Tab id="paid">
                 Pagas
                 <Tabs.Indicator />
               </Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
 
-          <Tabs.Panel className="p-0" id="pendentes">
+          <Tabs.Panel className="p-0" id="pending">
             <Card>
               <Card.Header>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -576,37 +582,37 @@ export default function SalgadosPage() {
                     </Card.Description>
                   </div>
                   <div className="flex gap-4 items-center flex-wrap">
-                    {ehAdmin && (
+                    {isAdmin && (
                       <ModalForm
                         isOpen={isTransferOpen}
                         onOpenChange={setIsTransferOpen}
-                        titulo="Sacar Dinheiro"
-                        descricao="Solicite uma transferência PIX dos valores disponíveis."
-                        gatilho={
+                        title="Sacar Dinheiro"
+                        description="Solicite uma transferência PIX dos valores disponíveis."
+                        trigger={
                           <Button variant="secondary">
                             <Banknote />
                             Sacar dinheiro
                           </Button>
                         }
-                        rotuloConfirmar="Confirmar Transferência"
-                        rotuloEnviando="Enviando..."
-                        onConfirmar={handleTransferirDinheiro}
-                        isEnviando={isSubmittingTransfer}
-                        isConfirmarDesabilitado={saldoInfo.disponivel <= 0}
+                        confirmLabel="Confirmar Transferência"
+                        submittingLabel="Enviando..."
+                        onConfirm={handleTransferMoney}
+                        isSubmitting={isSubmittingTransfer}
+                        isConfirmDisabled={balanceInfo.available <= 0}
                       >
                         <p className="text-sm">
                           Saldo disponível para saque:{" "}
-                          <strong>{moeda(saldoInfo.disponivel)}</strong>
+                          <strong>{formatCurrency(balanceInfo.available)}</strong>
                         </p>
 
-                        <CampoModal
-                          rotulo="Valor a sacar (R$)"
+                        <ModalField
+                          label="Valor a sacar (R$)"
                           htmlFor="transfer_amount"
                         >
                           <Input
                             id="transfer_amount"
                             type="number"
-                            max={saldoInfo.disponivel}
+                            max={balanceInfo.available}
                             value={transferData.amount}
                             onChange={(e) =>
                               setTransferData({
@@ -617,19 +623,19 @@ export default function SalgadosPage() {
                             variant="secondary"
                             placeholder="Ex: 80.50 para R$ 80,50"
                           />
-                        </CampoModal>
+                        </ModalField>
 
-                        <LinhaCampos>
-                          <CampoModal
-                            rotulo="Tipo da chave PIX"
+                        <FieldRow>
+                          <ModalField
+                            label="Tipo da chave PIX"
                             htmlFor="pix_key_type"
                           >
                             <Select
                               selectedKey={transferData.pix_key_type}
-                              onSelectionChange={(chave) =>
+                              onSelectionChange={(key) =>
                                 setTransferData({
                                   ...transferData,
-                                  pix_key_type: String(chave),
+                                  pix_key_type: String(key),
                                   pix_key: "",
                                 })
                               }
@@ -642,21 +648,21 @@ export default function SalgadosPage() {
                               </Select.Trigger>
                               <Select.Popover>
                                 <ListBox>
-                                  {TIPOS_CHAVE_PIX.map((tipo) => (
+                                  {PIX_KEY_TYPE_OPTIONS.map((keyType) => (
                                     <ListBox.Item
-                                      key={tipo.id}
-                                      id={tipo.id}
-                                      textValue={tipo.rotulo}
+                                      key={keyType.id}
+                                      id={keyType.id}
+                                      textValue={keyType.label}
                                     >
-                                      {tipo.rotulo}
+                                      {keyType.label}
                                     </ListBox.Item>
                                   ))}
                                 </ListBox>
                               </Select.Popover>
                             </Select>
-                          </CampoModal>
+                          </ModalField>
 
-                          <CampoModal rotulo="Chave PIX" htmlFor="pix_key">
+                          <ModalField label="Chave PIX" htmlFor="pix_key">
                             <Input
                               id="pix_key"
                               value={transferData.pix_key}
@@ -668,13 +674,13 @@ export default function SalgadosPage() {
                               }
                               variant="secondary"
                               placeholder={
-                                PLACEHOLDER_CHAVE_PIX[transferData.pix_key_type]
+                                PIX_KEY_PLACEHOLDERS[transferData.pix_key_type]
                               }
                             />
-                          </CampoModal>
-                        </LinhaCampos>
+                          </ModalField>
+                        </FieldRow>
 
-                        <CampoModal rotulo="Observação" htmlFor="transfer_desc">
+                        <ModalField label="Observação" htmlFor="transfer_desc">
                           <TextArea
                             id="transfer_desc"
                             value={transferData.description}
@@ -687,30 +693,30 @@ export default function SalgadosPage() {
                             variant="secondary"
                             placeholder="Ex: Salgado de novembro"
                           />
-                        </CampoModal>
+                        </ModalField>
                       </ModalForm>
                     )}
 
                     <ModalForm
                       isOpen={isAddDialogOpen}
                       onOpenChange={setIsAddDialogOpen}
-                      titulo="Nova Dívida de Salgado"
-                      descricao="Adicione uma nova dívida de salgado para um colaborador."
-                      gatilho={
+                      title="Nova Dívida de Salgado"
+                      description="Adicione uma nova dívida de salgado para um colaborador."
+                      trigger={
                         <Button>
                           <Plus />
                           Adicionar Dívida
                         </Button>
                       }
-                      rotuloConfirmar="Adicionar Dívida"
-                      onConfirmar={adicionarDivida}
+                      confirmLabel="Adicionar Dívida"
+                      onConfirm={addDebt}
                     >
-                      <CampoModal rotulo="Colaborador" htmlFor="colaborador">
+                      <ModalField label="Colaborador" htmlFor="employee">
                         <Select
-                          value={newDivida.colaborador_id}
+                          value={newDebt.colaborador_id}
                           onChange={(value) =>
-                            setNewDivida({
-                              ...newDivida,
+                            setNewDebt({
+                              ...newDebt,
                               colaborador_id: value as string,
                             })
                           }
@@ -723,26 +729,26 @@ export default function SalgadosPage() {
                           </Select.Trigger>
                           <Select.Popover>
                             <ListBox>
-                              {colaboradores.map((colaborador) => (
+                              {employees.map((employee) => (
                                 <ListBox.Item
-                                  key={colaborador.id}
-                                  id={colaborador.id.toString()}
-                                  textValue={colaborador.nome}
+                                  key={employee.id}
+                                  id={employee.id.toString()}
+                                  textValue={employee.nome}
                                 >
-                                  {colaborador.nome}
+                                  {employee.nome}
                                 </ListBox.Item>
                               ))}
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                      </CampoModal>
+                      </ModalField>
 
-                      <CampoModal rotulo="Tipo de Salgado" htmlFor="item">
+                      <ModalField label="Tipo de Salgado" htmlFor="item">
                         <Select
-                          value={newDivida.item}
+                          value={newDebt.item}
                           onChange={(value) =>
-                            setNewDivida({
-                              ...newDivida,
+                            setNewDebt({
+                              ...newDebt,
                               item: value as string,
                               valor: "",
                             })
@@ -777,46 +783,46 @@ export default function SalgadosPage() {
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                      </CampoModal>
+                      </ModalField>
 
-                      {(newDivida.item === "1 cento" ||
-                        newDivida.item === "2 centos") && (
+                      {(newDebt.item === "1 cento" ||
+                        newDebt.item === "2 centos") && (
                         <>
-                          <LinhaCampos>
-                            <CampoModal
-                              rotulo="Valor por Cento (R$)"
-                              htmlFor="valorPorCento"
+                          <FieldRow>
+                            <ModalField
+                              label="Valor por Cento (R$)"
+                              htmlFor="pricePerHundred"
                             >
                               <Input
-                                id="valorPorCento"
+                                id="pricePerHundred"
                                 type="text"
                                 inputMode="decimal"
-                                value={newDivida.valorPorCento}
+                                value={newDebt.pricePerHundred}
                                 onChange={(e) => {
-                                  const valorAjustado = e.target.value.replace(
+                                  const sanitizedValue = e.target.value.replace(
                                     /[^0-9,]/g,
                                     "",
                                   );
-                                  setNewDivida({
-                                    ...newDivida,
-                                    valorPorCento: valorAjustado,
+                                  setNewDebt({
+                                    ...newDebt,
+                                    pricePerHundred: sanitizedValue,
                                   });
                                 }}
                                 variant="secondary"
                                 placeholder="0,00"
                               />
-                            </CampoModal>
+                            </ModalField>
 
-                            <CampoModal
-                              rotulo="Quantidade de Centos"
-                              htmlFor="quantidadeCentos"
+                            <ModalField
+                              label="Quantidade de Centos"
+                              htmlFor="hundredCount"
                             >
                               <Select
-                                value={newDivida.quantidadeCentos}
+                                value={newDebt.hundredCount}
                                 onChange={(value) =>
-                                  setNewDivida({
-                                    ...newDivida,
-                                    quantidadeCentos: value as string,
+                                  setNewDebt({
+                                    ...newDebt,
+                                    hundredCount: value as string,
                                   })
                                 }
                                 variant="secondary"
@@ -836,13 +842,13 @@ export default function SalgadosPage() {
                                   </ListBox>
                                 </Select.Popover>
                               </Select>
-                            </CampoModal>
-                          </LinhaCampos>
+                            </ModalField>
+                          </FieldRow>
 
-                          <CampoModal rotulo="Valor Total">
+                          <ModalField label="Valor Total">
                             <div className="rounded border border-border bg-default p-2 text-lg font-semibold text-foreground">
-                              {newDivida.valor
-                                ? Number(newDivida.valor).toLocaleString(
+                              {newDebt.valor
+                                ? Number(newDebt.valor).toLocaleString(
                                     "pt-BR",
                                     {
                                       style: "currency",
@@ -851,79 +857,79 @@ export default function SalgadosPage() {
                                   )
                                 : "R$ 0,00"}
                             </div>
-                          </CampoModal>
+                          </ModalField>
                         </>
                       )}
 
-                      {newDivida.item === "salgado" && (
-                        <CampoModal rotulo="Valor (R$)" htmlFor="valor">
+                      {newDebt.item === "salgado" && (
+                        <ModalField label="Valor (R$)" htmlFor="amount">
                           <Input
-                            id="valor"
+                            id="amount"
                             type="text"
                             inputMode="decimal"
-                            value={newDivida.valor}
+                            value={newDebt.valor}
                             onChange={(e) => {
-                              const valorAjustado = e.target.value.replace(
+                              const sanitizedValue = e.target.value.replace(
                                 /[^0-9,]/g,
                                 "",
                               );
-                              setNewDivida({
-                                ...newDivida,
-                                valor: valorAjustado,
+                              setNewDebt({
+                                ...newDebt,
+                                valor: sanitizedValue,
                               });
                             }}
                             variant="secondary"
                             placeholder="0,00"
                           />
-                        </CampoModal>
+                        </ModalField>
                       )}
 
-                      <CampoModal rotulo="Motivo da Dívida" htmlFor="motivo">
+                      <ModalField label="Motivo da Dívida" htmlFor="reason">
                         <TextArea
-                          id="motivo"
-                          value={newDivida.motivo}
+                          id="reason"
+                          value={newDebt.motivo}
                           onChange={(e) =>
-                            setNewDivida({
-                              ...newDivida,
+                            setNewDebt({
+                              ...newDebt,
                               motivo: e.target.value,
                             })
                           }
                           variant="secondary"
                           placeholder="Ex: Esqueceu de pagar, Pagamento atrasado..."
                         />
-                      </CampoModal>
+                      </ModalField>
                     </ModalForm>
                   </div>
                 </div>
               </Card.Header>
               <Card.Content>
                 <DataTable
-                  colunas={colunasPendentes}
-                  dados={dividas}
-                  rotulo="Dívidas pendentes"
-                  vazio="Nenhuma dívida encontrada"
-                  total={totalPendentes}
-                  pagina={currentPagePendentes}
-                  totalPaginas={totalPagesPendentes}
-                  onMudarPagina={setCurrentPagePendentes}
-                  itensPorPagina={itemsPerPage}
-                  onMudarItensPorPagina={(itens) => {
-                    setItemsPerPage(itens);
-                    reiniciarPaginas();
+                  columns={pendingColumns}
+                  data={debts}
+                  label="Dívidas pendentes"
+                  emptyMessage="Nenhuma dívida encontrada"
+                  total={totalPending}
+                  page={currentPagePending}
+                  totalPages={totalPagesPending}
+                  onPageChange={setCurrentPagePending}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(count) => {
+                    setItemsPerPage(count);
+                    resetPages();
                   }}
-                  busca={searchTerm}
-                  onMudarBusca={(valor) => {
-                    setSearchTerm(valor);
-                    reiniciarPaginas();
+                  search={searchTerm}
+                  onSearchChange={(value) => {
+                    setSearchTerm(value);
+                    resetPages();
                   }}
-                  placeholderBusca="Pesquisar por colaborador ou item..."
-                  filtros={filtroMotivo}
+                  searchPlaceholder="Pesquisar por colaborador ou item..."
+                  filters={reasonFilter}
                 />
               </Card.Content>
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel className="p-0" id="pagas">
+          <Tabs.Panel className="p-0" id="paid">
             <Card>
               <Card.Header>
                 <Card.Title>Dívidas Pagas</Card.Title>
@@ -933,32 +939,32 @@ export default function SalgadosPage() {
               </Card.Header>
               <Card.Content>
                 <DataTable
-                  colunas={colunasPagas}
-                  dados={salgadosPagos}
-                  rotulo="Dívidas pagas"
-                  vazio="Nenhum histórico encontrado"
-                  total={totalPagas}
-                  pagina={currentPagePagas}
-                  totalPaginas={totalPagesPagas}
-                  onMudarPagina={setCurrentPagePagas}
-                  itensPorPagina={itemsPerPage}
-                  onMudarItensPorPagina={(itens) => {
-                    setItemsPerPage(itens);
-                    reiniciarPaginas();
+                  columns={paidColumns}
+                  data={paidDebts}
+                  label="Dívidas pagas"
+                  emptyMessage="Nenhum histórico encontrado"
+                  total={totalPaid}
+                  page={currentPagePaid}
+                  totalPages={totalPagesPaid}
+                  onPageChange={setCurrentPagePaid}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(count) => {
+                    setItemsPerPage(count);
+                    resetPages();
                   }}
-                  busca={searchTerm}
-                  onMudarBusca={(valor) => {
-                    setSearchTerm(valor);
-                    reiniciarPaginas();
+                  search={searchTerm}
+                  onSearchChange={(value) => {
+                    setSearchTerm(value);
+                    resetPages();
                   }}
-                  placeholderBusca="Pesquisar por colaborador ou item..."
-                  filtros={filtroMotivo}
+                  searchPlaceholder="Pesquisar por colaborador ou item..."
+                  filters={reasonFilter}
                 />
               </Card.Content>
             </Card>
           </Tabs.Panel>
         </Tabs>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

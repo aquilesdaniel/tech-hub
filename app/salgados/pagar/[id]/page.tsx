@@ -1,23 +1,26 @@
 "use client";
 
-import { moeda, SERIE } from "@/components/dashboard/viz";
-import { IconeDestaque } from "@/components/icone-destaque";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { formatCurrency, SERIES } from "@/components/dashboard/viz";
+import { HighlightIcon } from "@/components/highlight-icon";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  INTERVALO_POLLING_MS,
-  TAXA_GATEWAY,
-  totalComTaxaGateway,
-} from "@/lib/salgados";
+  POLLING_INTERVAL_MS,
+  GATEWAY_FEE,
+  totalWithGatewayFee,
+} from "@/lib/snacks";
 import { Button, Card, Chip, Input, Separator, toast } from "@heroui/react";
 import confetti from "canvas-confetti";
 import {
   Check,
+  Clock,
   Copy,
   QrCode,
   Receipt,
+  RefreshCw,
+  TimerOff,
   TriangleAlert,
   UserRound,
   Zap,
@@ -25,10 +28,10 @@ import {
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 
-interface Divida {
+interface Debt {
   id: number;
   colaborador_id: number;
-  colaborador_nome: string;
+  employee_name: string;
   item: string;
   motivo: string;
   data_inicio: string;
@@ -38,7 +41,7 @@ interface Divida {
   updated_at: Date;
 }
 
-interface Colaborador {
+interface Employee {
   id: number;
   setor_id: number;
   nome: string;
@@ -54,13 +57,13 @@ interface Colaborador {
   country_code: string;
   area_code: string;
   number: string;
-  possui_documento: boolean;
-  document_mascarado: string | null;
+  has_document: boolean;
+  masked_document: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
-interface Pagamento {
+interface Payment {
   id: number;
   divida_id: number;
   colaborador_id: number;
@@ -71,25 +74,57 @@ interface Pagamento {
   expires_at: string | null;
 }
 
-const EH_DESENVOLVIMENTO =
+const IS_DEVELOPMENT =
   process.env.NODE_ENV !== "production" ||
   process.env.NEXT_PUBLIC_SIMULAR_PAGAMENTO === "true";
 
-function soltarConfetes() {
-  const disparar = (particleRatio: number, opcoes: confetti.Options) => {
+function secondsUntil(date: string | null | undefined) {
+  if (!date) return null;
+  return Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 1000));
+}
+
+function useSecondsRemaining(expiresAt: string | null | undefined) {
+  const [remaining, setRemaining] = useState(() => secondsUntil(expiresAt));
+
+  useEffect(() => {
+    setRemaining(secondsUntil(expiresAt));
+    if (!expiresAt) return;
+
+    const interval = setInterval(() => {
+      const seconds = secondsUntil(expiresAt);
+      setRemaining(seconds);
+      if (seconds === 0) clearInterval(interval);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  return remaining;
+}
+
+function formatTime(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mmss = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return hours > 0 ? `${hours}:${mmss}` : mmss;
+}
+
+function fireConfetti() {
+  const fire = (particleRatio: number, options: confetti.Options) => {
     confetti({
       origin: { y: 0.7 },
       spread: 70,
       startVelocity: 45,
       particleCount: Math.floor(200 * particleRatio),
-      ...opcoes,
+      ...options,
     });
   };
 
-  disparar(0.25, { spread: 26, startVelocity: 55 });
-  disparar(0.35, { spread: 60 });
-  disparar(0.2, { spread: 120, decay: 0.91, scalar: 0.8 });
-  disparar(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+  fire(0.25, { spread: 26, startVelocity: 55 });
+  fire(0.35, { spread: 60 });
+  fire(0.2, { spread: 120, decay: 0.91, scalar: 0.8 });
+  fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
 }
 
 export default function PaymentPage({
@@ -101,44 +136,47 @@ export default function PaymentPage({
   const { user } = useAuth();
   const router = useRouter();
 
-  const [divida, setDivida] = useState<Divida | null>(null);
+  const [debt, setDebt] = useState<Debt | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pagamento, setPagamento] = useState<Pagamento | null>(null);
-  const [gerandoPix, setGerandoPix] = useState(false);
-  const [simulando, setSimulando] = useState(false);
-  const confetesDisparados = useRef(false);
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [generatingPix, setGeneratingPix] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const confettiFired = useRef(false);
+  const secondsRemaining = useSecondsRemaining(payment?.expires_at);
+  const chargeExpired =
+    payment?.status === "canceled" || secondsRemaining === 0;
 
-  const [colaboradorCompleto, setColaboradorCompleto] =
-    useState<Colaborador | null>(null);
+  const [currentEmployee, setCurrentEmployee] =
+    useState<Employee | null>(null);
 
-  const possuiDadosCompletos =
-    colaboradorCompleto?.possui_documento &&
-    colaboradorCompleto?.country_code &&
-    colaboradorCompleto?.area_code &&
-    colaboradorCompleto?.number;
+  const hasCompleteData =
+    currentEmployee?.has_document &&
+    currentEmployee?.country_code &&
+    currentEmployee?.area_code &&
+    currentEmployee?.number;
 
-  const [documentoInput, setDocumentoInput] = useState("");
+  const [documentInput, setDocumentInput] = useState("");
   const [countryInput, setCountryInput] = useState("55");
   const [areaInput, setAreaInput] = useState("");
-  const [numeroInput, setNumeroInput] = useState("");
+  const [numberInput, setNumberInput] = useState("");
 
   useEffect(() => {
-    const carregarDados = async () => {
+    const loadData = async () => {
       try {
-        const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
-        if (!responseDivida.ok) {
+        const debtResponse = await fetch(`/api/salgados/dividas/${id}`);
+        if (!debtResponse.ok) {
           throw new Error("Dívida não encontrada");
         }
-        const dividaData = await responseDivida.json();
-        setDivida(dividaData);
-        confetesDisparados.current = Boolean(dividaData.pago);
+        const debtData = await debtResponse.json();
+        setDebt(debtData);
+        confettiFired.current = Boolean(debtData.pago);
 
-        const responsePagamento = await fetch(
+        const paymentResponse = await fetch(
           `/api/salgados/pagamentos?divida_id=${id}`,
         );
-        if (responsePagamento.ok) {
-          setPagamento(await responsePagamento.json());
+        if (paymentResponse.ok) {
+          setPayment(await paymentResponse.json());
         }
 
         let userIdLocal = user?.id;
@@ -151,12 +189,12 @@ export default function PaymentPage({
         }
 
         if (userIdLocal) {
-          const responseColab = await fetch(
+          const employeeResponse = await fetch(
             `/api/colaboradores/${userIdLocal}`,
           );
-          if (responseColab.ok) {
-            const colabData = await responseColab.json();
-            setColaboradorCompleto(colabData);
+          if (employeeResponse.ok) {
+            const employeeData = await employeeResponse.json();
+            setCurrentEmployee(employeeData);
           }
         }
       } catch (error) {
@@ -170,28 +208,30 @@ export default function PaymentPage({
       }
     };
 
-    carregarDados();
+    loadData();
   }, [id, router, user?.id]);
 
-  const confirmarPagamento = useCallback(() => {
-    setDivida((atual) => (atual ? { ...atual, pago: true } : atual));
-    setPagamento((atual) => (atual ? { ...atual, status: "paid" } : atual));
+  const confirmPayment = useCallback(() => {
+    setDebt((current) => (current ? { ...current, pago: true } : current));
+    setPayment((current) => (current ? { ...current, status: "paid" } : current));
 
-    if (confetesDisparados.current) return;
-    confetesDisparados.current = true;
+    if (confettiFired.current) return;
+    confettiFired.current = true;
 
-    soltarConfetes();
+    fireConfetti();
     toast("Pagamento confirmado!", {
       description: "O PIX foi compensado e a dívida está quitada.",
     });
   }, []);
 
   useEffect(() => {
-    if (!divida || divida.pago || !pagamento?.pix_id) return;
+    if (!debt || debt.pago || !payment?.pix_id || chargeExpired) {
+      return;
+    }
 
-    let ativo = true;
+    let active = true;
 
-    const verificar = async () => {
+    const checkStatus = async () => {
       try {
         const response = await fetch(
           `/api/salgados/pagamentos/status?divida_id=${id}`,
@@ -199,27 +239,32 @@ export default function PaymentPage({
         if (!response.ok) return;
 
         const status = await response.json();
-        if (ativo && status.pago) {
-          confirmarPagamento();
+        if (!active) return;
+        if (status.pago) {
+          confirmPayment();
+        } else if (status.status === "canceled") {
+          setPayment((current) =>
+            current ? { ...current, status: "canceled" } : current,
+          );
         }
       } catch (error) {
         console.error("Erro ao verificar o status do pagamento:", error);
       }
     };
 
-    const intervalo = setInterval(verificar, INTERVALO_POLLING_MS);
-    void verificar();
+    const interval = setInterval(checkStatus, POLLING_INTERVAL_MS);
+    void checkStatus();
 
     return () => {
-      ativo = false;
-      clearInterval(intervalo);
+      active = false;
+      clearInterval(interval);
     };
-  }, [id, divida, pagamento?.pix_id, confirmarPagamento]);
+  }, [id, debt, payment?.pix_id, chargeExpired, confirmPayment]);
 
-  const handleGerarPix = async () => {
+  const handleGeneratePix = async () => {
     if (!user) return;
 
-    setGerandoPix(true);
+    setGeneratingPix(true);
     try {
       const response = await fetch("/api/salgados/pagamentos", {
         method: "POST",
@@ -239,7 +284,7 @@ export default function PaymentPage({
         return;
       }
 
-      setPagamento(data);
+      setPayment(data);
       toast("PIX gerado!", {
         description: "Escaneie o QR Code ou copie o código para pagar.",
       });
@@ -249,15 +294,15 @@ export default function PaymentPage({
         description: "Não foi possível gerar a cobrança PIX.",
       });
     } finally {
-      setGerandoPix(false);
+      setGeneratingPix(false);
     }
   };
 
-  const handleCopiarCodigo = async () => {
-    if (!pagamento?.br_code) return;
+  const handleCopyCode = async () => {
+    if (!payment?.br_code) return;
 
     try {
-      await navigator.clipboard.writeText(pagamento.br_code);
+      await navigator.clipboard.writeText(payment.br_code);
       toast("Código copiado!", {
         description: "Cole no aplicativo do seu banco para pagar.",
       });
@@ -268,8 +313,8 @@ export default function PaymentPage({
     }
   };
 
-  const handleSimularPagamento = async () => {
-    setSimulando(true);
+  const handleSimulatePayment = async () => {
+    setSimulating(true);
     try {
       const response = await fetch("/api/salgados/pagamentos/simular", {
         method: "POST",
@@ -286,54 +331,54 @@ export default function PaymentPage({
         return;
       }
 
-      if (data.pago) confirmarPagamento();
+      if (data.pago) confirmPayment();
     } catch (error) {
       console.error("Erro ao simular o pagamento:", error);
       toast.danger("Erro", {
         description: "Não foi possível simular o pagamento.",
       });
     } finally {
-      setSimulando(false);
+      setSimulating(false);
     }
   };
 
-  const handleSalvarDados = async () => {
-    const soDigitos = (str: string) => str.replace(/\D/g, "");
+  const handleSaveData = async () => {
+    const digitsOnly = (str: string) => str.replace(/\D/g, "");
 
-    const cpfLimpo = soDigitos(documentoInput);
-    const ddiLimpo = soDigitos(countryInput);
-    const dddLimpo = soDigitos(areaInput);
-    const numeroLimpo = soDigitos(numeroInput);
+    const cleanCpf = digitsOnly(documentInput);
+    const cleanCountryCode = digitsOnly(countryInput);
+    const cleanAreaCode = digitsOnly(areaInput);
+    const cleanNumber = digitsOnly(numberInput);
 
-    if (!cpfLimpo || !ddiLimpo || !dddLimpo || !numeroLimpo) {
+    if (!cleanCpf || !cleanCountryCode || !cleanAreaCode || !cleanNumber) {
       toast.danger("Atenção", {
         description: "Preencha todos os campos obrigatórios.",
       });
       return;
     }
 
-    if (cpfLimpo.length !== 11) {
+    if (cleanCpf.length !== 11) {
       toast.danger("CPF Inválido", {
         description: "O CPF deve conter exatamente 11 dígitos.",
       });
       return;
     }
 
-    if (ddiLimpo.length < 1 || ddiLimpo.length > 3) {
+    if (cleanCountryCode.length < 1 || cleanCountryCode.length > 3) {
       toast.danger("DDI Inválido", {
         description: "Verifique o código do país (ex: 55).",
       });
       return;
     }
 
-    if (dddLimpo.length !== 2) {
+    if (cleanAreaCode.length !== 2) {
       toast.danger("DDD Inválido", {
         description: "O DDD deve conter exatamente 2 dígitos (ex: 11).",
       });
       return;
     }
 
-    if (numeroLimpo.length < 8 || numeroLimpo.length > 9) {
+    if (cleanNumber.length < 8 || cleanNumber.length > 9) {
       toast.danger("Número Inválido", {
         description: "O número deve conter de 8 a 9 dígitos.",
       });
@@ -346,16 +391,16 @@ export default function PaymentPage({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          document: cpfLimpo,
-          country_code: ddiLimpo,
-          area_code: dddLimpo,
-          number: numeroLimpo,
+          document: cleanCpf,
+          country_code: cleanCountryCode,
+          area_code: cleanAreaCode,
+          number: cleanNumber,
         }),
       });
 
       if (response.ok) {
-        const colaboradorAtualizado = await response.json();
-        setColaboradorCompleto(colaboradorAtualizado);
+        const updatedEmployee = await response.json();
+        setCurrentEmployee(updatedEmployee);
         toast("Parabéns!", {
           description: "Seus dados foram validados e salvos com sucesso.",
         });
@@ -374,43 +419,44 @@ export default function PaymentPage({
   if (loading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
-  if (!divida) {
+  if (!debt) {
     return null;
   }
 
-  const cobrancaAtiva = Boolean(pagamento?.br_code_base64) && !divida.pago;
-  const painelLateral = divida.pago || cobrancaAtiva;
-  const expiraEm = pagamento?.expires_at
-    ? new Date(pagamento.expires_at).toLocaleString("pt-BR")
+  const hasCharge = Boolean(payment?.br_code_base64) && !debt.pago;
+  const chargeActive = hasCharge && !chargeExpired;
+  const showSidePanel = debt.pago || hasCharge;
+  const expiresAtLabel = payment?.expires_at
+    ? new Date(payment.expires_at).toLocaleString("pt-BR")
     : null;
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Confirmar Pagamento"
-          descricao="Verifique os detalhes da dívida antes de prosseguir"
-          voltarHref="/salgados"
+      <PageLayout>
+        <PageHeader
+          title="Confirmar Pagamento"
+          description="Verifique os detalhes da dívida antes de prosseguir"
+          backHref="/salgados"
         />
 
         <div className="flex flex-col lg:flex-row gap-4">
           <div
-            className={`flex flex-col gap-4 transition-all duration-300 w-full ${painelLateral ? "lg:w-2/3" : ""}`}
+            className={`flex flex-col gap-4 transition-all duration-300 w-full ${showSidePanel ? "lg:w-2/3" : ""}`}
           >
             <Card>
               <Card.Header>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <IconeDestaque icone={Receipt} cor={SERIE.s2} />
+                    <HighlightIcon icon={Receipt} color={SERIES.s2} />
                     <Card.Title>Detalhes da Dívida</Card.Title>
                   </div>
 
-                  {divida.pago ? (
+                  {debt.pago ? (
                     <Chip variant="primary" color="success">
                       Pago
                     </Chip>
@@ -427,34 +473,34 @@ export default function PaymentPage({
                   <div>
                     <p className="text-sm font-medium text-muted">Devedor</p>
                     <p className="text-lg font-semibold">
-                      {divida.colaborador_nome}
+                      {debt.employee_name}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted">Motivo</p>
-                    <p className="font-medium">{divida.motivo}</p>
+                    <p className="font-medium">{debt.motivo}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted">Item</p>
-                    <p className="font-medium">{divida.item}</p>
+                    <p className="font-medium">{debt.item}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted">
                       Data de Entrada
                     </p>
                     <p className="font-medium">
-                      {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                      {new Date(debt.data_inicio).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                 </div>
 
                 <Separator className="my-3" />
 
-                {divida.pago ? (
+                {debt.pago ? (
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-semibold">Valor Total:</span>
                     <span className="text-lg font-bold tabular-nums">
-                      {moeda(Number(divida.valor))}
+                      {formatCurrency(Number(debt.valor))}
                     </span>
                   </div>
                 ) : (
@@ -462,13 +508,13 @@ export default function PaymentPage({
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted">Valor da dívida</span>
                       <span className="font-medium tabular-nums">
-                        {moeda(Number(divida.valor))}
+                        {formatCurrency(Number(debt.valor))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted">Taxa do gateway</span>
                       <span className="font-medium tabular-nums">
-                        + {moeda(TAXA_GATEWAY)}
+                        + {formatCurrency(GATEWAY_FEE)}
                       </span>
                     </div>
 
@@ -479,7 +525,7 @@ export default function PaymentPage({
                         Total a pagar:
                       </span>
                       <span className="text-lg font-bold tabular-nums">
-                        {moeda(totalComTaxaGateway(divida.valor))}
+                        {formatCurrency(totalWithGatewayFee(debt.valor))}
                       </span>
                     </div>
                   </div>
@@ -490,7 +536,7 @@ export default function PaymentPage({
             <Card>
               <Card.Header>
                 <div className="flex items-center gap-4">
-                  <IconeDestaque icone={UserRound} cor={SERIE.s1} />
+                  <HighlightIcon icon={UserRound} color={SERIES.s1} />
                   <Card.Title>Responsável pela Baixa</Card.Title>
                 </div>
               </Card.Header>
@@ -524,14 +570,14 @@ export default function PaymentPage({
                     </div>
 
                     <div className="col-span-1 md:col-span-2">
-                      {possuiDadosCompletos ? (
+                      {hasCompleteData ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p className="text-sm font-medium text-muted pb-1">
                               CPF
                             </p>
                             <p className="font-medium">
-                              {colaboradorCompleto?.document_mascarado}
+                              {currentEmployee?.masked_document}
                             </p>
                           </div>
                           <div>
@@ -539,9 +585,9 @@ export default function PaymentPage({
                               Número de Contato
                             </p>
                             <p className="font-medium">
-                              +{colaboradorCompleto?.country_code} (
-                              {colaboradorCompleto?.area_code}){" "}
-                              {colaboradorCompleto?.number}
+                              +{currentEmployee?.country_code} (
+                              {currentEmployee?.area_code}){" "}
+                              {currentEmployee?.number}
                             </p>
                           </div>
                         </div>
@@ -565,9 +611,9 @@ export default function PaymentPage({
                             </p>
                             <Input
                               placeholder="00011122233"
-                              value={documentoInput}
+                              value={documentInput}
                               onChange={(e) =>
-                                setDocumentoInput(e.target.value)
+                                setDocumentInput(e.target.value)
                               }
                               maxLength={11}
                             />
@@ -597,8 +643,8 @@ export default function PaymentPage({
                               <Input
                                 placeholder="999990000"
                                 className="flex-1"
-                                value={numeroInput}
-                                onChange={(e) => setNumeroInput(e.target.value)}
+                                value={numberInput}
+                                onChange={(e) => setNumberInput(e.target.value)}
                                 maxLength={9}
                               />
                             </div>
@@ -614,24 +660,26 @@ export default function PaymentPage({
                 )}
               </Card.Content>
 
-              {!divida.pago && colaboradorCompleto !== null && (
+              {!debt.pago && currentEmployee !== null && (
                 <Card.Footer className="flex flex-col-reverse sm:flex-row w-full gap-4 justify-end">
                   <div className="flex flex-col sm:flex-row w-full sm:w-fit gap-4">
-                    {possuiDadosCompletos ? (
+                    {hasCompleteData ? (
                       <Button
-                        onPress={handleGerarPix}
-                        isDisabled={gerandoPix || cobrancaAtiva}
+                        onPress={handleGeneratePix}
+                        isDisabled={generatingPix || chargeActive}
                       >
                         <QrCode />
-                        {gerandoPix
+                        {generatingPix
                           ? "Gerando..."
-                          : cobrancaAtiva
+                          : chargeActive
                             ? "PIX gerado"
-                            : "Gerar pagamento PIX"}
+                            : hasCharge
+                              ? "Gerar novo pagamento"
+                              : "Gerar pagamento PIX"}
                       </Button>
                     ) : (
                       <Button
-                        onPress={handleSalvarDados}
+                        onPress={handleSaveData}
                         isDisabled={isProcessing}
                       >
                         Atualizar Dados
@@ -643,11 +691,48 @@ export default function PaymentPage({
             </Card>
           </div>
 
-          {cobrancaAtiva && pagamento && (
+          {hasCharge && payment && chargeExpired && (
+            <Card className="w-full lg:w-1/3 border-danger/40">
+              <Card.Header>
+                <div className="flex items-center gap-4">
+                  <HighlightIcon icon={QrCode} color={SERIES.s3} />
+                  <div>
+                    <Card.Title>Pague com PIX</Card.Title>
+                    <Card.Description>Cobrança expirada</Card.Description>
+                  </div>
+                </div>
+              </Card.Header>
+
+              <Card.Content className="flex flex-col items-center gap-4 py-6 text-center">
+                <div className="flex size-16 items-center justify-center rounded-full bg-danger/10 text-danger">
+                  <TimerOff aria-hidden className="size-8" />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <p className="text-lg font-semibold">QR Code expirado</p>
+                  <p className="text-sm text-muted">
+                    Este PIX não pode mais ser pago. Gere um novo pagamento para
+                    continuar.
+                  </p>
+                </div>
+
+                <Button
+                  fullWidth
+                  onPress={handleGeneratePix}
+                  isDisabled={generatingPix}
+                >
+                  <RefreshCw />
+                  {generatingPix ? "Gerando..." : "Gerar novo pagamento"}
+                </Button>
+              </Card.Content>
+            </Card>
+          )}
+
+          {chargeActive && payment && (
             <Card className="w-full lg:w-1/3 border-primary/40">
               <Card.Header>
                 <div className="flex items-center gap-4">
-                  <IconeDestaque icone={QrCode} cor={SERIE.s3} />
+                  <HighlightIcon icon={QrCode} color={SERIES.s3} />
                   <div>
                     <Card.Title>Pague com PIX</Card.Title>
                     <Card.Description>
@@ -658,9 +743,29 @@ export default function PaymentPage({
               </Card.Header>
 
               <Card.Content className="flex flex-col items-center gap-4">
-                {pagamento.br_code_base64 && (
+                {secondsRemaining !== null && (
+                  <div
+                    role="timer"
+                    aria-live="off"
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${
+                      secondsRemaining <= 60
+                        ? "border-danger/40 bg-danger/10 text-danger"
+                        : "border-border bg-default"
+                    }`}
+                  >
+                    <Clock aria-hidden className="size-4" />
+                    <span>
+                      Expira em{" "}
+                      <span className="font-mono tabular-nums">
+                        {formatTime(secondsRemaining)}
+                      </span>
+                    </span>
+                  </div>
+                )}
+
+                {payment.br_code_base64 && (
                   <img
-                    src={pagamento.br_code_base64}
+                    src={payment.br_code_base64}
                     alt="QR Code do PIX para pagamento da dívida"
                     className="size-56 rounded-lg bg-white p-2"
                   />
@@ -672,42 +777,42 @@ export default function PaymentPage({
                 </p>
 
                 <p className="w-full break-all rounded-md border border-border bg-default p-2 text-center font-mono text-xs">
-                  {pagamento.br_code}
+                  {payment.br_code}
                 </p>
 
                 <div className="flex w-full flex-col gap-2">
                   <Button
                     fullWidth
                     variant="secondary"
-                    onPress={handleCopiarCodigo}
+                    onPress={handleCopyCode}
                   >
                     <Copy />
                     Copiar código PIX
                   </Button>
 
-                  {EH_DESENVOLVIMENTO && (
+                  {IS_DEVELOPMENT && (
                     <Button
                       fullWidth
                       variant="outline"
-                      onPress={handleSimularPagamento}
-                      isDisabled={simulando}
+                      onPress={handleSimulatePayment}
+                      isDisabled={simulating}
                     >
                       <Zap />
-                      {simulando ? "Simulando..." : "Simular pagamento (dev)"}
+                      {simulating ? "Simulando..." : "Simular pagamento (dev)"}
                     </Button>
                   )}
                 </div>
 
-                {expiraEm && (
+                {expiresAtLabel && (
                   <p className="text-center text-xs text-muted">
-                    Válido até {expiraEm}
+                    Válido até {expiresAtLabel}
                   </p>
                 )}
               </Card.Content>
             </Card>
           )}
 
-          {divida.pago && (
+          {debt.pago && (
             <Card className="w-full min-h-full flex flex-col justify-center items-center lg:w-1/3 border-success/40">
               <Card.Header className="flex flex-col items-center justify-center space-y-4 p-6">
                 <div className="flex items-center justify-center size-16 rounded-full bg-success text-success-foreground">
@@ -725,7 +830,7 @@ export default function PaymentPage({
             </Card>
           )}
         </div>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

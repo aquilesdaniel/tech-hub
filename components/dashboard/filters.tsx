@@ -9,35 +9,35 @@ import {
   ToggleButtonGroup,
 } from "@heroui/react";
 import { RotateCw } from "lucide-react";
-import type { Setor } from "./types";
+import type { Sector } from "./types";
 
-export const PERIODOS = [
-  { id: "3", rotulo: "3 meses" },
-  { id: "6", rotulo: "6 meses" },
-  { id: "12", rotulo: "12 meses" },
-  { id: "0", rotulo: "Tudo" },
+export const PERIODS = [
+  { id: "3", label: "3 meses" },
+  { id: "6", label: "6 meses" },
+  { id: "12", label: "12 meses" },
+  { id: "0", label: "Tudo" },
 ] as const;
 
 type Props = {
-  meses: number;
-  onMesesChange: (meses: number) => void;
-  setorId: string;
-  onSetorChange: (setorId: string) => void;
-  setores: Setor[];
-  mostrarSetor: boolean;
-  revalidando: boolean;
-  onAtualizar: () => void;
+  months: number;
+  onMonthsChange: (months: number) => void;
+  sectorId: string;
+  onSectorChange: (sectorId: string) => void;
+  sectors: Sector[];
+  showSector: boolean;
+  revalidating: boolean;
+  onRefresh: () => void;
 };
 
-export function FiltroDashboard({
-  meses,
-  onMesesChange,
-  setorId,
-  onSetorChange,
-  setores,
-  mostrarSetor,
-  revalidando,
-  onAtualizar,
+export function DashboardFilters({
+  months,
+  onMonthsChange,
+  sectorId,
+  onSectorChange,
+  sectors,
+  showSector,
+  revalidating,
+  onRefresh,
 }: Props) {
   return (
     <Card className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -46,28 +46,28 @@ export function FiltroDashboard({
         className="max-sm:w-full max-sm:*:flex-1"
         selectionMode="single"
         disallowEmptySelection
-        selectedKeys={[String(meses)]}
-        onSelectionChange={(chaves) => {
-          const escolhida = Array.from(chaves)[0];
-          if (escolhida != null) {
-            onMesesChange(Number(escolhida));
+        selectedKeys={[String(months)]}
+        onSelectionChange={(keys) => {
+          const selected = Array.from(keys)[0];
+          if (selected != null) {
+            onMonthsChange(Number(selected));
           }
         }}
-        aria-labelledby="rotulo-periodo"
+        aria-labelledby="period-label"
       >
-        {PERIODOS.map((periodo) => (
-          <ToggleButton key={periodo.id} id={periodo.id}>
-            {periodo.rotulo}
+        {PERIODS.map((period) => (
+          <ToggleButton key={period.id} id={period.id}>
+            {period.label}
           </ToggleButton>
         ))}
       </ToggleButtonGroup>
 
-      {mostrarSetor && (
+      {showSector && (
         <div className="w-full sm:w-52">
           <Select
-            selectedKey={setorId}
-            onSelectionChange={(chave) => onSetorChange(String(chave))}
-            aria-labelledby="rotulo-setor"
+            selectedKey={sectorId}
+            onSelectionChange={(key) => onSectorChange(String(key))}
+            aria-labelledby="sector-label"
             variant="secondary"
           >
             <Select.Trigger className="w-full">
@@ -76,16 +76,16 @@ export function FiltroDashboard({
             </Select.Trigger>
             <Select.Popover>
               <ListBox>
-                <ListBox.Item id="todos" textValue="Todos os setores">
+                <ListBox.Item id="all" textValue="Todos os setores">
                   Todos os setores
                 </ListBox.Item>
-                {setores.map((setor) => (
+                {sectors.map((sector) => (
                   <ListBox.Item
-                    key={setor.id}
-                    id={String(setor.id)}
-                    textValue={setor.nome}
+                    key={sector.id}
+                    id={String(sector.id)}
+                    textValue={sector.nome}
                   >
-                    {setor.nome}
+                    {sector.nome}
                   </ListBox.Item>
                 ))}
               </ListBox>
@@ -97,13 +97,13 @@ export function FiltroDashboard({
       <Button
         size="sm"
         variant="secondary"
-        onPress={onAtualizar}
-        isPending={revalidando}
+        onPress={onRefresh}
+        isPending={revalidating}
         className="max-sm:w-full sm:ml-auto"
       >
         <RotateCw
           aria-hidden
-          className={`size-4 ${revalidando ? "animate-spin" : ""}`}
+          className={`size-4 ${revalidating ? "animate-spin" : ""}`}
         />
         Atualizar
       </Button>

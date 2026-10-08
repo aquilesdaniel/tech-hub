@@ -1,9 +1,9 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { ehAdminPermanente } from "@/lib/permissoes";
+import { isPermanentAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-const FILTRO_ADMINS: Prisma.colaboradoresWhereInput = {
+const ADMINS_FILTER: Prisma.colaboradoresWhereInput = {
   OR: [
     { admin_permanente: true },
     { tipo: "admin" },
@@ -11,19 +11,19 @@ const FILTRO_ADMINS: Prisma.colaboradoresWhereInput = {
   ],
 };
 
-const FILTRO_CANDIDATOS: Prisma.colaboradoresWhereInput = {
+const CANDIDATES_FILTER: Prisma.colaboradoresWhereInput = {
   admin_permanente: { not: true },
   tipo: { not: "admin" },
 };
 
-function ehOProprioUsuario(
-  emailAlvo?: string | null,
-  emailSolicitante?: string | null,
+function isSameUser(
+  targetEmail?: string | null,
+  requesterEmail?: string | null,
 ) {
   return Boolean(
-    emailAlvo &&
-    emailSolicitante &&
-    emailAlvo.toLowerCase() === emailSolicitante.trim().toLowerCase(),
+    targetEmail &&
+    requesterEmail &&
+    targetEmail.toLowerCase() === requesterEmail.trim().toLowerCase(),
   );
 }
 
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get("user_email");
 
-    if (!(await ehAdminPermanente(userEmail))) {
+    if (!(await isPermanentAdmin(userEmail))) {
       return NextResponse.json(
         {
           error:
@@ -45,19 +45,19 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
-    const escopo = searchParams.get("escopo");
+    const scope = searchParams.get("scope");
 
-    const filtroEscopo =
-      escopo === "candidatos"
-        ? FILTRO_CANDIDATOS
-        : escopo === "todos"
+    const scopeFilter =
+      scope === "candidates"
+        ? CANDIDATES_FILTER
+        : scope === "all"
           ? {}
-          : FILTRO_ADMINS;
+          : ADMINS_FILTER;
 
     const where: Prisma.colaboradoresWhereInput = search
       ? {
           AND: [
-            filtroEscopo,
+            scopeFilter,
             {
               OR: [
                 { nome: { contains: search, mode: "insensitive" } },
@@ -66,9 +66,9 @@ export async function GET(request: NextRequest) {
             },
           ],
         }
-      : filtroEscopo;
+      : scopeFilter;
 
-    const selecao = {
+    const userSelect = {
       id: true,
       nome: true,
       email: true,
@@ -85,34 +85,34 @@ export async function GET(request: NextRequest) {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 10;
 
-      const [colaboradores, total, admins] = await prisma.$transaction([
+      const [employees, total, admins] = await prisma.$transaction([
         prisma.colaboradores.findMany({
           where,
-          select: selecao,
+          select: userSelect,
           orderBy: { nome: "asc" },
           skip: (pageNum - 1) * limitNum,
           take: limitNum,
         }),
         prisma.colaboradores.count({ where }),
-        prisma.colaboradores.count({ where: FILTRO_ADMINS }),
+        prisma.colaboradores.count({ where: ADMINS_FILTER }),
       ]);
 
       return NextResponse.json({
-        data: colaboradores,
+        data: employees,
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
-        resumo: { admins },
+        summary: { admins },
       });
     }
 
-    const colaboradores = await prisma.colaboradores.findMany({
+    const employees = await prisma.colaboradores.findMany({
       where,
-      select: selecao,
+      select: userSelect,
       orderBy: { nome: "asc" },
     });
 
-    return NextResponse.json(colaboradores);
+    return NextResponse.json(employees);
   } catch (error) {
     console.error("Erro ao listar colaboradores:", error);
     return NextResponse.json(
@@ -125,9 +125,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { colaborador_id, admin_ate, user_email, admin_permanente } = body;
+    const {
+      colaborador_id: employeeId,
+      admin_until: adminUntil,
+      user_email: userEmail,
+      admin_permanente: adminPermanent,
+    } = body;
 
-    if (!(await ehAdminPermanente(user_email))) {
+    if (!(await isPermanentAdmin(userEmail))) {
       return NextResponse.json(
         {
           error:
@@ -137,34 +142,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!colaborador_id) {
+    if (!employeeId) {
       return NextResponse.json(
         { error: "Campo obrigatório: colaborador_id" },
         { status: 400 },
       );
     }
 
-    const permanente = admin_permanente === true;
+    const isPermanent = adminPermanent === true;
 
-    if (!permanente && !admin_ate) {
+    if (!isPermanent && !adminUntil) {
       return NextResponse.json(
         { error: "Informe a data de expiração do admin temporário" },
         { status: 400 },
       );
     }
 
-    let dataAdmin: Date | null = null;
+    let adminExpiresAt: Date | null = null;
 
-    if (!permanente) {
-      dataAdmin = new Date(`${String(admin_ate).slice(0, 10)}T23:59:59`);
-      if (Number.isNaN(dataAdmin.getTime())) {
+    if (!isPermanent) {
+      adminExpiresAt = new Date(`${String(adminUntil).slice(0, 10)}T23:59:59`);
+      if (Number.isNaN(adminExpiresAt.getTime())) {
         return NextResponse.json(
           { error: "Data de expiração inválida" },
           { status: 400 },
         );
       }
 
-      if (dataAdmin <= new Date()) {
+      if (adminExpiresAt <= new Date()) {
         return NextResponse.json(
           { error: "A data de expiração deve ser futura" },
           { status: 400 },
@@ -172,31 +177,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const colaborador = await prisma.colaboradores.findUnique({
-      where: { id: Number(colaborador_id) },
+    const employee = await prisma.colaboradores.findUnique({
+      where: { id: Number(employeeId) },
       select: { id: true, nome: true, email: true, admin_permanente: true },
     });
 
-    if (!colaborador) {
+    if (!employee) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
       );
     }
 
-    if (ehOProprioUsuario(colaborador.email, user_email)) {
+    if (isSameUser(employee.email, userEmail)) {
       return NextResponse.json(
         { error: "Você não pode alterar seus próprios privilégios de admin" },
         { status: 400 },
       );
     }
 
-    if (colaborador.admin_permanente === true && !permanente) {
-      const totalPermanentes = await prisma.colaboradores.count({
+    if (employee.admin_permanente === true && !isPermanent) {
+      const permanentAdminCount = await prisma.colaboradores.count({
         where: { admin_permanente: true },
       });
 
-      if (totalPermanentes <= 1) {
+      if (permanentAdminCount <= 1) {
         return NextResponse.json(
           { error: "É necessário manter ao menos um admin permanente" },
           { status: 400 },
@@ -205,21 +210,21 @@ export async function POST(request: NextRequest) {
     }
 
     await prisma.colaboradores.update({
-      where: { id: colaborador.id },
+      where: { id: employee.id },
       data: {
-        admin_permanente: permanente,
-        admin_temporario_ate: dataAdmin,
+        admin_permanente: isPermanent,
+        admin_temporario_ate: adminExpiresAt,
         tipo: "admin",
         updated_at: new Date(),
       },
     });
 
     return NextResponse.json({
-      message: permanente
-        ? `${colaborador.nome} agora é admin permanente`
+      message: isPermanent
+        ? `${employee.nome} agora é admin permanente`
         : `Admin temporário definido para ${
-            colaborador.nome
-          } até ${dataAdmin!.toLocaleDateString("pt-BR")}`,
+            employee.nome
+          } até ${adminExpiresAt!.toLocaleDateString("pt-BR")}`,
     });
   } catch (error) {
     console.error("Erro ao definir privilégios de admin:", error);
@@ -233,10 +238,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const colaborador_id = searchParams.get("colaborador_id");
-    const user_email = searchParams.get("user_email");
+    const employeeId = searchParams.get("colaborador_id");
+    const userEmail = searchParams.get("user_email");
 
-    if (!(await ehAdminPermanente(user_email))) {
+    if (!(await isPermanentAdmin(userEmail))) {
       return NextResponse.json(
         {
           error:
@@ -246,38 +251,38 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (!colaborador_id) {
+    if (!employeeId) {
       return NextResponse.json(
         { error: "Campo obrigatório: colaborador_id" },
         { status: 400 },
       );
     }
 
-    const colaborador = await prisma.colaboradores.findUnique({
-      where: { id: Number(colaborador_id) },
+    const employee = await prisma.colaboradores.findUnique({
+      where: { id: Number(employeeId) },
       select: { id: true, nome: true, email: true, admin_permanente: true },
     });
 
-    if (!colaborador) {
+    if (!employee) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
       );
     }
 
-    if (ehOProprioUsuario(colaborador.email, user_email)) {
+    if (isSameUser(employee.email, userEmail)) {
       return NextResponse.json(
         { error: "Você não pode remover seus próprios privilégios de admin" },
         { status: 400 },
       );
     }
 
-    if (colaborador.admin_permanente === true) {
-      const totalPermanentes = await prisma.colaboradores.count({
+    if (employee.admin_permanente === true) {
+      const permanentAdminCount = await prisma.colaboradores.count({
         where: { admin_permanente: true },
       });
 
-      if (totalPermanentes <= 1) {
+      if (permanentAdminCount <= 1) {
         return NextResponse.json(
           { error: "É necessário manter ao menos um admin permanente" },
           { status: 400 },
@@ -286,7 +291,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.colaboradores.update({
-      where: { id: colaborador.id },
+      where: { id: employee.id },
       data: {
         admin_permanente: false,
         admin_temporario_ate: null,
@@ -296,7 +301,7 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({
-      message: `Privilégios de admin removidos para ${colaborador.nome}`,
+      message: `Privilégios de admin removidos para ${employee.nome}`,
     });
   } catch (error) {
     console.error("Erro ao remover privilégios de admin:", error);

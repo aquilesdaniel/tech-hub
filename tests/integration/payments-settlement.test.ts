@@ -1,9 +1,9 @@
-import { aplicarPagamentoConfirmado } from "@/lib/pagamentos";
+import { applyConfirmedPayment } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 
 jest.mock("@/lib/abacatepay", () => ({
-  consultarCobrancaPix: jest.fn(),
-  statusInterno: jest.fn(),
+  getPixCharge: jest.fn(),
+  toInternalStatus: jest.fn(),
 }));
 
 jest.mock("@/lib/prisma", () => ({
@@ -15,7 +15,7 @@ jest.mock("@/lib/prisma", () => ({
 
 const transaction = prisma.$transaction as unknown as jest.Mock;
 
-function criarTx() {
+function createTx() {
   return {
     pagamentos: {
       findUnique: jest.fn(),
@@ -29,7 +29,7 @@ function criarTx() {
   };
 }
 
-function usarTx(tx: ReturnType<typeof criarTx>) {
+function mockTx(tx: ReturnType<typeof createTx>) {
   transaction.mockImplementation((callback: (t: unknown) => unknown) =>
     callback(tx),
   );
@@ -38,7 +38,7 @@ function usarTx(tx: ReturnType<typeof criarTx>) {
 
 describe("aplicarPagamentoConfirmado", () => {
   it("quita a dívida e acumula o valor no total gasto do colaborador", async () => {
-    const tx = usarTx(criarTx());
+    const tx = mockTx(createTx());
     tx.pagamentos.findUnique.mockResolvedValue({
       id: 51,
       divida_id: 12,
@@ -51,11 +51,11 @@ describe("aplicarPagamentoConfirmado", () => {
       colaborador_id: 3,
     });
 
-    const resultado = await aplicarPagamentoConfirmado(51);
+    const result = await applyConfirmedPayment(51);
 
-    expect(resultado).toEqual({
-      encontrado: true,
-      atualizado: true,
+    expect(result).toEqual({
+      found: true,
+      updated: true,
       divida_id: 12,
       status: "paid",
     });
@@ -76,16 +76,16 @@ describe("aplicarPagamentoConfirmado", () => {
   });
 
   it("é idempotente: não reprocessa um pagamento já pago", async () => {
-    const tx = usarTx(criarTx());
+    const tx = mockTx(createTx());
     tx.pagamentos.findUnique.mockResolvedValue({
       id: 51,
       divida_id: 12,
       status: "paid",
     });
 
-    await expect(aplicarPagamentoConfirmado(51)).resolves.toEqual({
-      encontrado: true,
-      atualizado: false,
+    await expect(applyConfirmedPayment(51)).resolves.toEqual({
+      found: true,
+      updated: false,
       divida_id: 12,
       status: "paid",
     });
@@ -96,7 +96,7 @@ describe("aplicarPagamentoConfirmado", () => {
   });
 
   it("não soma o valor duas vezes quando a dívida já estava quitada", async () => {
-    const tx = usarTx(criarTx());
+    const tx = mockTx(createTx());
     tx.pagamentos.findUnique.mockResolvedValue({
       id: 51,
       divida_id: 12,
@@ -109,9 +109,9 @@ describe("aplicarPagamentoConfirmado", () => {
       colaborador_id: 3,
     });
 
-    const resultado = await aplicarPagamentoConfirmado(51);
+    const result = await applyConfirmedPayment(51);
 
-    expect(resultado.status).toBe("paid");
+    expect(result.status).toBe("paid");
     expect(tx.pagamentos.update).toHaveBeenCalled();
     expect(tx.dividas.update).not.toHaveBeenCalled();
     expect(tx.colaboradores.update).not.toHaveBeenCalled();

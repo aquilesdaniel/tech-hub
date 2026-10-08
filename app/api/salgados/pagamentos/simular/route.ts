@@ -1,5 +1,5 @@
-import { ErroAbacatePay, simularPagamentoPix } from "@/lib/abacatepay";
-import { aplicarPagamentoConfirmado } from "@/lib/pagamentos";
+import { AbacatePayError, simulatePixPayment } from "@/lib/abacatepay";
+import { applyConfirmedPayment } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
@@ -19,39 +19,39 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { divida_id } = await req.json();
-    const dividaId = Number(divida_id);
+    const { divida_id: rawDebtId } = await req.json();
+    const debtId = Number(rawDebtId);
 
-    if (!Number.isFinite(dividaId)) {
+    if (!Number.isFinite(debtId)) {
       return NextResponse.json(
         { error: "O ID da dívida é obrigatório" },
         { status: 400 },
       );
     }
 
-    const pagamento = await prisma.pagamentos.findFirst({
-      where: { divida_id: dividaId, pix_id: { not: null } },
+    const payment = await prisma.pagamentos.findFirst({
+      where: { divida_id: debtId, pix_id: { not: null } },
       orderBy: { created_at: "desc" },
       select: { id: true, pix_id: true, status: true },
     });
 
-    if (!pagamento?.pix_id) {
+    if (!payment?.pix_id) {
       return NextResponse.json(
         { error: "Nenhuma cobrança PIX foi gerada para esta dívida" },
         { status: 404 },
       );
     }
 
-    await simularPagamentoPix(pagamento.pix_id);
-    const resultado = await aplicarPagamentoConfirmado(pagamento.id);
+    await simulatePixPayment(payment.pix_id);
+    const result = await applyConfirmedPayment(payment.id);
 
     revalidatePath("/salgados");
     return NextResponse.json({
-      pago: resultado.status === "paid",
-      ...resultado,
+      pago: result.status === "paid",
+      ...result,
     });
   } catch (error) {
-    if (error instanceof ErroAbacatePay) {
+    if (error instanceof AbacatePayError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

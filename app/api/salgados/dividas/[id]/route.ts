@@ -11,21 +11,21 @@ export async function GET(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
-    const divida = await prisma.dividas.findUnique({
+    const debt = await prisma.dividas.findUnique({
       where: { id },
       include: { colaboradores: { select: { nome: true } } },
     });
 
-    if (!divida) {
+    if (!debt) {
       return NextResponse.json(
         { error: "Dívida não encontrada" },
         { status: 404 },
       );
     }
 
-    const { colaboradores, ...rest } = divida;
+    const { colaboradores, ...rest } = debt;
     return NextResponse.json(
-      serializeDecimals({ ...rest, colaborador_nome: colaboradores.nome }),
+      serializeDecimals({ ...rest, employee_name: colaboradores.nome }),
     );
   } catch (error) {
     console.error("Erro ao buscar dívida:", error);
@@ -36,7 +36,7 @@ export async function GET(
   }
 }
 
-const CAMPOS_ATUALIZAVEIS = ["item", "motivo", "data_inicio", "valor", "pago"] as const;
+const UPDATABLE_FIELDS = ["item", "motivo", "data_inicio", "valor", "pago"] as const;
 
 export async function PATCH(
   req: NextRequest,
@@ -48,12 +48,12 @@ export async function PATCH(
     const body = await req.json();
 
     const data: Prisma.dividasUpdateInput = {};
-    for (const campo of CAMPOS_ATUALIZAVEIS) {
-      if (body[campo] === undefined) continue;
-      if (campo === "data_inicio") {
+    for (const field of UPDATABLE_FIELDS) {
+      if (body[field] === undefined) continue;
+      if (field === "data_inicio") {
         data.data_inicio = new Date(body.data_inicio);
       } else {
-        (data as Record<string, unknown>)[campo] = body[campo];
+        (data as Record<string, unknown>)[field] = body[field];
       }
     }
 
@@ -64,48 +64,48 @@ export async function PATCH(
       );
     }
 
-    const divida = await prisma.$transaction(async (tx) => {
-      const existente = await tx.dividas.findUnique({
+    const debt = await prisma.$transaction(async (tx) => {
+      const existing = await tx.dividas.findUnique({
         where: { id },
         select: { colaborador_id: true, valor: true, pago: true },
       });
 
-      if (!existente) {
-        throw new Error("DIVIDA_NAO_ENCONTRADA");
+      if (!existing) {
+        throw new Error("DEBT_NOT_FOUND");
       }
 
-      const atualizada = await tx.dividas.update({
+      const updated = await tx.dividas.update({
         where: { id },
         data: { ...data, updated_at: new Date() },
       });
 
-      if (body.pago === true && !existente.pago) {
+      if (body.pago === true && !existing.pago) {
         await tx.colaboradores.update({
-          where: { id: existente.colaborador_id },
+          where: { id: existing.colaborador_id },
           data: {
-            total_gasto_salgados: { increment: existente.valor },
+            total_gasto_salgados: { increment: existing.valor },
             updated_at: new Date(),
           },
         });
       }
 
-      if (body.pago === false && existente.pago) {
+      if (body.pago === false && existing.pago) {
         await tx.colaboradores.update({
-          where: { id: existente.colaborador_id },
+          where: { id: existing.colaborador_id },
           data: {
-            total_gasto_salgados: { decrement: existente.valor },
+            total_gasto_salgados: { decrement: existing.valor },
             updated_at: new Date(),
           },
         });
       }
 
-      return atualizada;
+      return updated;
     });
 
     revalidatePath("/salgados");
-    return NextResponse.json(serializeDecimals(divida));
+    return NextResponse.json(serializeDecimals(debt));
   } catch (error) {
-    if (error instanceof Error && error.message === "DIVIDA_NAO_ENCONTRADA") {
+    if (error instanceof Error && error.message === "DEBT_NOT_FOUND") {
       return NextResponse.json(
         { error: "Dívida não encontrada" },
         { status: 404 },

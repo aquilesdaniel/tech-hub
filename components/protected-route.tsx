@@ -5,7 +5,7 @@ import type React from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { SpinnerTela } from "./spinner-tela";
+import { ScreenSpinner } from "./screen-spinner";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -35,7 +35,7 @@ export function ProtectedRoute({
   }, [user, isLoading, router, requiredRole]);
 
   if (isLoading) {
-    return <SpinnerTela />;
+    return <ScreenSpinner />;
   }
 
   if (!user) {

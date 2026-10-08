@@ -2,23 +2,23 @@
 
 import type { LucideIcon } from "lucide-react";
 
-export function IconeDestaque({
-  icone: Icone,
-  cor,
+export function HighlightIcon({
+  icon: Icon,
+  color,
 }: {
-  icone: LucideIcon;
-  cor: string;
+  icon: LucideIcon;
+  color: string;
 }) {
   return (
     <span
       aria-hidden
       className="flex size-10 shrink-0 items-center justify-center rounded-xl"
       style={{
-        color: cor,
-        backgroundColor: `color-mix(in oklab, ${cor} 14%, transparent)`,
+        color,
+        backgroundColor: `color-mix(in oklab, ${color} 14%, transparent)`,
       }}
     >
-      <Icone className="size-5" />
+      <Icon className="size-5" />
     </span>
   );
 }

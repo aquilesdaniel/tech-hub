@@ -7,15 +7,15 @@ import { type NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
-    const pago = searchParams.get("pago");
-    const colaboradorId = searchParams.get("colaborador_id");
-    const motivo = searchParams.get("motivo");
+    const paid = searchParams.get("pago");
+    const employeeId = searchParams.get("colaborador_id");
+    const reason = searchParams.get("motivo");
     const search = searchParams.get("search");
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
-    const motivosOnly = searchParams.get("motivos_only");
+    const reasonsOnly = searchParams.get("reasons_only");
 
-    if (motivosOnly === "true") {
+    if (reasonsOnly === "true") {
       const result = await prisma.dividas.findMany({
         where: { AND: [{ motivo: { not: null } }, { motivo: { not: "" } }] },
         distinct: ["motivo"],
@@ -26,12 +26,12 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.dividasWhereInput = {};
 
-    if (pago === "true") where.pago = true;
-    else if (pago === "false") where.pago = false;
+    if (paid === "true") where.pago = true;
+    else if (paid === "false") where.pago = false;
 
-    if (colaboradorId) where.colaborador_id = Number(colaboradorId);
+    if (employeeId) where.colaborador_id = Number(employeeId);
 
-    if (motivo && motivo !== "todos") where.motivo = motivo;
+    if (reason && reason !== "all") where.motivo = reason;
 
     if (search) {
       where.OR = [
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       const limitNum = parseInt(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
 
-      const [dividas, total] = await prisma.$transaction([
+      const [debts, total] = await prisma.$transaction([
         prisma.dividas.findMany({
           where,
           include: { colaboradores: { select: { nome: true } } },
@@ -56,9 +56,9 @@ export async function GET(req: NextRequest) {
         prisma.dividas.count({ where }),
       ]);
 
-      const data = dividas.map(({ colaboradores, ...divida }) => ({
-        ...divida,
-        colaborador_nome: colaboradores.nome,
+      const data = debts.map(({ colaboradores, ...debt }) => ({
+        ...debt,
+        employee_name: colaboradores.nome,
       }));
 
       return NextResponse.json({
@@ -69,15 +69,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const dividas = await prisma.dividas.findMany({
+    const debts = await prisma.dividas.findMany({
       where,
       include: { colaboradores: { select: { nome: true } } },
       orderBy: { data_inicio: "desc" },
     });
 
-    const data = dividas.map(({ colaboradores, ...divida }) => ({
-      ...divida,
-      colaborador_nome: colaboradores.nome,
+    const data = debts.map(({ colaboradores, ...debt }) => ({
+      ...debt,
+      employee_name: colaboradores.nome,
     }));
 
     return NextResponse.json(serializeDecimals(data));
@@ -93,28 +93,34 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { colaborador_id, item, motivo, data_inicio, valor } = body;
+    const {
+      colaborador_id: employeeId,
+      item,
+      motivo: reason,
+      data_inicio: startDate,
+      valor: amount,
+    } = body;
 
-    if (!colaborador_id || !item || !valor) {
+    if (!employeeId || !item || !amount) {
       return NextResponse.json(
         { error: "Colaborador, item e valor são obrigatórios" },
         { status: 400 },
       );
     }
 
-    const divida = await prisma.dividas.create({
+    const debt = await prisma.dividas.create({
       data: {
-        colaborador_id: Number(colaborador_id),
+        colaborador_id: Number(employeeId),
         item,
-        motivo: motivo || "",
-        data_inicio: data_inicio ? new Date(data_inicio) : new Date(),
-        valor,
+        motivo: reason || "",
+        data_inicio: startDate ? new Date(startDate) : new Date(),
+        valor: amount,
         pago: false,
       },
     });
 
     revalidatePath("/salgados");
-    return NextResponse.json(serializeDecimals(divida), { status: 201 });
+    return NextResponse.json(serializeDecimals(debt), { status: 201 });
   } catch (error) {
     console.error("Erro ao criar dívida:", error);
     return NextResponse.json(

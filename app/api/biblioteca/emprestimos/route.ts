@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
     const status = searchParams.get("status");
-    const colaboradorId = searchParams.get("colaborador_id");
+    const employeeId = searchParams.get("colaborador_id");
 
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.emprestimosWhereInput = {};
 
-    if (status && status !== "todos") where.status = status;
-    if (colaboradorId) where.colaborador_id = Number(colaboradorId);
+    if (status && status !== "all") where.status = status;
+    if (employeeId) where.colaborador_id = Number(employeeId);
 
     if (search) {
       where.OR = [
@@ -31,11 +31,11 @@ export async function GET(req: NextRequest) {
       const limitNum = parseInt(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
 
-      const escopo: Prisma.emprestimosWhereInput = colaboradorId
-        ? { colaborador_id: Number(colaboradorId) }
+      const scope: Prisma.emprestimosWhereInput = employeeId
+        ? { colaborador_id: Number(employeeId) }
         : {};
 
-      const [pagina, total, totalEscopo, ativos, atrasados, devolvidos] =
+      const [pageRows, total, scopeTotal, active, overdue, returned] =
         await prisma.$transaction([
           prisma.emprestimos.findMany({
             where,
@@ -48,27 +48,27 @@ export async function GET(req: NextRequest) {
             take: limitNum,
           }),
           prisma.emprestimos.count({ where }),
-          prisma.emprestimos.count({ where: escopo }),
+          prisma.emprestimos.count({ where: scope }),
           prisma.emprestimos.count({
-            where: { ...escopo, status: "emprestado" },
+            where: { ...scope, status: "emprestado" },
           }),
           prisma.emprestimos.count({
             where: {
-              ...escopo,
+              ...scope,
               status: "emprestado",
               data_prevista_devolucao: { lt: new Date() },
             },
           }),
           prisma.emprestimos.count({
-            where: { ...escopo, data_real_devolucao: { not: null } },
+            where: { ...scope, data_real_devolucao: { not: null } },
           }),
         ]);
 
-      const data = pagina.map(({ livros, colaboradores, ...emprestimo }) => ({
-        ...emprestimo,
-        livro_titulo: livros.titulo,
-        livro_autor: livros.autor,
-        colaborador_nome: colaboradores.nome,
+      const data = pageRows.map(({ livros, colaboradores, ...loan }) => ({
+        ...loan,
+        book_title: livros.titulo,
+        book_author: livros.autor,
+        employee_name: colaboradores.nome,
       }));
 
       return NextResponse.json({
@@ -76,11 +76,16 @@ export async function GET(req: NextRequest) {
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
-        resumo: { total: totalEscopo, ativos, atrasados, devolvidos },
+        summary: {
+          total: scopeTotal,
+          active,
+          overdue,
+          returned,
+        },
       });
     }
 
-    const emprestimos = await prisma.emprestimos.findMany({
+    const loans = await prisma.emprestimos.findMany({
       where,
       include: {
         livros: { select: { titulo: true, autor: true } },
@@ -89,11 +94,11 @@ export async function GET(req: NextRequest) {
       orderBy: { data_emprestimo: "desc" },
     });
 
-    const data = emprestimos.map(({ livros, colaboradores, ...emprestimo }) => ({
-      ...emprestimo,
-      livro_titulo: livros.titulo,
-      livro_autor: livros.autor,
-      colaborador_nome: colaboradores.nome,
+    const data = loans.map(({ livros, colaboradores, ...loan }) => ({
+      ...loan,
+      book_title: livros.titulo,
+      book_author: livros.autor,
+      employee_name: colaboradores.nome,
     }));
 
     return NextResponse.json(data);
@@ -109,63 +114,62 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { livro_id, colaborador_id, data_emprestimo, data_prevista_devolucao } =
-      body;
+    const {
+      livro_id: bookId,
+      colaborador_id: employeeId,
+      data_emprestimo: loanDate,
+      data_prevista_devolucao: dueDate,
+    } = body;
 
-    if (
-      !livro_id ||
-      !colaborador_id ||
-      !data_emprestimo ||
-      !data_prevista_devolucao
-    ) {
+    if (!bookId || !employeeId || !loanDate || !dueDate) {
       return NextResponse.json(
         { error: "Todos os campos são obrigatórios" },
         { status: 400 },
       );
     }
 
-    const emprestimo = await prisma.$transaction(async (tx) => {
-      const livro = await tx.livros.findUnique({
-        where: { id: Number(livro_id) },
+    const loan = await prisma.$transaction(async (tx) => {
+      const book = await tx.livros.findUnique({
+        where: { id: Number(bookId) },
         select: { disponivel: true },
       });
 
-      if (!livro) {
-        throw new Error("LIVRO_NAO_ENCONTRADO");
+      if (!book) {
+        throw new Error("BOOK_NOT_FOUND");
       }
 
-      if (!livro.disponivel) {
-        throw new Error("LIVRO_INDISPONIVEL");
+      if (!book.disponivel) {
+        throw new Error("BOOK_UNAVAILABLE");
       }
 
-      const novoEmprestimo = await tx.emprestimos.create({
+      const newLoan = await tx.emprestimos.create({
         data: {
-          livro_id: Number(livro_id),
-          colaborador_id: Number(colaborador_id),
-          data_emprestimo: new Date(data_emprestimo),
-          data_prevista_devolucao: new Date(data_prevista_devolucao),
+          livro_id: Number(bookId),
+          colaborador_id: Number(employeeId),
+          data_emprestimo: new Date(loanDate),
+          data_prevista_devolucao: new Date(dueDate),
           status: "emprestado",
         },
       });
 
       await tx.livros.update({
-        where: { id: Number(livro_id) },
+        where: { id: Number(bookId) },
         data: { disponivel: false, updated_at: new Date() },
       });
 
-      return novoEmprestimo;
+      return newLoan;
     });
 
     revalidatePath("/biblioteca");
-    return NextResponse.json(emprestimo, { status: 201 });
+    return NextResponse.json(loan, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message === "LIVRO_NAO_ENCONTRADO") {
+    if (error instanceof Error && error.message === "BOOK_NOT_FOUND") {
       return NextResponse.json(
         { error: "Livro não encontrado" },
         { status: 404 },
       );
     }
-    if (error instanceof Error && error.message === "LIVRO_INDISPONIVEL") {
+    if (error instanceof Error && error.message === "BOOK_UNAVAILABLE") {
       return NextResponse.json(
         { error: "Este livro não está disponível para empréstimo" },
         { status: 400 },

@@ -11,7 +11,7 @@ export async function GET(
     const { id: idParam } = await params;
     const id = Number(idParam);
 
-    const setor = await prisma.setores.findUnique({
+    const sector = await prisma.setores.findUnique({
       where: { id },
       include: {
         colaboradores: {
@@ -21,14 +21,14 @@ export async function GET(
       },
     });
 
-    if (!setor) {
+    if (!sector) {
       return NextResponse.json(
         { error: "Setor não encontrado" },
         { status: 404 },
       );
     }
 
-    return NextResponse.json(setor);
+    return NextResponse.json(sector);
   } catch (error) {
     console.error("Erro ao buscar setor:", error);
     return NextResponse.json(
@@ -46,33 +46,37 @@ export async function PUT(
     const { id: idParam } = await params;
     const id = Number(idParam);
     const body = await req.json();
-    const { nome, descricao } = body;
+    const { nome: name, descricao: description } = body;
 
-    if (!nome) {
+    if (!name) {
       return NextResponse.json(
         { error: "Nome do setor é obrigatório" },
         { status: 400 },
       );
     }
 
-    const existingSetor = await prisma.setores.findUnique({
+    const existingSector = await prisma.setores.findUnique({
       where: { id },
       select: { id: true },
     });
-    if (!existingSetor) {
+    if (!existingSector) {
       return NextResponse.json(
         { error: "Setor não encontrado" },
         { status: 404 },
       );
     }
 
-    const setor = await prisma.setores.update({
+    const sector = await prisma.setores.update({
       where: { id },
-      data: { nome, descricao: descricao || "", updated_at: new Date() },
+      data: {
+        nome: name,
+        descricao: description || "",
+        updated_at: new Date(),
+      },
     });
 
     revalidatePath("/admin");
-    return NextResponse.json(setor);
+    return NextResponse.json(sector);
   } catch (error) {
     console.error("Erro ao atualizar setor:", error);
     return NextResponse.json(
@@ -90,11 +94,11 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = Number(idParam);
 
-    const totalColaboradores = await prisma.colaboradores.count({
+    const totalEmployees = await prisma.colaboradores.count({
       where: { setor_id: id },
     });
 
-    if (totalColaboradores > 0) {
+    if (totalEmployees > 0) {
       return NextResponse.json(
         { error: "Não é possível excluir um setor que possui colaboradores" },
         { status: 400 },

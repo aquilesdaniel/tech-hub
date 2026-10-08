@@ -2,7 +2,7 @@
 
 import { Spinner } from "@heroui/react";
 
-export function SpinnerTela() {
+export function ScreenSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <Spinner />

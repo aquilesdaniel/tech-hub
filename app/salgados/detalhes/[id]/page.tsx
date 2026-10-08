@@ -1,19 +1,19 @@
 "use client";
 
-import { SERIE } from "@/components/dashboard/viz";
-import { IconeDestaque } from "@/components/icone-destaque";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { SERIES } from "@/components/dashboard/viz";
+import { HighlightIcon } from "@/components/highlight-icon";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { Card, Chip, Separator, toast } from "@heroui/react";
 import { CalendarDays, CheckCircle2, CreditCard, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
-interface Divida {
+interface Debt {
   id: number;
   colaborador_id: number;
-  colaborador_nome: string;
+  employee_name: string;
   item: string;
   motivo: string;
   data_inicio: string;
@@ -23,7 +23,7 @@ interface Divida {
   updated_at: string;
 }
 
-interface Pagamento {
+interface Payment {
   id: number;
   divida_id: number;
   colaborador_id: number;
@@ -33,16 +33,16 @@ interface Pagamento {
   updated_at: string;
 }
 
-interface Colaborador {
+interface Employee {
   id: number;
   nome: string;
   email: string;
   departamento: string;
   cargo: string;
-  document_mascarado: string | null;
+  masked_document: string | null;
 }
 
-export default function DetalhesPage({
+export default function DebtDetailsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -50,36 +50,36 @@ export default function DetalhesPage({
   const { id } = use(params);
   const router = useRouter();
 
-  const [divida, setDivida] = useState<Divida | null>(null);
-  const [pagamento, setPagamento] = useState<Pagamento | null>(null);
-  const [colaboradorPagador, setColaboradorPagador] =
-    useState<Colaborador | null>(null);
+  const [debt, setDebt] = useState<Debt | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [payer, setPayer] =
+    useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const carregarDados = async () => {
+    const loadData = async () => {
       try {
-        const responseDivida = await fetch(`/api/salgados/dividas/${id}`);
-        if (!responseDivida.ok) {
+        const debtResponse = await fetch(`/api/salgados/dividas/${id}`);
+        if (!debtResponse.ok) {
           throw new Error("Dívida não encontrada");
         }
-        const dividaData = await responseDivida.json();
-        setDivida(dividaData);
+        const debtData = await debtResponse.json();
+        setDebt(debtData);
 
-        const responsePagamento = await fetch(
+        const paymentResponse = await fetch(
           `/api/salgados/pagamentos?divida_id=${id}`,
         );
-        if (responsePagamento.ok) {
-          const pagData = await responsePagamento.json();
-          setPagamento(pagData);
+        if (paymentResponse.ok) {
+          const paymentData = await paymentResponse.json();
+          setPayment(paymentData);
 
-          if (pagData && pagData.colaborador_id) {
-            const responseColab = await fetch(
-              `/api/colaboradores/${pagData.colaborador_id}`,
+          if (paymentData && paymentData.colaborador_id) {
+            const employeeResponse = await fetch(
+              `/api/colaboradores/${paymentData.colaborador_id}`,
             );
-            if (responseColab.ok) {
-              const colabData = await responseColab.json();
-              setColaboradorPagador(colabData);
+            if (employeeResponse.ok) {
+              const employeeData = await employeeResponse.json();
+              setPayer(employeeData);
             }
           }
         }
@@ -94,28 +94,28 @@ export default function DetalhesPage({
       }
     };
 
-    carregarDados();
+    loadData();
   }, [id, router]);
 
   if (loading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
-  if (!divida) {
+  if (!debt) {
     return null;
   }
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Detalhes da Dívida"
-          descricao="Visualize todas as informações desta dívida"
-          voltarHref="/salgados"
+      <PageLayout>
+        <PageHeader
+          title="Detalhes da Dívida"
+          description="Visualize todas as informações desta dívida"
+          backHref="/salgados"
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -123,10 +123,10 @@ export default function DetalhesPage({
             <Card.Header>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <IconeDestaque icone={User} cor={SERIE.s1} />
+                  <HighlightIcon icon={User} color={SERIES.s1} />
                   <Card.Title>Devedor</Card.Title>
                 </div>
-                {divida.pago ? (
+                {debt.pago ? (
                   <Chip color="success">Pago</Chip>
                 ) : (
                   <Chip color="danger">Pendente</Chip>
@@ -139,16 +139,16 @@ export default function DetalhesPage({
                 <div>
                   <p className="text-sm font-medium">Nome</p>
                   <p className="text-lg font-semibold">
-                    {divida.colaborador_nome}
+                    {debt.employee_name}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Item</p>
-                  <p>{divida.item}</p>
+                  <p>{debt.item}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Motivo</p>
-                  <p>{divida.motivo}</p>
+                  <p>{debt.motivo}</p>
                 </div>
               </div>
 
@@ -159,14 +159,14 @@ export default function DetalhesPage({
                   <p className="text-sm font-medium">Data de Registro</p>
                   <p className="flex items-center gap-2">
                     <CalendarDays aria-hidden className="size-4 text-muted" />
-                    {new Date(divida.data_inicio).toLocaleDateString("pt-BR")}
+                    {new Date(debt.data_inicio).toLocaleDateString("pt-BR")}
                   </p>
                 </div>
 
                 <div className="text-right">
                   <p className="text-sm font-medium">Valor</p>
                   <p className="text-xl font-bold">
-                    {Number(divida.valor).toLocaleString("pt-BR", {
+                    {Number(debt.valor).toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
@@ -179,20 +179,20 @@ export default function DetalhesPage({
           <Card>
             <Card.Header>
               <div className="flex items-center gap-4">
-                <IconeDestaque icone={CreditCard} cor={SERIE.s7} />
+                <HighlightIcon icon={CreditCard} color={SERIES.s7} />
                 <Card.Title>Emissor do Pagamento</Card.Title>
               </div>
             </Card.Header>
             <Card.Content>
-              {colaboradorPagador ? (
+              {payer ? (
                 <div className="space-y-4">
                   <div>
                     <p className="text-lg font-semibold">
-                      {colaboradorPagador.nome}
+                      {payer.nome}
                     </p>
                     <p className="text-sm">
-                      {colaboradorPagador.cargo} •{" "}
-                      {colaboradorPagador.departamento}
+                      {payer.cargo} •{" "}
+                      {payer.departamento}
                     </p>
                   </div>
 
@@ -202,19 +202,19 @@ export default function DetalhesPage({
                     <div>
                       <p className="text-sm font-medium">Email</p>
                       <p className="text-sm break-all">
-                        {colaboradorPagador.email}
+                        {payer.email}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm font-medium">Documento Principal</p>
                       <p className="text-sm">
-                        {colaboradorPagador.document_mascarado ||
+                        {payer.masked_document ||
                           "Não informado"}
                       </p>
                     </div>
                   </div>
 
-                  {pagamento && (
+                  {payment && (
                     <>
                       <Separator />
                       <div className="p-4 rounded-lg space-y-2 bg-surface-secondary">
@@ -225,14 +225,14 @@ export default function DetalhesPage({
                           <span>Status Gateway:</span>
                           <span
                             className={`font-semibold flex items-center gap-1 ${
-                              pagamento.status === "paid"
+                              payment.status === "paid"
                                 ? "text-success"
-                                : pagamento.status === "pending"
+                                : payment.status === "pending"
                                   ? "text-warning"
                                   : "text-danger"
                             }`}
                           >
-                            {pagamento.status === "paid" && (
+                            {payment.status === "paid" && (
                               <>
                                 <CheckCircle2
                                   aria-hidden
@@ -241,21 +241,21 @@ export default function DetalhesPage({
                                 Pago
                               </>
                             )}
-                            {pagamento.status === "pending" && "Pendente"}
-                            {pagamento.status === "canceled" && "Cancelado"}
-                            {pagamento.status === "failed" && "Falhou"}
+                            {payment.status === "pending" && "Pendente"}
+                            {payment.status === "canceled" && "Cancelado"}
+                            {payment.status === "failed" && "Falhou"}
                             {![
                               "paid",
                               "pending",
                               "canceled",
                               "failed",
-                            ].includes(pagamento.status) && pagamento.status}
+                            ].includes(payment.status) && payment.status}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm mt-2">
                           <span>Gerado em:</span>
                           <span>
-                            {new Date(pagamento.created_at).toLocaleString(
+                            {new Date(payment.created_at).toLocaleString(
                               "pt-BR",
                             )}
                           </span>
@@ -276,7 +276,7 @@ export default function DetalhesPage({
             </Card.Content>
           </Card>
         </div>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

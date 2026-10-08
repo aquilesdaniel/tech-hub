@@ -4,92 +4,92 @@ import { Button, Form, Label, Modal } from "@heroui/react";
 import type React from "react";
 import { Children, isValidElement } from "react";
 
-function tamanhoPorCampos(total: number): "sm" | "md" | "lg" {
+function sizeForFieldCount(total: number): "sm" | "md" | "lg" {
   if (total <= 2) return "sm";
   if (total <= 5) return "md";
   return "lg";
 }
 
-function contarCampos(no: React.ReactNode): number {
-  return Children.toArray(no).reduce<number>((total, filho) => {
-    if (!isValidElement(filho)) return total;
-    if (filho.type === CampoModal) return total + 1;
+function countFields(node: React.ReactNode): number {
+  return Children.toArray(node).reduce<number>((total, child) => {
+    if (!isValidElement(child)) return total;
+    if (child.type === ModalField) return total + 1;
 
-    const { children } = filho.props as { children?: React.ReactNode };
-    return total + contarCampos(children);
+    const { children } = child.props as { children?: React.ReactNode };
+    return total + countFields(children);
   }, 0);
 }
 
-export function CampoModal({
-  rotulo,
+export function ModalField({
+  label,
   htmlFor,
   children,
 }: {
-  rotulo: string;
+  label: string;
   htmlFor?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={htmlFor}>{rotulo}</Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
   );
 }
 
-export function LinhaCampos({ children }: { children: React.ReactNode }) {
+export function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
 }
 
 interface ModalFormProps {
   isOpen: boolean;
-  onOpenChange: (aberto: boolean) => void;
-  titulo: string;
-  descricao?: string;
-  gatilho?: React.ReactNode;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: string;
+  trigger?: React.ReactNode;
   children: React.ReactNode;
-  rotuloConfirmar: string;
-  rotuloEnviando?: string;
-  onConfirmar: () => void | Promise<void>;
-  isEnviando?: boolean;
-  isConfirmarDesabilitado?: boolean;
+  confirmLabel: string;
+  submittingLabel?: string;
+  onConfirm: () => void | Promise<void>;
+  isSubmitting?: boolean;
+  isConfirmDisabled?: boolean;
 }
 
 export function ModalForm({
   isOpen,
   onOpenChange,
-  titulo,
-  descricao,
-  gatilho,
+  title,
+  description,
+  trigger,
   children,
-  rotuloConfirmar,
-  rotuloEnviando = "Salvando...",
-  onConfirmar,
-  isEnviando = false,
-  isConfirmarDesabilitado = false,
+  confirmLabel,
+  submittingLabel = "Salvando...",
+  onConfirm,
+  isSubmitting = false,
+  isConfirmDisabled = false,
 }: ModalFormProps) {
-  const aoEnviar = (evento: React.FormEvent<HTMLFormElement>) => {
-    evento.preventDefault();
-    void onConfirmar();
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void onConfirm();
   };
 
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
-      {gatilho}
+      {trigger}
 
       <Modal.Backdrop variant="blur">
-        <Modal.Container size={tamanhoPorCampos(contarCampos(children))}>
+        <Modal.Container size={sizeForFieldCount(countFields(children))}>
           <Modal.Dialog>
             <Modal.CloseTrigger />
 
-            <Form onSubmit={aoEnviar} className="flex min-h-0 flex-1 flex-col">
+            <Form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
               <Modal.Header>
-                <Modal.Heading>{titulo}</Modal.Heading>
+                <Modal.Heading>{title}</Modal.Heading>
               </Modal.Header>
 
               <Modal.Body>
-                {descricao && (
-                  <p className="mb-4 text-sm text-muted">{descricao}</p>
+                {description && (
+                  <p className="mb-4 text-sm text-muted">{description}</p>
                 )}
                 <div className="grid gap-4">{children}</div>
               </Modal.Body>
@@ -109,9 +109,9 @@ export function ModalForm({
                   type="submit"
                   fullWidth
                   className="sm:w-auto"
-                  isDisabled={isEnviando || isConfirmarDesabilitado}
+                  isDisabled={isSubmitting || isConfirmDisabled}
                 >
-                  {isEnviando ? rotuloEnviando : rotuloConfirmar}
+                  {isSubmitting ? submittingLabel : confirmLabel}
                 </Button>
               </Modal.Footer>
             </Form>

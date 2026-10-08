@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const ABREV_MES = [
+const MONTH_ABBREVIATIONS = [
   "jan",
   "fev",
   "mar",
@@ -18,103 +18,103 @@ const ABREV_MES = [
   "dez",
 ];
 
-const DIAS_ALERTA_VENCIMENTO = 90;
-const MS_POR_DIA = 86_400_000;
+const EXPIRATION_ALERT_DAYS = 90;
+const MS_PER_DAY = 86_400_000;
 
-function chaveMes(data: Date) {
-  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}`;
+function monthKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function rotuloMes(chave: string) {
-  const [ano, mes] = chave.split("-");
-  return `${ABREV_MES[Number(mes) - 1]}/${ano.slice(2)}`;
+function monthLabel(key: string) {
+  const [year, month] = key.split("-");
+  return `${MONTH_ABBREVIATIONS[Number(month) - 1]}/${year.slice(2)}`;
 }
 
-function inicioMesUTC(referencia: Date, deslocamentoMeses: number) {
+function startOfMonthUTC(reference: Date, monthOffset: number) {
   return new Date(
     Date.UTC(
-      referencia.getUTCFullYear(),
-      referencia.getUTCMonth() + deslocamentoMeses,
+      reference.getUTCFullYear(),
+      reference.getUTCMonth() + monthOffset,
       1,
     ),
   );
 }
 
-function paraNumero(valor: unknown) {
-  return Number(valor ?? 0) || 0;
+function toNumber(value: unknown) {
+  return Number(value ?? 0) || 0;
 }
 
-function variacao(atual: number, anterior: number) {
-  if (anterior === 0) return atual === 0 ? 0 : null;
-  return ((atual - anterior) / anterior) * 100;
+function percentChange(current: number, previous: number) {
+  if (previous === 0) return current === 0 ? 0 : null;
+  return ((current - previous) / previous) * 100;
 }
 
-function acumular<T>(
-  linhas: T[],
-  chave: (linha: T) => string | null,
-  valor: (linha: T) => number,
+function accumulate<T>(
+  rows: T[],
+  key: (row: T) => string | null,
+  value: (row: T) => number,
 ) {
-  const mapa = new Map<string, number>();
-  for (const linha of linhas) {
-    const k = chave(linha);
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const k = key(row);
     if (k === null) continue;
-    mapa.set(k, (mapa.get(k) ?? 0) + valor(linha));
+    map.set(k, (map.get(k) ?? 0) + value(row));
   }
-  return mapa;
+  return map;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
 
-    const mesesBrutos = Number(params.get("meses") ?? 6);
-    const meses = [0, 3, 6, 12, 24].includes(mesesBrutos) ? mesesBrutos : 6;
+    const rawMonths = Number(params.get("months") ?? 6);
+    const months = [0, 3, 6, 12, 24].includes(rawMonths) ? rawMonths : 6;
 
-    const setorParam = params.get("setorId");
-    const setorId =
-      setorParam && setorParam !== "todos" ? Number(setorParam) : null;
+    const sectorParam = params.get("sectorId");
+    const sectorId =
+      sectorParam && sectorParam !== "all" ? Number(sectorParam) : null;
 
-    const colaboradorParam = params.get("colaboradorId");
-    const colaboradorId = colaboradorParam ? Number(colaboradorParam) : null;
+    const employeeParam = params.get("employeeId");
+    const employeeId = employeeParam ? Number(employeeParam) : null;
 
-    const agora = new Date();
-    const hojeUTC = new Date(
-      Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()),
+    const now = new Date();
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
 
-    const inicio = meses > 0 ? inicioMesUTC(hojeUTC, -(meses - 1)) : null;
-    const inicioAnterior =
-      meses > 0 ? inicioMesUTC(hojeUTC, -(meses * 2 - 1)) : null;
+    const start = months > 0 ? startOfMonthUTC(todayUTC, -(months - 1)) : null;
+    const previousStart =
+      months > 0 ? startOfMonthUTC(todayUTC, -(months * 2 - 1)) : null;
 
-    const filtroColaborador: { setor_id?: number; id?: number } = {};
-    if (setorId !== null) filtroColaborador.setor_id = setorId;
-    if (colaboradorId !== null) filtroColaborador.id = colaboradorId;
-    const escopo =
-      Object.keys(filtroColaborador).length > 0
-        ? { colaboradores: filtroColaborador }
+    const employeeFilter: { setor_id?: number; id?: number } = {};
+    if (sectorId !== null) employeeFilter.setor_id = sectorId;
+    if (employeeId !== null) employeeFilter.id = employeeId;
+    const scope =
+      Object.keys(employeeFilter).length > 0
+        ? { colaboradores: employeeFilter }
         : {};
 
-    const desdeAnterior = inicioAnterior ? { gte: inicioAnterior } : undefined;
+    const sincePrevious = previousStart ? { gte: previousStart } : undefined;
 
-    const limiteVencimento = new Date(
-      hojeUTC.getTime() + DIAS_ALERTA_VENCIMENTO * MS_POR_DIA,
+    const expirationLimit = new Date(
+      todayUTC.getTime() + EXPIRATION_ALERT_DAYS * MS_PER_DAY,
     );
 
     const [
-      dividasJanela,
-      dividasAbertas,
-      certificacoesJanela,
-      certificacoesVencendo,
-      emprestimosJanela,
-      emprestimosAbertos,
-      livros,
-      colaboradores,
-      setores,
+      windowDebts,
+      openDebts,
+      windowCertifications,
+      expiringCertifications,
+      windowLoans,
+      openLoans,
+      books,
+      employees,
+      sectors,
     ] = await Promise.all([
       prisma.dividas.findMany({
         where: {
-          ...escopo,
-          ...(desdeAnterior && { data_inicio: desdeAnterior }),
+          ...scope,
+          ...(sincePrevious && { data_inicio: sincePrevious }),
         },
         select: {
           id: true,
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
       }),
 
       prisma.dividas.findMany({
-        where: { ...escopo, pago: { not: true } },
+        where: { ...scope, pago: { not: true } },
         select: {
           id: true,
           item: true,
@@ -140,8 +140,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.certificacoes.findMany({
         where: {
-          ...escopo,
-          ...(desdeAnterior && { data_obtencao: desdeAnterior }),
+          ...scope,
+          ...(sincePrevious && { data_obtencao: sincePrevious }),
         },
         select: {
           id: true,
@@ -157,8 +157,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.certificacoes.findMany({
         where: {
-          ...escopo,
-          data_vencimento: { gte: hojeUTC, lte: limiteVencimento },
+          ...scope,
+          data_vencimento: { gte: todayUTC, lte: expirationLimit },
         },
         orderBy: { data_vencimento: "asc" },
         select: {
@@ -171,8 +171,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.emprestimos.findMany({
         where: {
-          ...escopo,
-          ...(desdeAnterior && { data_emprestimo: desdeAnterior }),
+          ...scope,
+          ...(sincePrevious && { data_emprestimo: sincePrevious }),
         },
         select: {
           id: true,
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
       }),
 
       prisma.emprestimos.findMany({
-        where: { ...escopo, status: "emprestado" },
+        where: { ...scope, status: "emprestado" },
         orderBy: { data_prevista_devolucao: "asc" },
         select: {
           id: true,
@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
         select: { id: true, genero: true, disponivel: true },
       }),
       prisma.colaboradores.findMany({
-        where: filtroColaborador,
+        where: employeeFilter,
         select: {
           id: true,
           nome: true,
@@ -213,307 +213,303 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const mesesJanela = meses > 0 ? meses : null;
-    const chavesJanela: string[] = [];
-    if (mesesJanela) {
-      for (let i = mesesJanela - 1; i >= 0; i--) {
-        chavesJanela.push(chaveMes(inicioMesUTC(hojeUTC, -i)));
+    const windowMonths = months > 0 ? months : null;
+    const windowKeys: string[] = [];
+    if (windowMonths) {
+      for (let i = windowMonths - 1; i >= 0; i--) {
+        windowKeys.push(monthKey(startOfMonthUTC(todayUTC, -i)));
       }
     } else {
-      const presentes = new Set<string>();
-      for (const d of dividasJanela) presentes.add(chaveMes(d.data_inicio));
-      for (const c of certificacoesJanela)
-        presentes.add(chaveMes(c.data_obtencao));
-      for (const e of emprestimosJanela)
-        presentes.add(chaveMes(e.data_emprestimo));
-      chavesJanela.push(...Array.from(presentes).sort());
+      const present = new Set<string>();
+      for (const d of windowDebts) present.add(monthKey(d.data_inicio));
+      for (const c of windowCertifications)
+        present.add(monthKey(c.data_obtencao));
+      for (const l of windowLoans) present.add(monthKey(l.data_emprestimo));
+      windowKeys.push(...Array.from(present).sort());
     }
 
-    const naJanela = (chave: string) => !inicio || chave >= chaveMes(inicio);
+    const inWindow = (key: string) => !start || key >= monthKey(start);
 
-    const lancadoPorMes = acumular(
-      dividasJanela,
-      (d) => chaveMes(d.data_inicio),
-      (d) => paraNumero(d.valor),
+    const issuedByMonth = accumulate(
+      windowDebts,
+      (d) => monthKey(d.data_inicio),
+      (d) => toNumber(d.valor),
     );
-    const quitadoPorMes = acumular(
-      dividasJanela.filter((d) => d.pago === true),
-      (d) => chaveMes(d.data_inicio),
-      (d) => paraNumero(d.valor),
+    const settledByMonth = accumulate(
+      windowDebts.filter((d) => d.pago === true),
+      (d) => monthKey(d.data_inicio),
+      (d) => toNumber(d.valor),
     );
-    const certificacoesPorMes = acumular(
-      certificacoesJanela,
-      (c) => chaveMes(c.data_obtencao),
+    const certificationsByMonth = accumulate(
+      windowCertifications,
+      (c) => monthKey(c.data_obtencao),
       () => 1,
     );
-    const emprestimosPorMes = acumular(
-      emprestimosJanela,
-      (e) => chaveMes(e.data_emprestimo),
+    const loansByMonth = accumulate(
+      windowLoans,
+      (l) => monthKey(l.data_emprestimo),
       () => 1,
     );
-    const devolucoesPorMes = acumular(
-      emprestimosJanela,
-      (e) => (e.data_real_devolucao ? chaveMes(e.data_real_devolucao) : null),
+    const returnsByMonth = accumulate(
+      windowLoans,
+      (l) => (l.data_real_devolucao ? monthKey(l.data_real_devolucao) : null),
       () => 1,
     );
 
-    const serieMensal = chavesJanela.map((chave) => ({
-      mes: chave,
-      label: rotuloMes(chave),
-      lancado: Math.round((lancadoPorMes.get(chave) ?? 0) * 100) / 100,
-      quitado: Math.round((quitadoPorMes.get(chave) ?? 0) * 100) / 100,
-      certificacoes: certificacoesPorMes.get(chave) ?? 0,
-      emprestimos: emprestimosPorMes.get(chave) ?? 0,
-      devolucoes: devolucoesPorMes.get(chave) ?? 0,
+    const monthlySeries = windowKeys.map((key) => ({
+      month: key,
+      label: monthLabel(key),
+      issued: Math.round((issuedByMonth.get(key) ?? 0) * 100) / 100,
+      settled: Math.round((settledByMonth.get(key) ?? 0) * 100) / 100,
+      certifications: certificationsByMonth.get(key) ?? 0,
+      loans: loansByMonth.get(key) ?? 0,
+      returns: returnsByMonth.get(key) ?? 0,
     }));
 
-    const dividasAtuais = dividasJanela.filter((d) =>
-      naJanela(chaveMes(d.data_inicio)),
+    const currentDebts = windowDebts.filter((d) =>
+      inWindow(monthKey(d.data_inicio)),
     );
-    const dividasPrevias = dividasJanela.filter(
-      (d) => !naJanela(chaveMes(d.data_inicio)),
+    const previousDebts = windowDebts.filter(
+      (d) => !inWindow(monthKey(d.data_inicio)),
     );
-    const certificacoesAtuais = certificacoesJanela.filter((c) =>
-      naJanela(chaveMes(c.data_obtencao)),
+    const currentCertifications = windowCertifications.filter((c) =>
+      inWindow(monthKey(c.data_obtencao)),
     );
-    const certificacoesPrevias = certificacoesJanela.filter(
-      (c) => !naJanela(chaveMes(c.data_obtencao)),
+    const previousCertifications = windowCertifications.filter(
+      (c) => !inWindow(monthKey(c.data_obtencao)),
     );
-    const emprestimosAtuais = emprestimosJanela.filter((e) =>
-      naJanela(chaveMes(e.data_emprestimo)),
+    const currentLoans = windowLoans.filter((l) =>
+      inWindow(monthKey(l.data_emprestimo)),
     );
-    const emprestimosPrevios = emprestimosJanela.filter(
-      (e) => !naJanela(chaveMes(e.data_emprestimo)),
-    );
-
-    const somaValor = (linhas: { valor: unknown }[]) =>
-      linhas.reduce((total, l) => total + paraNumero(l.valor), 0);
-
-    const valorQuitado = somaValor(
-      dividasAtuais.filter((d) => d.pago === true),
-    );
-    const valorQuitadoAnterior = somaValor(
-      dividasPrevias.filter((d) => d.pago === true),
-    );
-    const valorLancado = somaValor(dividasAtuais);
-    const valorEmAberto = somaValor(dividasAbertas);
-
-    const atrasados = emprestimosAbertos.filter(
-      (e) => e.data_prevista_devolucao.getTime() < hojeUTC.getTime(),
+    const previousLoans = windowLoans.filter(
+      (l) => !inWindow(monthKey(l.data_emprestimo)),
     );
 
-    const devolvidosNaJanela = emprestimosJanela.filter(
-      (e) =>
-        e.data_real_devolucao !== null &&
-        naJanela(chaveMes(e.data_real_devolucao)),
+    const sumAmount = (rows: { valor: unknown }[]) =>
+      rows.reduce((total, r) => total + toNumber(r.valor), 0);
+
+    const settledAmount = sumAmount(
+      currentDebts.filter((d) => d.pago === true),
+    );
+    const previousSettledAmount = sumAmount(
+      previousDebts.filter((d) => d.pago === true),
+    );
+    const issuedAmount = sumAmount(currentDebts);
+    const openAmount = sumAmount(openDebts);
+
+    const overdue = openLoans.filter(
+      (l) => l.data_prevista_devolucao.getTime() < todayUTC.getTime(),
     );
 
-    const livrosDisponiveis = livros.filter(
-      (l) => l.disponivel === true,
-    ).length;
+    const returnedInWindow = windowLoans.filter(
+      (l) =>
+        l.data_real_devolucao !== null &&
+        inWindow(monthKey(l.data_real_devolucao)),
+    );
 
-    const gastoTotalSalgados = colaboradores.reduce(
-      (total, c) => total + paraNumero(c.total_gasto_salgados),
+    const availableBooks = books.filter((b) => b.disponivel === true).length;
+
+    const totalSnackSpending = employees.reduce(
+      (total, e) => total + toNumber(e.total_gasto_salgados),
       0,
     );
 
     const kpis = {
-      valorEmAberto,
-      valorQuitado,
-      valorLancado,
-      gastoTotalSalgados,
-      dividasEmAberto: dividasAbertas.length,
-      dividasQuitadas: dividasAtuais.filter((d) => d.pago === true).length,
-      taxaQuitacao: valorLancado > 0 ? (valorQuitado / valorLancado) * 100 : 0,
-      ticketMedio:
-        dividasAtuais.length > 0 ? valorLancado / dividasAtuais.length : 0,
-      emprestimosAtivos: emprestimosAbertos.length,
-      emprestimosAtrasados: atrasados.length,
-      emprestimosNoPeriodo: emprestimosAtuais.length,
-      devolucoesNoPeriodo: devolvidosNaJanela.length,
-      livrosTotal: livros.length,
-      livrosDisponiveis,
-      taxaDisponibilidade:
-        livros.length > 0 ? (livrosDisponiveis / livros.length) * 100 : 0,
-      certificacoesNoPeriodo: certificacoesAtuais.length,
-      certificacoesSenior: certificacoesAtuais.filter(
+      openAmount,
+      settledAmount,
+      issuedAmount,
+      totalSnackSpending,
+      openDebts: openDebts.length,
+      settledDebts: currentDebts.filter((d) => d.pago === true).length,
+      settlementRate: issuedAmount > 0 ? (settledAmount / issuedAmount) * 100 : 0,
+      averageTicket:
+        currentDebts.length > 0 ? issuedAmount / currentDebts.length : 0,
+      activeLoans: openLoans.length,
+      overdueLoans: overdue.length,
+      loansInPeriod: currentLoans.length,
+      returnsInPeriod: returnedInWindow.length,
+      totalBooks: books.length,
+      availableBooks,
+      availabilityRate:
+        books.length > 0 ? (availableBooks / books.length) * 100 : 0,
+      certificationsInPeriod: currentCertifications.length,
+      seniorCertifications: currentCertifications.filter(
         (c) => c.tipo === "Certificação Senior",
       ).length,
-      certificacoesVencendo: certificacoesVencendo.length,
-      colaboradores: colaboradores.length,
-      colaboradoresAtivos: colaboradores.filter((c) => c.status === "ativo")
-        .length,
-      setores: setores.length,
+      expiringCertifications: expiringCertifications.length,
+      employees: employees.length,
+      activeEmployees: employees.filter((e) => e.status === "ativo").length,
+      sectors: sectors.length,
     };
 
     const deltas = {
-      valorQuitado: variacao(valorQuitado, valorQuitadoAnterior),
-      certificacoes: variacao(
-        certificacoesAtuais.length,
-        certificacoesPrevias.length,
+      settledAmount: percentChange(settledAmount, previousSettledAmount),
+      certifications: percentChange(
+        currentCertifications.length,
+        previousCertifications.length,
       ),
-      emprestimos: variacao(
-        emprestimosAtuais.length,
-        emprestimosPrevios.length,
-      ),
-      dividasLancadas: variacao(dividasAtuais.length, dividasPrevias.length),
+      loans: percentChange(currentLoans.length, previousLoans.length),
+      issuedDebts: percentChange(currentDebts.length, previousDebts.length),
     };
 
-    const porColaborador = new Map<
+    const byEmployee = new Map<
       number,
       {
         id: number;
-        nome: string;
-        departamento: string;
+        name: string;
+        department: string;
         senior: number;
-        outras: number;
+        others: number;
       }
     >();
-    for (const cert of certificacoesAtuais) {
-      const atual = porColaborador.get(cert.colaborador_id) ?? {
+    for (const cert of currentCertifications) {
+      const entry = byEmployee.get(cert.colaborador_id) ?? {
         id: cert.colaborador_id,
-        nome: cert.colaboradores.nome,
-        departamento: cert.colaboradores.departamento,
+        name: cert.colaboradores.nome,
+        department: cert.colaboradores.departamento,
         senior: 0,
-        outras: 0,
+        others: 0,
       };
-      if (cert.tipo === "Certificação Senior") atual.senior += 1;
-      else atual.outras += 1;
-      porColaborador.set(cert.colaborador_id, atual);
+      if (cert.tipo === "Certificação Senior") entry.senior += 1;
+      else entry.others += 1;
+      byEmployee.set(cert.colaborador_id, entry);
     }
-    const rankingCertificacoes = Array.from(porColaborador.values())
-      .map((c) => ({ ...c, total: c.senior + c.outras }))
-      .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome))
+    const certificationRanking = Array.from(byEmployee.values())
+      .map((e) => ({ ...e, total: e.senior + e.others }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
       .slice(0, 8);
 
-    const devedores = new Map<
+    const debtors = new Map<
       number,
       {
         id: number;
-        nome: string;
-        departamento: string;
-        valor: number;
-        itens: number;
+        name: string;
+        department: string;
+        amount: number;
+        items: number;
       }
     >();
-    for (const divida of dividasAbertas) {
-      const atual = devedores.get(divida.colaborador_id) ?? {
-        id: divida.colaborador_id,
-        nome: divida.colaboradores.nome,
-        departamento: divida.colaboradores.departamento,
-        valor: 0,
-        itens: 0,
+    for (const debt of openDebts) {
+      const entry = debtors.get(debt.colaborador_id) ?? {
+        id: debt.colaborador_id,
+        name: debt.colaboradores.nome,
+        department: debt.colaboradores.departamento,
+        amount: 0,
+        items: 0,
       };
-      atual.valor += paraNumero(divida.valor);
-      atual.itens += 1;
-      devedores.set(divida.colaborador_id, atual);
+      entry.amount += toNumber(debt.valor);
+      entry.items += 1;
+      debtors.set(debt.colaborador_id, entry);
     }
-    const rankingDevedores = Array.from(devedores.values())
-      .map((d) => ({ ...d, valor: Math.round(d.valor * 100) / 100 }))
-      .sort((a, b) => b.valor - a.valor)
+    const debtorRanking = Array.from(debtors.values())
+      .map((d) => ({ ...d, amount: Math.round(d.amount * 100) / 100 }))
+      .sort((a, b) => b.amount - a.amount)
       .slice(0, 8);
 
-    const certPorSetor = new Map<
+    const certsBySector = new Map<
       number | null,
-      { senior: number; outras: number }
+      { senior: number; others: number }
     >();
-    for (const cert of certificacoesAtuais) {
-      const chave = cert.colaboradores.setor_id ?? null;
-      const atual = certPorSetor.get(chave) ?? { senior: 0, outras: 0 };
-      if (cert.tipo === "Certificação Senior") atual.senior += 1;
-      else atual.outras += 1;
-      certPorSetor.set(chave, atual);
+    for (const cert of currentCertifications) {
+      const key = cert.colaboradores.setor_id ?? null;
+      const entry = certsBySector.get(key) ?? { senior: 0, others: 0 };
+      if (cert.tipo === "Certificação Senior") entry.senior += 1;
+      else entry.others += 1;
+      certsBySector.set(key, entry);
     }
-    const porSetor = setores
-      .map((setor) => {
-        const cert = certPorSetor.get(setor.id) ?? { senior: 0, outras: 0 };
-        const doSetor = colaboradores.filter((c) => c.setores?.id === setor.id);
+    const bySector = sectors
+      .map((sector) => {
+        const cert = certsBySector.get(sector.id) ?? { senior: 0, others: 0 };
+        const sectorEmployees = employees.filter(
+          (e) => e.setores?.id === sector.id,
+        );
         return {
-          setorId: setor.id,
-          setor: setor.nome,
-          colaboradores: doSetor.length,
+          sectorId: sector.id,
+          sector: sector.nome,
+          employees: sectorEmployees.length,
           senior: cert.senior,
-          outras: cert.outras,
-          total: cert.senior + cert.outras,
-          gasto:
+          others: cert.others,
+          total: cert.senior + cert.others,
+          spent:
             Math.round(
-              doSetor.reduce(
-                (t, c) => t + paraNumero(c.total_gasto_salgados),
+              sectorEmployees.reduce(
+                (t, e) => t + toNumber(e.total_gasto_salgados),
                 0,
               ) * 100,
             ) / 100,
         };
       })
-      .filter((s) => s.colaboradores > 0 || s.total > 0)
-      .sort((a, b) => b.total - a.total || b.colaboradores - a.colaboradores);
+      .filter((s) => s.employees > 0 || s.total > 0)
+      .sort((a, b) => b.total - a.total || b.employees - a.employees);
 
-    const generosMapa = new Map<
-      string,
-      { total: number; emprestados: number }
-    >();
-    for (const livro of livros) {
-      const genero = livro.genero?.trim() || "Sem gênero";
-      const atual = generosMapa.get(genero) ?? { total: 0, emprestados: 0 };
-      atual.total += 1;
-      if (livro.disponivel !== true) atual.emprestados += 1;
-      generosMapa.set(genero, atual);
+    const genreMap = new Map<string, { total: number; loaned: number }>();
+    for (const book of books) {
+      const genre = book.genero?.trim() || "Sem gênero";
+      const entry = genreMap.get(genre) ?? { total: 0, loaned: 0 };
+      entry.total += 1;
+      if (book.disponivel !== true) entry.loaned += 1;
+      genreMap.set(genre, entry);
     }
-    const generos = Array.from(generosMapa.entries())
-      .map(([genero, v]) => ({ genero, ...v }))
+    const genres = Array.from(genreMap.entries())
+      .map(([genre, v]) => ({ genre, ...v }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
 
-    const itensMapa = new Map<string, { quantidade: number; valor: number }>();
-    for (const divida of dividasAtuais) {
-      const atual = itensMapa.get(divida.item) ?? { quantidade: 0, valor: 0 };
-      atual.quantidade += 1;
-      atual.valor += paraNumero(divida.valor);
-      itensMapa.set(divida.item, atual);
+    const itemMap = new Map<string, { count: number; amount: number }>();
+    for (const debt of currentDebts) {
+      const entry = itemMap.get(debt.item) ?? { count: 0, amount: 0 };
+      entry.count += 1;
+      entry.amount += toNumber(debt.valor);
+      itemMap.set(debt.item, entry);
     }
-    const itensPopulares = Array.from(itensMapa.entries())
+    const popularItems = Array.from(itemMap.entries())
       .map(([item, v]) => ({
         item,
-        quantidade: v.quantidade,
-        valor: Math.round(v.valor * 100) / 100,
+        count: v.count,
+        amount: Math.round(v.amount * 100) / 100,
       }))
-      .sort((a, b) => b.quantidade - a.quantidade)
+      .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    const diasDe = (data: Date) =>
-      Math.round((hojeUTC.getTime() - data.getTime()) / MS_POR_DIA);
+    const daysSince = (date: Date) =>
+      Math.round((todayUTC.getTime() - date.getTime()) / MS_PER_DAY);
 
     return NextResponse.json({
-      periodo: {
-        meses,
-        inicio: inicio?.toISOString() ?? null,
-        fim: hojeUTC.toISOString(),
+      period: {
+        months,
+        start: start?.toISOString() ?? null,
+        end: todayUTC.toISOString(),
       },
-      filtros: { setorId, colaboradorId },
-      setores,
+      filters: { sectorId, employeeId },
+      sectors,
       kpis,
       deltas,
-      serieMensal,
-      rankingCertificacoes,
-      rankingDevedores,
-      porSetor,
-      generos,
-      itensPopulares,
-      alertas: {
-        emprestimosAtrasados: atrasados.slice(0, 8).map((e) => ({
-          id: e.id,
-          livro: e.livros.titulo,
-          colaborador: e.colaboradores.nome,
-          diasAtraso: diasDe(e.data_prevista_devolucao),
-          previsto: e.data_prevista_devolucao.toISOString(),
+      monthlySeries,
+      certificationRanking,
+      debtorRanking,
+      bySector,
+      genres,
+      popularItems,
+      alerts: {
+        overdueLoans: overdue.slice(0, 8).map((l) => ({
+          id: l.id,
+          book: l.livros.titulo,
+          employee: l.colaboradores.nome,
+          daysOverdue: daysSince(l.data_prevista_devolucao),
+          dueDate: l.data_prevista_devolucao.toISOString(),
         })),
-        certificacoesVencendo: certificacoesVencendo.slice(0, 8).map((c) => ({
-          id: c.id,
-          nome: c.nome,
-          tipo: c.tipo,
-          colaborador: c.colaboradores.nome,
-          diasRestantes: c.data_vencimento ? -diasDe(c.data_vencimento) : null,
-          vencimento: c.data_vencimento?.toISOString() ?? null,
-        })),
+        expiringCertifications: expiringCertifications
+          .slice(0, 8)
+          .map((c) => ({
+            id: c.id,
+            name: c.nome,
+            type: c.tipo,
+            employee: c.colaboradores.nome,
+            daysRemaining: c.data_vencimento
+              ? -daysSince(c.data_vencimento)
+              : null,
+            expiresAt: c.data_vencimento?.toISOString() ?? null,
+          })),
       },
     });
   } catch (error) {

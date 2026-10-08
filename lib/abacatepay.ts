@@ -1,8 +1,8 @@
 import "dotenv/config";
 
-const URL_BASE = "https://api.abacatepay.com";
+const BASE_URL = "https://api.abacatepay.com";
 
-export const TIPOS_CHAVE_PIX = [
+export const PIX_KEY_TYPES = [
   "CPF",
   "CNPJ",
   "EMAIL",
@@ -10,121 +10,121 @@ export const TIPOS_CHAVE_PIX = [
   "RANDOM",
 ] as const;
 
-export type TipoChavePix = (typeof TIPOS_CHAVE_PIX)[number];
+export type PixKeyType = (typeof PIX_KEY_TYPES)[number];
 
-export class ErroAbacatePay extends Error {
+export class AbacatePayError extends Error {
   readonly status: number;
 
-  constructor(mensagem: string, status = 502) {
-    super(mensagem);
-    this.name = "ErroAbacatePay";
+  constructor(message: string, status = 502) {
+    super(message);
+    this.name = "AbacatePayError";
     this.status = status;
   }
 }
 
-type Versao = "v1" | "v2";
+type ApiVersion = "v1" | "v2";
 
-function chaveDaVersao(versao: Versao) {
-  const chave =
-    versao === "v1"
+function apiKeyForVersion(version: ApiVersion) {
+  const key =
+    version === "v1"
       ? process.env.API_KEY_ABACATEPAY_V1
       : process.env.API_KEY_ABACATEPAY_V2;
 
-  if (!chave?.trim()) {
-    throw new ErroAbacatePay(
-      `A variável API_KEY_ABACATEPAY_${versao.toUpperCase()} não está configurada.`,
+  if (!key?.trim()) {
+    throw new AbacatePayError(
+      `A variável API_KEY_ABACATEPAY_${version.toUpperCase()} não está configurada.`,
       500,
     );
   }
 
-  return chave.trim();
+  return key.trim();
 }
 
-interface OpcoesRequisicao {
-  metodo?: "GET" | "POST";
-  corpo?: unknown;
+interface RequestOptions {
+  method?: "GET" | "POST";
+  body?: unknown;
   query?: Record<string, string>;
 }
 
-async function requisitar<T>(
-  versao: Versao,
-  caminho: string,
-  { metodo = "GET", corpo, query }: OpcoesRequisicao = {},
+async function request<T>(
+  version: ApiVersion,
+  path: string,
+  { method = "GET", body, query }: RequestOptions = {},
 ): Promise<T> {
-  const url = new URL(`${URL_BASE}/${versao}${caminho}`);
-  for (const [chave, valor] of Object.entries(query ?? {})) {
-    url.searchParams.set(chave, valor);
+  const url = new URL(`${BASE_URL}/${version}${path}`);
+  for (const [key, value] of Object.entries(query ?? {})) {
+    url.searchParams.set(key, value);
   }
 
-  let resposta: Response;
+  let response: Response;
   try {
-    resposta = await fetch(url, {
-      method: metodo,
+    response = await fetch(url, {
+      method,
       headers: {
-        Authorization: `Bearer ${chaveDaVersao(versao)}`,
+        Authorization: `Bearer ${apiKeyForVersion(version)}`,
         "Content-Type": "application/json",
       },
-      body: metodo === "POST" ? JSON.stringify(corpo ?? {}) : undefined,
+      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
       cache: "no-store",
     });
-  } catch (erro) {
-    console.error(`Falha de rede ao chamar ${caminho} na AbacatePay:`, erro);
-    throw new ErroAbacatePay("Não foi possível se comunicar com a AbacatePay.");
+  } catch (error) {
+    console.error(`Falha de rede ao chamar ${path} na AbacatePay:`, error);
+    throw new AbacatePayError("Não foi possível se comunicar com a AbacatePay.");
   }
 
-  const texto = await resposta.text();
+  const text = await response.text();
 
   let json: { data?: T; error?: unknown; message?: unknown } | null = null;
   try {
-    json = texto ? JSON.parse(texto) : null;
+    json = text ? JSON.parse(text) : null;
   } catch {
     json = null;
   }
 
-  if (!resposta.ok) {
+  if (!response.ok) {
     console.error(
-      `A AbacatePay respondeu ${resposta.status} em ${caminho}:`,
-      texto,
+      `A AbacatePay respondeu ${response.status} em ${path}:`,
+      text,
     );
-    throw new ErroAbacatePay(
-      mensagemDeErro(json) ?? "A AbacatePay recusou a requisição.",
+    throw new AbacatePayError(
+      errorMessage(json) ?? "A AbacatePay recusou a requisição.",
     );
   }
 
   if (json?.error) {
-    console.error(`A AbacatePay retornou erro em ${caminho}:`, json.error);
-    throw new ErroAbacatePay(
-      mensagemDeErro(json) ?? "A AbacatePay retornou um erro.",
+    console.error(`A AbacatePay retornou erro em ${path}:`, json.error);
+    throw new AbacatePayError(
+      errorMessage(json) ?? "A AbacatePay retornou um erro.",
     );
   }
 
   if (json?.data === undefined || json.data === null) {
-    throw new ErroAbacatePay("A AbacatePay retornou uma resposta vazia.");
+    throw new AbacatePayError("A AbacatePay retornou uma resposta vazia.");
   }
 
   return json.data;
 }
 
-function mensagemDeErro(json: { error?: unknown; message?: unknown } | null) {
-  for (const candidato of [json?.error, json?.message]) {
-    if (typeof candidato === "string" && candidato.trim()) return candidato;
-    if (candidato && typeof candidato === "object") {
-      const { message } = candidato as { message?: unknown };
+function errorMessage(json: { error?: unknown; message?: unknown } | null) {
+  for (const candidate of [json?.error, json?.message]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (candidate && typeof candidate === "object") {
+      const { message } = candidate as { message?: unknown };
       if (typeof message === "string" && message.trim()) return message;
     }
   }
   return null;
 }
 
-export function paraCentavos(valorEmReais: number) {
-  return Math.round(Number(valorEmReais) * 100);
+export function toCents(amountInReais: number) {
+  return Math.round(Number(amountInReais) * 100);
 }
 
-export function paraReais(valorEmCentavos: number) {
-  return Number(valorEmCentavos ?? 0) / 100;
+export function toReais(amountInCents: number) {
+  return Number(amountInCents ?? 0) / 100;
 }
 
-export interface CobrancaPix {
+export interface PixCharge {
   id: string;
   amount: number;
   status: string;
@@ -139,7 +139,7 @@ export interface CobrancaPix {
   metadata: Record<string, unknown>;
 }
 
-export interface DadosCobrancaPix {
+export interface PixChargeData {
   amount: number;
   expiresIn: number;
   description: string;
@@ -152,37 +152,37 @@ export interface DadosCobrancaPix {
   };
 }
 
-export function criarCobrancaPix(dados: DadosCobrancaPix) {
-  return requisitar<CobrancaPix>("v2", "/transparents/create", {
-    metodo: "POST",
-    corpo: { method: "PIX", data: dados },
+export function createPixCharge(data: PixChargeData) {
+  return request<PixCharge>("v2", "/transparents/create", {
+    method: "POST",
+    body: { method: "PIX", data },
   });
 }
 
-export function consultarCobrancaPix(id: string) {
-  return requisitar<Partial<CobrancaPix> & { status: string }>(
+export function getPixCharge(id: string) {
+  return request<Partial<PixCharge> & { status: string }>(
     "v2",
     "/transparents/check",
     { query: { id } },
   );
 }
 
-export function simularPagamentoPix(id: string) {
-  return requisitar<Partial<CobrancaPix>>("v2", "/transparents/simulate-payment", {
-    metodo: "POST",
-    corpo: { metadata: {} },
+export function simulatePixPayment(id: string) {
+  return request<Partial<PixCharge>>("v2", "/transparents/simulate-payment", {
+    method: "POST",
+    body: { metadata: {} },
     query: { id },
   });
 }
 
-export interface DadosEnvioPix {
+export interface SendPixData {
   amount: number;
   externalId: string;
   description: string;
-  pix: { key: string; type: TipoChavePix };
+  pix: { key: string; type: PixKeyType };
 }
 
-export interface EnvioPix {
+export interface SentPix {
   id: string;
   status: string;
   amount: number;
@@ -191,41 +191,41 @@ export interface EnvioPix {
   createdAt: string;
 }
 
-export function enviarPix(dados: DadosEnvioPix) {
-  return requisitar<EnvioPix>("v2", "/pix/send", {
-    metodo: "POST",
-    corpo: dados,
+export function sendPix(data: SendPixData) {
+  return request<SentPix>("v2", "/pix/send", {
+    method: "POST",
+    body: data,
   });
 }
 
-export interface SaldoLoja {
-  disponivel: number;
-  pendente: number;
-  bloqueado: number;
+export interface StoreBalance {
+  available: number;
+  pending: number;
+  blocked: number;
 }
 
-function primeiroNumero(...candidatos: unknown[]) {
-  for (const candidato of candidatos) {
-    const numero = Number(candidato);
-    if (candidato !== null && candidato !== undefined && !Number.isNaN(numero)) {
-      return numero;
+function firstNumber(...candidates: unknown[]) {
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (candidate !== null && candidate !== undefined && !Number.isNaN(parsed)) {
+      return parsed;
     }
   }
   return 0;
 }
 
-export async function consultarSaldoLoja(): Promise<SaldoLoja> {
-  const loja = await requisitar<Record<string, any>>("v1", "/store/get");
-  const saldo = (loja.balance ?? loja) as Record<string, unknown>;
+export async function getStoreBalance(): Promise<StoreBalance> {
+  const store = await request<Record<string, any>>("v1", "/store/get");
+  const balance = (store.balance ?? store) as Record<string, unknown>;
 
   return {
-    disponivel: paraReais(
-      primeiroNumero(saldo.available, saldo.availableAmount, loja.available),
+    available: toReais(
+      firstNumber(balance.available, balance.availableAmount, store.available),
     ),
-    pendente: paraReais(
-      primeiroNumero(saldo.pending, saldo.waitingFunds, loja.pending),
+    pending: toReais(
+      firstNumber(balance.pending, balance.waitingFunds, store.pending),
     ),
-    bloqueado: paraReais(primeiroNumero(saldo.blocked, loja.blocked)),
+    blocked: toReais(firstNumber(balance.blocked, store.blocked)),
   };
 }
 
@@ -233,8 +233,8 @@ export async function consultarSaldoLoja(): Promise<SaldoLoja> {
  * Converte o status da AbacatePay (PENDING, PAID, ...) para o vocabulário já
  * usado na coluna `pagamentos.status` e nas telas do sistema.
  */
-export function statusInterno(statusAbacate?: string | null) {
-  switch (String(statusAbacate ?? "").toUpperCase()) {
+export function toInternalStatus(abacateStatus?: string | null) {
+  switch (String(abacateStatus ?? "").toUpperCase()) {
     case "PAID":
     case "COMPLETED":
     case "APPROVED":

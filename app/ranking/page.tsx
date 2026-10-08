@@ -1,48 +1,48 @@
 "use client";
 
-import { FiltroDashboard } from "@/components/dashboard/filters";
+import { DashboardFilters } from "@/components/dashboard/filters";
 import {
-  PainelAlertas,
-  PainelIndicadores,
+  AlertsPanel,
+  IndicatorsPanel,
 } from "@/components/dashboard/indicators";
 import {
-  PainelCertificacoes,
-  PainelDevedores,
-  PainelFinanceiro,
-  PainelGeneros,
-  PainelGiroBiblioteca,
-  PainelItens,
-  PainelSetores,
+  CertificationsPanel,
+  DebtorsPanel,
+  FinancePanel,
+  GenresPanel,
+  ItemsPanel,
+  LibraryTurnoverPanel,
+  SectorsPanel,
 } from "@/components/dashboard/panels";
 import {
-  PainelRanking,
-  PainelTiposCertificacao,
-  PainelTopCertificadores,
-  agruparPorTipo,
-  recortarColaboradores,
-  type ColaboradorStats,
-  type EstatisticasGerais,
-  type FiltroTipo,
-  type Ordenacao,
+  CertificationTypesPanel,
+  RankingPanel,
+  TopCertifiersPanel,
+  filterAndSortEmployees,
+  groupByType,
+  type CertificationFilter,
+  type EmployeeStats,
+  type GeneralStats,
+  type SortOrder,
 } from "@/components/dashboard/ranking";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import type { DashboardData } from "@/components/dashboard/types";
 import {
-  inteiro,
-  moeda,
-  moedaCompacta,
-  nomeCurto,
+  formatInteger,
+  formatCurrency,
+  formatCompactCurrency,
+  shortName,
 } from "@/components/dashboard/viz";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
-import { SpinnerTela } from "@/components/spinner-tela";
+import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
 import { Button, Card, Separator } from "@heroui/react";
 import { Award, BookOpen, Target, Trophy, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const LEGENDA_PERIODO: Record<number, string> = {
+const PERIOD_LEGEND: Record<number, string> = {
   3: "vs. 3 meses anteriores",
   6: "vs. 6 meses anteriores",
   12: "vs. 12 meses anteriores",
@@ -51,151 +51,149 @@ const LEGENDA_PERIODO: Record<number, string> = {
 
 export default function RankingPage() {
   const { user } = useAuth();
-  const ehAdmin = user?.tipo === "admin";
+  const isAdmin = user?.tipo === "admin";
 
-  const [dados, setDados] = useState<DashboardData | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [revalidando, setRevalidando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [revalidating, setRevalidating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [meses, setMeses] = useState(6);
-  const [setorId, setSetorId] = useState("todos");
+  const [months, setMonths] = useState(6);
+  const [sectorId, setSectorId] = useState("all");
 
-  const [colaboradores, setColaboradores] = useState<ColaboradorStats[]>([]);
-  const [gerais, setGerais] = useState<EstatisticasGerais | null>(null);
-  const [carregandoRanking, setCarregandoRanking] = useState(true);
-  const [erroRanking, setErroRanking] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<EmployeeStats[]>([]);
+  const [generalStats, setGeneralStats] = useState<GeneralStats | null>(null);
+  const [rankingLoading, setRankingLoading] = useState(true);
+  const [rankingError, setRankingError] = useState<string | null>(null);
 
-  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
-  const [ordenacao, setOrdenacao] = useState<Ordenacao>("total_desc");
+  const [typeFilter, setTypeFilter] = useState<CertificationFilter>("all");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("total_desc");
 
-  const meuId = useMemo(() => {
+  const myId = useMemo(() => {
     if (user?.id == null) return null;
-    const numero = Number(user.id);
-    return Number.isFinite(numero) ? numero : null;
+    const num = Number(user.id);
+    return Number.isFinite(num) ? num : null;
   }, [user?.id]);
 
-  const colaboradorId = ehAdmin ? null : meuId;
+  const employeeId = isAdmin ? null : myId;
 
-  const buscar = useCallback(
-    async (silencioso: boolean) => {
-      if (silencioso) setRevalidando(true);
-      else setCarregando(true);
-      setErro(null);
+  const fetchDashboard = useCallback(
+    async (silent: boolean) => {
+      if (silent) setRevalidating(true);
+      else setLoading(true);
+      setError(null);
 
       try {
-        const params = new URLSearchParams({ meses: String(meses) });
-        if (ehAdmin && setorId !== "todos") params.set("setorId", setorId);
-        if (colaboradorId !== null)
-          params.set("colaboradorId", String(colaboradorId));
+        const params = new URLSearchParams({ months: String(months) });
+        if (isAdmin && sectorId !== "all") params.set("sectorId", sectorId);
+        if (employeeId !== null)
+          params.set("employeeId", String(employeeId));
 
-        const resposta = await fetch(`/api/dashboard?${params}`);
-        if (!resposta.ok) throw new Error("Falha ao carregar o dashboard");
-        setDados((await resposta.json()) as DashboardData);
-      } catch (causa) {
-        console.error("Erro ao carregar o dashboard:", causa);
-        setErro("Não foi possível carregar os indicadores.");
+        const response = await fetch(`/api/dashboard?${params}`);
+        if (!response.ok) throw new Error("Falha ao carregar o dashboard");
+        setData((await response.json()) as DashboardData);
+      } catch (cause) {
+        console.error("Erro ao carregar o dashboard:", cause);
+        setError("Não foi possível carregar os indicadores.");
       } finally {
-        setCarregando(false);
-        setRevalidando(false);
+        setLoading(false);
+        setRevalidating(false);
       }
     },
-    [meses, setorId, ehAdmin, colaboradorId],
+    [months, sectorId, isAdmin, employeeId],
   );
 
-  const buscarRanking = useCallback(async () => {
-    setErroRanking(null);
+  const fetchRanking = useCallback(async () => {
+    setRankingError(null);
     try {
-      const [respostaColaboradores, respostaGerais] = await Promise.all([
+      const [employeesResponse, statsResponse] = await Promise.all([
         fetch("/api/ranking/colaboradores"),
         fetch("/api/ranking/estatisticas"),
       ]);
-      if (!respostaColaboradores.ok || !respostaGerais.ok)
+      if (!employeesResponse.ok || !statsResponse.ok)
         throw new Error("Falha ao carregar o ranking");
 
-      setColaboradores(
-        (await respostaColaboradores.json()) as ColaboradorStats[],
-      );
-      setGerais((await respostaGerais.json()) as EstatisticasGerais);
-    } catch (causa) {
-      console.error("Erro ao carregar o ranking:", causa);
-      setErroRanking("Não foi possível carregar o ranking de certificações.");
+      setEmployees((await employeesResponse.json()) as EmployeeStats[]);
+      setGeneralStats((await statsResponse.json()) as GeneralStats);
+    } catch (cause) {
+      console.error("Erro ao carregar o ranking:", cause);
+      setRankingError("Não foi possível carregar o ranking de certificações.");
     } finally {
-      setCarregandoRanking(false);
+      setRankingLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!user || !ehAdmin) {
+    if (!user || !isAdmin) {
       return;
     }
 
-    void buscar(dados !== null);
-  }, [user, ehAdmin, buscar]);
+    void fetchDashboard(data !== null);
+  }, [user, isAdmin, fetchDashboard]);
 
   useEffect(() => {
     if (!user) {
       return;
     }
 
-    void buscarRanking();
-  }, [user, buscarRanking]);
+    void fetchRanking();
+  }, [user, fetchRanking]);
 
-  const serie = dados?.serieMensal ?? [];
-  const kpis = dados?.kpis;
-  const legendaPeriodo = LEGENDA_PERIODO[meses] ?? "";
+  const series = data?.monthlySeries ?? [];
+  const kpis = data?.kpis;
+  const periodLegend = PERIOD_LEGEND[months] ?? "";
 
   const ranking = useMemo(
-    () => recortarColaboradores(colaboradores, filtroTipo, ordenacao),
-    [colaboradores, filtroTipo, ordenacao],
+    () => filterAndSortEmployees(employees, typeFilter, sortOrder),
+    [employees, typeFilter, sortOrder],
   );
-  const tipos = useMemo(() => agruparPorTipo(colaboradores), [colaboradores]);
+  const types = useMemo(() => groupByType(employees), [employees]);
 
-  if ((ehAdmin && carregando) || carregandoRanking) {
+  if ((isAdmin && loading) || rankingLoading) {
     return (
       <ProtectedRoute>
-        <SpinnerTela />
+        <ScreenSpinner />
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo="Ranking"
-          descricao={
-            ehAdmin
+      <PageLayout>
+        <PageHeader
+          title="Ranking"
+          description={
+            isAdmin
               ? "Panorama da empresa e a classificação de certificações dos colaboradores."
               : "A classificação de certificações da empresa e a sua posição nela."
           }
-          voltarHref="/"
+          backHref="/"
         />
 
-        {ehAdmin && (
+        {isAdmin && (
           <>
-            <FiltroDashboard
-              meses={meses}
-              onMesesChange={setMeses}
-              setorId={setorId}
-              onSetorChange={setSetorId}
-              setores={dados?.setores ?? []}
-              mostrarSetor
-              revalidando={revalidando}
-              onAtualizar={() => {
-                void buscar(true);
-                void buscarRanking();
+            <DashboardFilters
+              months={months}
+              onMonthsChange={setMonths}
+              sectorId={sectorId}
+              onSectorChange={setSectorId}
+              sectors={data?.sectors ?? []}
+              showSector
+              revalidating={revalidating}
+              onRefresh={() => {
+                void fetchDashboard(true);
+                void fetchRanking();
               }}
             />
 
-            {erro && (
+            {error && (
               <Card className="border-l-2 border-l-danger">
                 <Card.Content className="flex flex-wrap items-center gap-3 p-4">
-                  <p className="text-sm text-foreground">{erro}</p>
+                  <p className="text-sm text-foreground">{error}</p>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onPress={() => void buscar(false)}
+                    onPress={() => void fetchDashboard(false)}
                   >
                     Tentar novamente
                   </Button>
@@ -205,7 +203,7 @@ export default function RankingPage() {
           </>
         )}
 
-        {ehAdmin && dados && kpis && (
+        {isAdmin && data && kpis && (
           <>
             <section
               aria-label="Indicadores principais"
@@ -224,11 +222,11 @@ export default function RankingPage() {
                   </div>
                   <div>
                     <p className="text-[2.75rem] font-semibold leading-none text-foreground">
-                      {moedaCompacta(kpis.valorEmAberto)}
+                      {formatCompactCurrency(kpis.openAmount)}
                     </p>
                     <p className="mt-2 text-xs text-muted">
-                      {moeda(kpis.valorEmAberto)} em{" "}
-                      {inteiro(kpis.dividasEmAberto)} lançamento(s) - saldo
+                      {formatCurrency(kpis.openAmount)} em{" "}
+                      {formatInteger(kpis.openDebts)} lançamento(s) - saldo
                       total, independente do período.
                     </p>
                   </div>
@@ -242,37 +240,37 @@ export default function RankingPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
                 <StatTile
-                  rotulo="Quitado no período"
-                  valor={moedaCompacta(kpis.valorQuitado)}
-                  icone={Wallet}
-                  delta={dados.deltas.valorQuitado}
-                  deltaLegenda={legendaPeriodo}
-                  serie={serie.map((p) => p.quitado)}
+                  label="Quitado no período"
+                  value={formatCompactCurrency(kpis.settledAmount)}
+                  icon={Wallet}
+                  delta={data.deltas.settledAmount}
+                  deltaLabel={periodLegend}
+                  series={series.map((p) => p.settled)}
                 />
                 <StatTile
-                  rotulo="Certificações no período"
-                  valor={inteiro(kpis.certificacoesNoPeriodo)}
-                  icone={Award}
-                  delta={dados.deltas.certificacoes}
-                  deltaLegenda={legendaPeriodo}
-                  serie={serie.map((p) => p.certificacoes)}
+                  label="Certificações no período"
+                  value={formatInteger(kpis.certificationsInPeriod)}
+                  icon={Award}
+                  delta={data.deltas.certifications}
+                  deltaLabel={periodLegend}
+                  series={series.map((p) => p.certifications)}
                 />
                 <StatTile
-                  rotulo="Empréstimos ativos"
-                  valor={inteiro(kpis.emprestimosAtivos)}
-                  icone={BookOpen}
-                  deltaLegenda={
-                    kpis.emprestimosAtrasados > 0
-                      ? `${inteiro(kpis.emprestimosAtrasados)} em atraso`
+                  label="Empréstimos ativos"
+                  value={formatInteger(kpis.activeLoans)}
+                  icon={BookOpen}
+                  deltaLabel={
+                    kpis.overdueLoans > 0
+                      ? `${formatInteger(kpis.overdueLoans)} em atraso`
                       : "nenhum em atraso"
                   }
-                  serie={serie.map((p) => p.emprestimos)}
+                  series={series.map((p) => p.loans)}
                 />
                 <StatTile
-                  rotulo="Colaboradores"
-                  valor={inteiro(kpis.colaboradores)}
-                  icone={Users}
-                  deltaLegenda={`${inteiro(kpis.colaboradoresAtivos)} ativos em ${inteiro(kpis.setores)} setores`}
+                  label="Colaboradores"
+                  value={formatInteger(kpis.employees)}
+                  icon={Users}
+                  deltaLabel={`${formatInteger(kpis.activeEmployees)} ativos em ${formatInteger(kpis.sectors)} setores`}
                 />
               </div>
             </section>
@@ -281,35 +279,29 @@ export default function RankingPage() {
               aria-label="Saúde e alertas"
               className="grid grid-cols-1 gap-4 lg:grid-cols-2"
             >
-              <PainelIndicadores dados={dados} />
-              <PainelAlertas dados={dados} />
+              <IndicatorsPanel data={data} />
+              <AlertsPanel data={data} />
             </section>
 
             <section
               aria-label="Gráficos do período"
               className="grid grid-cols-1 gap-4 xl:grid-cols-2"
             >
-              <PainelFinanceiro serie={serie} revalidando={revalidando} />
-              <PainelCertificacoes serie={serie} revalidando={revalidando} />
-              <PainelGiroBiblioteca serie={serie} revalidando={revalidando} />
-              <PainelGeneros linhas={dados.generos} revalidando={revalidando} />
-              <PainelItens
-                linhas={dados.itensPopulares}
-                revalidando={revalidando}
+              <FinancePanel series={series} revalidating={revalidating} />
+              <CertificationsPanel series={series} revalidating={revalidating} />
+              <LibraryTurnoverPanel series={series} revalidating={revalidating} />
+              <GenresPanel rows={data.genres} revalidating={revalidating} />
+              <ItemsPanel rows={data.popularItems} revalidating={revalidating} />
+              <DebtorsPanel
+                rows={data.debtorRanking}
+                revalidating={revalidating}
               />
-              <PainelDevedores
-                linhas={dados.rankingDevedores}
-                revalidando={revalidando}
-              />
-              <PainelSetores
-                linhas={dados.porSetor}
-                revalidando={revalidando}
-              />
+              <SectorsPanel rows={data.bySector} revalidating={revalidating} />
             </section>
           </>
         )}
 
-        {ehAdmin && (
+        {isAdmin && (
           <>
             <Separator className="mt-2" />
 
@@ -331,14 +323,14 @@ export default function RankingPage() {
           aria-label="Ranking de certificações"
           className="flex flex-col gap-4"
         >
-          {erroRanking && (
+          {rankingError && (
             <Card className="border-l-2 border-l-danger">
               <Card.Content className="flex flex-wrap items-center gap-3 p-4">
-                <p className="text-sm text-foreground">{erroRanking}</p>
+                <p className="text-sm text-foreground">{rankingError}</p>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onPress={() => void buscarRanking()}
+                  onPress={() => void fetchRanking()}
                 >
                   Tentar novamente
                 </Button>
@@ -348,63 +340,63 @@ export default function RankingPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
-              rotulo="Colaboradores"
-              valor={inteiro(gerais?.total_colaboradores ?? 0)}
-              icone={Users}
-              deltaLegenda="cadastrados no TechHub"
+              label="Colaboradores"
+              value={formatInteger(generalStats?.total_employees ?? 0)}
+              icon={Users}
+              deltaLabel="cadastrados no TechHub"
             />
             <StatTile
-              rotulo="Certificações"
-              valor={inteiro(gerais?.total_certificacoes ?? 0)}
-              icone={Award}
-              deltaLegenda={
-                gerais?.tipo_certificacao_mais_popular
-                  ? `tipo mais comum: ${gerais.tipo_certificacao_mais_popular}`
+              label="Certificações"
+              value={formatInteger(generalStats?.total_certifications ?? 0)}
+              icon={Award}
+              deltaLabel={
+                generalStats?.most_popular_certification_type
+                  ? `tipo mais comum: ${generalStats.most_popular_certification_type}`
                   : "nenhuma registrada"
               }
             />
             <StatTile
-              rotulo="Média por colaborador"
-              valor={(
-                gerais?.media_certificacoes_por_colaborador ?? 0
+              label="Média por colaborador"
+              value={(
+                generalStats?.average_certifications_per_employee ?? 0
               ).toLocaleString("pt-BR", {
                 minimumFractionDigits: 1,
                 maximumFractionDigits: 1,
               })}
-              icone={Target}
-              deltaLegenda="entre quem tem ao menos uma"
+              icon={Target}
+              deltaLabel="entre quem tem ao menos uma"
             />
             <StatTile
-              rotulo="Líder atual"
-              valor={
-                gerais?.colaborador_mais_certificacoes &&
-                gerais.colaborador_mais_certificacoes !== "N/A"
-                  ? nomeCurto(gerais.colaborador_mais_certificacoes)
+              label="Líder atual"
+              value={
+                generalStats?.top_certified_employee &&
+                generalStats.top_certified_employee !== "N/A"
+                  ? shortName(generalStats.top_certified_employee)
                   : "-"
               }
-              icone={Trophy}
-              deltaLegenda="quem mais certificou até hoje"
+              icon={Trophy}
+              deltaLabel="quem mais certificou até hoje"
             />
           </div>
 
-          {ehAdmin && (
+          {isAdmin && (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <PainelTopCertificadores linhas={ranking} />
-              <PainelTiposCertificacao linhas={tipos} />
+              <TopCertifiersPanel rows={ranking} />
+              <CertificationTypesPanel rows={types} />
             </div>
           )}
 
-          <PainelRanking
-            linhas={ranking}
-            filtroTipo={filtroTipo}
-            onFiltroTipoChange={setFiltroTipo}
-            ordenacao={ordenacao}
-            onOrdenacaoChange={setOrdenacao}
-            mostrarFiltros={ehAdmin}
-            destaqueId={meuId}
+          <RankingPanel
+            rows={ranking}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            showFilters={isAdmin}
+            highlightId={myId}
           />
         </section>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }

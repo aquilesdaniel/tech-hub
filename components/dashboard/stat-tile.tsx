@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { percentual } from "./viz";
+import { formatPercent } from "./viz";
 
 const Sparkline = dynamic(
   () => import("./sparkline").then((m) => m.Sparkline),
@@ -13,75 +13,75 @@ const Sparkline = dynamic(
 );
 
 type Props = {
-  rotulo: string;
-  valor: string;
-  icone?: LucideIcon;
+  label: string;
+  value: string;
+  icon?: LucideIcon;
   delta?: number | null;
-  deltaLegenda?: string;
-  subirEhBom?: boolean;
-  serie?: number[];
-  rodape?: ReactNode;
+  deltaLabel?: string;
+  higherIsBetter?: boolean;
+  series?: number[];
+  footer?: ReactNode;
 };
 
 export function StatTile({
-  rotulo,
-  valor,
-  icone: Icone,
+  label,
+  value,
+  icon: Icon,
   delta,
-  deltaLegenda,
-  subirEhBom = true,
-  serie,
-  rodape,
+  deltaLabel,
+  higherIsBetter = true,
+  series,
+  footer,
 }: Props) {
-  const temDelta = typeof delta === "number" && Number.isFinite(delta);
-  const subiu = temDelta && delta > 0;
-  const desceu = temDelta && delta < 0;
-  const bom = subiu ? subirEhBom : desceu ? !subirEhBom : null;
+  const hasDelta = typeof delta === "number" && Number.isFinite(delta);
+  const wentUp = hasDelta && delta > 0;
+  const wentDown = hasDelta && delta < 0;
+  const isGood = wentUp ? higherIsBetter : wentDown ? !higherIsBetter : null;
 
-  const corDelta =
-    bom === null ? "text-muted" : bom ? "text-success" : "text-danger";
-  const IconeDelta = subiu ? ArrowUpRight : desceu ? ArrowDownRight : Minus;
+  const deltaColor =
+    isGood === null ? "text-muted" : isGood ? "text-success" : "text-danger";
+  const DeltaIcon = wentUp ? ArrowUpRight : wentDown ? ArrowDownRight : Minus;
 
-  const temSparkline = (serie?.length ?? 0) >= 3;
+  const hasSparkline = (series?.length ?? 0) >= 3;
 
   return (
     <Card className="h-full">
       <Card.Content className="flex h-full flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm text-muted">{rotulo}</p>
-          {Icone && (
-            <Icone aria-hidden className="size-4 shrink-0 text-muted" />
+          <p className="text-sm text-muted">{label}</p>
+          {Icon && (
+            <Icon aria-hidden className="size-4 shrink-0 text-muted" />
           )}
         </div>
 
         <div className="flex flex-col gap-1">
           <p className="text-2xl font-semibold leading-none text-foreground">
-            {valor}
+            {value}
           </p>
-          {temDelta && (
-            <p className={`flex items-center gap-1 text-xs ${corDelta}`}>
-              <IconeDelta aria-hidden className="size-3.5 shrink-0" />
+          {hasDelta && (
+            <p className={`flex items-center gap-1 text-xs ${deltaColor}`}>
+              <DeltaIcon aria-hidden className="size-3.5 shrink-0" />
               <span className="font-medium">
-                {subiu ? "+" : ""}
-                {percentual(delta, 1)}
+                {wentUp ? "+" : ""}
+                {formatPercent(delta, 1)}
               </span>
-              {deltaLegenda && (
-                <span className="text-muted">{deltaLegenda}</span>
+              {deltaLabel && (
+                <span className="text-muted">{deltaLabel}</span>
               )}
             </p>
           )}
-          {!temDelta && deltaLegenda && (
-            <p className="text-xs text-muted">{deltaLegenda}</p>
+          {!hasDelta && deltaLabel && (
+            <p className="text-xs text-muted">{deltaLabel}</p>
           )}
         </div>
 
-        {temSparkline && serie && (
+        {hasSparkline && series && (
           <div className="mt-auto h-8" aria-hidden>
-            <Sparkline valores={serie} />
+            <Sparkline values={series} />
           </div>
         )}
 
-        {rodape && <div className="mt-auto">{rodape}</div>}
+        {footer && <div className="mt-auto">{footer}</div>}
       </Card.Content>
     </Card>
   );

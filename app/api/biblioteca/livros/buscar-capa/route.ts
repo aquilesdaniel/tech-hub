@@ -1,14 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-interface Capa {
+interface CoverResult {
   capa: string;
   autor: string | null;
   isbn: string | null;
 }
 
-const TEMPO_LIMITE = 8000;
+const TIMEOUT_MS = 8000;
 
-const TAMANHOS_CAPA = [
+const COVER_SIZES = [
   "extraLarge",
   "large",
   "medium",
@@ -17,7 +17,7 @@ const TAMANHOS_CAPA = [
   "smallThumbnail",
 ] as const;
 
-interface VolumeGoogle {
+interface GoogleVolume {
   volumeInfo?: {
     authors?: string[];
     imageLinks?: Record<string, string>;
@@ -25,14 +25,14 @@ interface VolumeGoogle {
   };
 }
 
-function extrairCapaGoogle(volume: VolumeGoogle): string | null {
-  const imagens = volume.volumeInfo?.imageLinks;
-  if (!imagens) {
+function extractGoogleCover(volume: GoogleVolume): string | null {
+  const images = volume.volumeInfo?.imageLinks;
+  if (!images) {
     return null;
   }
 
-  for (const tamanho of TAMANHOS_CAPA) {
-    const url = imagens[tamanho];
+  for (const size of COVER_SIZES) {
+    const url = images[size];
 
     if (url) {
       return url.replace(/^http:\/\//, "https://").replace(/&edge=curl/g, "");
@@ -42,45 +42,45 @@ function extrairCapaGoogle(volume: VolumeGoogle): string | null {
   return null;
 }
 
-async function buscarNoGoogle(
-  titulo: string,
-  autor: string | null,
-): Promise<Capa | null> {
-  const parametros = new URLSearchParams({
-    q: autor
-      ? `intitle:"${titulo}" inauthor:"${autor}"`
-      : `intitle:"${titulo}"`,
+async function searchGoogle(
+  title: string,
+  author: string | null,
+): Promise<CoverResult | null> {
+  const params = new URLSearchParams({
+    q: author
+      ? `intitle:"${title}" inauthor:"${author}"`
+      : `intitle:"${title}"`,
     maxResults: "10",
     printType: "books",
     country: "BR",
   });
 
-  const chave = process.env.GOOGLE_BOOKS_API_KEY;
-  if (chave) {
-    parametros.set("key", chave);
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
+  if (apiKey) {
+    params.set("key", apiKey);
   }
 
-  const resposta = await fetch(
-    `https://www.googleapis.com/books/v1/volumes?${parametros}`,
-    { signal: AbortSignal.timeout(TEMPO_LIMITE) },
+  const response = await fetch(
+    `https://www.googleapis.com/books/v1/volumes?${params}`,
+    { signal: AbortSignal.timeout(TIMEOUT_MS) },
   );
 
-  if (!resposta.ok) {
-    console.warn(`Google Books respondeu ${resposta.status}`);
+  if (!response.ok) {
+    console.warn(`Google Books respondeu ${response.status}`);
     return null;
   }
 
-  const dados = (await resposta.json()) as { items?: VolumeGoogle[] };
+  const data = (await response.json()) as { items?: GoogleVolume[] };
 
-  for (const volume of dados.items ?? []) {
-    const capa = extrairCapaGoogle(volume);
-    if (!capa) {
+  for (const volume of data.items ?? []) {
+    const cover = extractGoogleCover(volume);
+    if (!cover) {
       continue;
     }
 
     const info = volume.volumeInfo;
     return {
-      capa,
+      capa: cover,
       autor: info?.authors?.[0] ?? null,
       isbn:
         info?.industryIdentifiers?.find(
@@ -92,37 +92,37 @@ async function buscarNoGoogle(
   return null;
 }
 
-interface DocOpenLibrary {
+interface OpenLibraryDoc {
   author_name?: string[];
   cover_i?: number;
   isbn?: string[];
 }
 
-async function buscarNaOpenLibrary(
-  titulo: string,
-  autor: string | null,
-): Promise<Capa | null> {
-  const parametros = new URLSearchParams({
-    title: titulo,
+async function searchOpenLibrary(
+  title: string,
+  author: string | null,
+): Promise<CoverResult | null> {
+  const params = new URLSearchParams({
+    title,
     limit: "10",
     fields: "author_name,cover_i,isbn",
   });
-  if (autor) {
-    parametros.set("author", autor);
+  if (author) {
+    params.set("author", author);
   }
 
-  const resposta = await fetch(
-    `https://openlibrary.org/search.json?${parametros}`,
-    { signal: AbortSignal.timeout(TEMPO_LIMITE) },
+  const response = await fetch(
+    `https://openlibrary.org/search.json?${params}`,
+    { signal: AbortSignal.timeout(TIMEOUT_MS) },
   );
 
-  if (!resposta.ok) {
-    console.warn(`Open Library respondeu ${resposta.status}`);
+  if (!response.ok) {
+    console.warn(`Open Library respondeu ${response.status}`);
     return null;
   }
 
-  const dados = (await resposta.json()) as { docs?: DocOpenLibrary[] };
-  const doc = dados.docs?.find((item) => item.cover_i);
+  const data = (await response.json()) as { docs?: OpenLibraryDoc[] };
+  const doc = data.docs?.find((item) => item.cover_i);
   if (!doc?.cover_i) {
     return null;
   }
@@ -136,10 +136,10 @@ async function buscarNaOpenLibrary(
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const titulo = searchParams.get("titulo")?.trim();
-  const autor = searchParams.get("autor")?.trim() || null;
+  const title = searchParams.get("titulo")?.trim();
+  const author = searchParams.get("autor")?.trim() || null;
 
-  if (!titulo) {
+  if (!title) {
     return NextResponse.json(
       { error: "Título é obrigatório" },
       { status: 400 },
@@ -147,13 +147,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const resultado =
-      (await buscarNoGoogle(titulo, autor)) ??
-      (await buscarNaOpenLibrary(titulo, autor)) ??
-      (autor ? await buscarNaOpenLibrary(titulo, null) : null);
+    const result =
+      (await searchGoogle(title, author)) ??
+      (await searchOpenLibrary(title, author)) ??
+      (author ? await searchOpenLibrary(title, null) : null);
 
     return NextResponse.json(
-      resultado ?? { capa: null, autor: null, isbn: null },
+      result ?? { capa: null, autor: null, isbn: null },
     );
   } catch (error) {
     console.error("Erro ao buscar capa do livro:", error);

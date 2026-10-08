@@ -1,7 +1,7 @@
 "use client";
 
-import { SERIE } from "@/components/dashboard/viz";
-import { CabecalhoPagina, LayoutPagina } from "@/components/pagina";
+import { SERIES } from "@/components/dashboard/viz";
+import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { Button, Card } from "@heroui/react";
@@ -16,87 +16,87 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type Modulo = {
+type Module = {
   href: string;
-  titulo: string;
-  descricao: string;
-  icone: LucideIcon;
-  cor: string;
-  somenteAdmin?: boolean;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+  adminOnly?: boolean;
 };
 
-const MODULOS: Modulo[] = [
+const MODULES: Module[] = [
   {
     href: "/salgados",
-    titulo: "Salgados",
-    descricao:
+    title: "Salgados",
+    description:
       "Lance dívidas para os funcionarios, acompanhe as dívidas em aberto e registre pagamentos.",
-    icone: Cookie,
-    cor: SERIE.s2,
+    icon: Cookie,
+    color: SERIES.s2,
   },
   {
     href: "/biblioteca",
-    titulo: "Biblioteca",
-    descricao:
+    title: "Biblioteca",
+    description:
       "Consulte a biblioteca, visualize livros disponiveis, faça empréstimos e devolva os livros no prazo.",
-    icone: BookOpen,
-    cor: SERIE.s1,
+    icon: BookOpen,
+    color: SERIES.s1,
   },
   {
     href: "/certificacoes",
-    titulo: "Certificações",
-    descricao:
+    title: "Certificações",
+    description:
       "Consulte as certificações lançadas, datas de obtenção e tipo de certificação.",
-    icone: Award,
-    cor: SERIE.s3,
+    icon: Award,
+    color: SERIES.s3,
   },
   {
     href: "/ranking",
-    titulo: "Ranking",
-    descricao:
+    title: "Ranking",
+    description:
       "Consulte o ranking de certificações da empresa, métricas e a sua posição nela.",
-    icone: Trophy,
-    cor: SERIE.s4,
+    icon: Trophy,
+    color: SERIES.s4,
   },
   {
     href: "/admin",
-    titulo: "Administração",
-    descricao:
+    title: "Administração",
+    description:
       "Gerencie os colaboradores, setores e as configurações gerais do TechHub.",
-    icone: Shield,
-    cor: SERIE.s7,
-    somenteAdmin: true,
+    icon: Shield,
+    color: SERIES.s7,
+    adminOnly: true,
   },
 ];
 
 export default function HomePage() {
   const { user } = useAuth();
-  const ehAdmin = user?.tipo === "admin";
-  const modulos = MODULOS.filter((m) => !m.somenteAdmin || ehAdmin);
+  const isAdmin = user?.tipo === "admin";
+  const modules = MODULES.filter((m) => !m.adminOnly || isAdmin);
 
   return (
     <ProtectedRoute>
-      <LayoutPagina>
-        <CabecalhoPagina
-          titulo={`Olá, ${user?.nome?.split(" ")[0] ?? ""}`}
-          descricao="Selecione uma opção abaixo para navegar até a tela da funcionalidade desejada."
+      <PageLayout>
+        <PageHeader
+          title={`Olá, ${user?.nome?.split(" ")[0] ?? ""}`}
+          description="Selecione uma opção abaixo para navegar até a tela da funcionalidade desejada."
         />
 
         <section
           aria-label="Módulos do TechHub"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {modulos.map((modulo) => (
-            <CartaoModulo key={modulo.href} modulo={modulo} />
+          {modules.map((appModule) => (
+            <ModuleCard key={appModule.href} appModule={appModule} />
           ))}
         </section>
-      </LayoutPagina>
+      </PageLayout>
     </ProtectedRoute>
   );
 }
 
-function CartaoModulo({ modulo }: { modulo: Modulo }) {
-  const { icone: Icone } = modulo;
+function ModuleCard({ appModule }: { appModule: Module }) {
+  const { icon: Icon } = appModule;
 
   return (
     <Card className="group relative h-full transition-colors hover:bg-surface-secondary">
@@ -105,24 +105,24 @@ function CartaoModulo({ modulo }: { modulo: Modulo }) {
           aria-hidden
           className="flex size-11 shrink-0 items-center justify-center rounded-xl"
           style={{
-            color: modulo.cor,
-            backgroundColor: `color-mix(in oklab, ${modulo.cor} 14%, transparent)`,
+            color: appModule.color,
+            backgroundColor: `color-mix(in oklab, ${appModule.color} 14%, transparent)`,
           }}
         >
-          <Icone className="size-5" />
+          <Icon className="size-5" />
         </span>
 
         <div className="flex flex-col gap-1.5">
           <h2 className="text-lg font-semibold text-foreground">
-            {modulo.titulo}
+            {appModule.title}
           </h2>
           <p className="text-sm leading-relaxed text-muted">
-            {modulo.descricao}
+            {appModule.description}
           </p>
         </div>
 
         <Link
-          href={modulo.href}
+          href={appModule.href}
           className="mt-auto w-fit rounded-lg outline-none after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
           <Button excludeFromTabOrder>

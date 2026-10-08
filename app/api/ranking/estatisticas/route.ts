@@ -5,16 +5,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const seisMesesAtras = new Date();
-    seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     const [
-      totalColaboradores,
-      totalCertificacoes,
-      certificacoesPorColaborador,
-      colaboradorMaisCertificacoes,
-      tipoMaisPopular,
-      certificacoesRecentes,
+      totalEmployees,
+      totalCertifications,
+      certificationsByEmployee,
+      topCertifiedEmployee,
+      mostPopularType,
+      recentCertifications,
     ] = await prisma.$transaction([
       prisma.colaboradores.count(),
       prisma.certificacoes.count(),
@@ -33,33 +33,33 @@ export async function GET() {
         take: 1,
       }),
       prisma.certificacoes.findMany({
-        where: { data_obtencao: { gte: seisMesesAtras } },
+        where: { data_obtencao: { gte: sixMonthsAgo } },
         select: { data_obtencao: true },
       }),
     ]);
 
-    const mediaCertificacoesPorColaborador =
-      certificacoesPorColaborador.length > 0
-        ? totalCertificacoes / certificacoesPorColaborador.length
+    const averageCertificationsPerEmployee =
+      certificationsByEmployee.length > 0
+        ? totalCertifications / certificationsByEmployee.length
         : 0;
 
-    const crescimentoPorMes = new Map<string, number>();
-    for (const cert of certificacoesRecentes) {
-      const mes = cert.data_obtencao.toISOString().slice(0, 7);
-      crescimentoPorMes.set(mes, (crescimentoPorMes.get(mes) ?? 0) + 1);
+    const growthByMonth = new Map<string, number>();
+    for (const cert of recentCertifications) {
+      const month = cert.data_obtencao.toISOString().slice(0, 7);
+      growthByMonth.set(month, (growthByMonth.get(month) ?? 0) + 1);
     }
 
-    const crescimento_mensal = Array.from(crescimentoPorMes.entries())
+    const monthly_growth = Array.from(growthByMonth.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, certificacoes]) => ({ mes, certificacoes }));
+      .map(([month, certifications]) => ({ month, certifications }));
 
     return NextResponse.json({
-      total_colaboradores: totalColaboradores,
-      total_certificacoes: totalCertificacoes,
-      media_certificacoes_por_colaborador: mediaCertificacoesPorColaborador,
-      colaborador_mais_certificacoes: colaboradorMaisCertificacoes?.nome ?? "N/A",
-      tipo_certificacao_mais_popular: tipoMaisPopular[0]?.tipo ?? "N/A",
-      crescimento_mensal,
+      total_employees: totalEmployees,
+      total_certifications: totalCertifications,
+      average_certifications_per_employee: averageCertificationsPerEmployee,
+      top_certified_employee: topCertifiedEmployee?.nome ?? "N/A",
+      most_popular_certification_type: mostPopularType[0]?.tipo ?? "N/A",
+      monthly_growth,
     });
   } catch (error) {
     console.error("Erro ao buscar estatísticas gerais:", error);

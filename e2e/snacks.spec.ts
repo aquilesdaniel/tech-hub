@@ -1,34 +1,39 @@
 import { expect, test } from "@playwright/test";
-import { prepararSessao, USUARIO_ADMIN, USUARIO_COMUM } from "./support/app";
+import {
+  ADMIN_USER,
+  REGULAR_USER,
+  response,
+  setupSession,
+} from "./support/app";
 
-const tabelaPendentes = (page: import("@playwright/test").Page) =>
+const pendingTable = (page: import("@playwright/test").Page) =>
   page.getByRole("grid", { name: /dívidas pendentes/i });
 
 test("lista as dívidas pendentes com colaborador, item e valor", async ({
   page,
 }) => {
-  await prepararSessao(page, USUARIO_COMUM);
+  await setupSession(page, REGULAR_USER);
   await page.goto("/salgados");
 
   await expect(
     page.getByRole("heading", { name: "Controle de Salgados" }),
   ).toBeVisible();
 
-  const tabela = tabelaPendentes(page);
-  await expect(tabela.getByText("Aquiles Bastos")).toBeVisible();
-  await expect(tabela.getByText("Coxinha")).toBeVisible();
-  await expect(tabela.getByText(/R\$\s?12,50/)).toBeVisible();
+  const table = pendingTable(page);
+  await expect(table.getByText("Aquiles Bastos")).toBeVisible();
+  await expect(table.getByText("Coxinha")).toBeVisible();
+  await expect(table.getByText(/R\$\s?12,50/)).toBeVisible();
 });
 
 test("admin lança uma nova dívida e a API recebe os dados do formulário", async ({
   page,
 }) => {
-  let recebido: any = null;
+  let received: any = null;
 
-  await prepararSessao(page, USUARIO_ADMIN, {
-    "POST /api/salgados/dividas": ({ corpo }) => {
-      recebido = corpo;
-      return { status: 201, corpo: { id: 999 } };
+  await setupSession(page, ADMIN_USER, {
+    "POST /api/salgados/dividas": ({ body }) => {
+      received = body;
+      return response(201, { id: 999 });
     },
   });
 
@@ -50,9 +55,9 @@ test("admin lança uma nova dívida e a API recebe os dados do formulário", asy
   await modal.getByRole("button", { name: "Adicionar Dívida" }).click();
 
   await expect
-    .poll(() => recebido, { message: "a API deveria ter recebido o POST" })
+    .poll(() => received, { message: "a API deveria ter recebido o POST" })
     .not.toBeNull();
-  expect(recebido).toMatchObject({
+  expect(received).toMatchObject({
     colaborador_id: 4,
     item: "salgado",
     motivo: "Aposta perdida",
@@ -65,12 +70,12 @@ test("admin lança uma nova dívida e a API recebe os dados do formulário", asy
 test("o formulário barra o lançamento sem os campos obrigatórios", async ({
   page,
 }) => {
-  let chamou = false;
+  let called = false;
 
-  await prepararSessao(page, USUARIO_ADMIN, {
+  await setupSession(page, ADMIN_USER, {
     "POST /api/salgados/dividas": () => {
-      chamou = true;
-      return { status: 201, corpo: { id: 999 } };
+      called = true;
+      return response(201, { id: 999 });
     },
   });
 
@@ -84,5 +89,5 @@ test("o formulário barra o lançamento sem os campos obrigatórios", async ({
     page.getByText("Preencha todos os campos obrigatórios."),
   ).toBeVisible();
   await expect(modal).toBeVisible();
-  expect(chamou).toBe(false);
+  expect(called).toBe(false);
 });
