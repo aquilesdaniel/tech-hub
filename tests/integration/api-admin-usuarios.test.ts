@@ -40,17 +40,18 @@ function post(corpo: unknown) {
   });
 }
 
-function amanha() {
+// Data local (AAAA-MM-DD): a rota interpreta admin_ate no fuso local, então
+// toISOString (UTC) viraria o dia seguinte à noite no Brasil.
+function diaLocal(deslocamento: number) {
   const data = new Date();
-  data.setDate(data.getDate() + 1);
-  return data.toISOString().slice(0, 10);
+  data.setDate(data.getDate() + deslocamento);
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${data.getFullYear()}-${mes}-${dia}`;
 }
 
-function ontem() {
-  const data = new Date();
-  data.setDate(data.getDate() - 1);
-  return data.toISOString().slice(0, 10);
-}
+const amanha = () => diaLocal(1);
+const ontem = () => diaLocal(-1);
 
 beforeEach(() => {
   jest.spyOn(console, "error").mockImplementation(() => {});
