@@ -99,7 +99,8 @@ npm run dev
 - `PATCH /api/day-offs/[id]` - Marcar como usado
 
 ### Autenticação
-- `POST /api/auth/login` - Fazer login
+- `POST /api/auth/senior` - Fazer login pela plataforma Senior
+- `POST /api/auth/logout` - Encerrar a sessão
 
 ## Tecnologias Utilizadas
 
