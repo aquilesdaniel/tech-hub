@@ -42,9 +42,17 @@ module.exports = async () => {
     testMatch: ["<rootDir>/tests/integration/**/*.test.{ts,tsx}"],
   })();
 
+  const securityProject = await createJestConfig({
+    ...base,
+    displayName: "security",
+    testEnvironment: "node",
+    testMatch: ["<rootDir>/tests/security/**/*.test.ts"],
+  })();
+
   return {
     projects: [
       unitProject,
+      securityProject,
       {
         ...integrationProject,
         transformIgnorePatterns: [

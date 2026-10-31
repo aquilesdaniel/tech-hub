@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isHttpUrl } from "@/lib/safe-url";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -147,6 +148,13 @@ export async function POST(request: NextRequest) {
           error:
             "Campos obrigatórios: colaborador_id, nome, tipo, instituicao, data_obtencao",
         },
+        { status: 400 },
+      );
+    }
+
+    if (credentialUrl && !isHttpUrl(credentialUrl)) {
+      return NextResponse.json(
+        { error: "A URL da credencial deve começar com http:// ou https://" },
         { status: 400 },
       );
     }

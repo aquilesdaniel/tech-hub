@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
+import { withSession } from "@/lib/session";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -11,6 +13,9 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    const limited = rateLimit(req, String(username));
+    if (limited) return limited;
 
     const loginResponse = await fetch(
       "https://platform.senior.com.br/t/senior.com.br/bridge/1.0/rest/platform/authentication/actions/login",
@@ -177,10 +182,13 @@ export async function POST(req: NextRequest) {
       admin_temporario_ate: localUser.admin_temporario_ate || null,
     };
 
-    return NextResponse.json({
-      user,
-      message: "Login realizado com sucesso",
-    });
+    return withSession(
+      NextResponse.json({
+        user,
+        message: "Login realizado com sucesso",
+      }),
+      localUser.id,
+    );
   } catch (error) {
     console.error("Erro no login com Senior:", error);
     return NextResponse.json(

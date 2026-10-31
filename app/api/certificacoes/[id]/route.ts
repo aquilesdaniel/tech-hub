@@ -1,7 +1,17 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
+import { isHttpUrl } from "@/lib/safe-url";
+import { denyUnlessOwnerOrAdmin } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
+
+async function denyUnlessCertificationOwner(request: NextRequest, id: number) {
+  const certification = await prisma.certificacoes.findUnique({
+    where: { id },
+    select: { colaborador_id: true },
+  });
+  return denyUnlessOwnerOrAdmin(request, certification?.colaborador_id ?? null);
+}
 
 export async function GET(
   request: NextRequest,
@@ -56,7 +66,18 @@ export async function PATCH(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
+
+    const denied = await denyUnlessCertificationOwner(request, id);
+    if (denied) return denied;
+
     const body = await request.json();
+
+    if (body.url_credencial && !isHttpUrl(body.url_credencial)) {
+      return NextResponse.json(
+        { error: "A URL da credencial deve começar com http:// ou https://" },
+        { status: 400 },
+      );
+    }
 
     const data: Prisma.certificacoesUpdateInput = {};
     for (const field of UPDATABLE_FIELDS) {
@@ -125,6 +146,10 @@ export async function DELETE(
   try {
     const { id: idParam } = await params;
     const id = Number(idParam);
+
+    const denied = await denyUnlessCertificationOwner(request, id);
+    if (denied) return denied;
+
     await prisma.certificacoes.delete({ where: { id } });
 
     return NextResponse.json({ message: "Certificação removida com sucesso" });

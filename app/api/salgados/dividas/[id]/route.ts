@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { serializeDecimals } from "@/lib/serialize";
+import { denyUnlessOwnerOrAdmin } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -43,6 +44,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Só admin altera dívida: o próprio devedor não pode se marcar como pago.
+    const denied = await denyUnlessOwnerOrAdmin(req, null);
+    if (denied) return denied;
+
     const { id: idParam } = await params;
     const id = Number(idParam);
     const body = await req.json();

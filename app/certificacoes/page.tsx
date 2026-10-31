@@ -9,6 +9,7 @@ import { PageHeader, PageLayout } from "@/components/page-layout";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ScreenSpinner } from "@/components/screen-spinner";
 import { useAuth } from "@/contexts/auth-context";
+import { isHttpUrl } from "@/lib/safe-url";
 import {
   Button,
   Card,
@@ -409,13 +410,17 @@ export default function CertificationsPage() {
         const certification = row.original;
         return (
           <div className="flex justify-end gap-2">
-            {certification.url_credencial && (
+            {isHttpUrl(certification.url_credencial) && (
               <Button
                 isIconOnly
                 variant="outline"
                 aria-label="Ver credencial"
                 onPress={() =>
-                  window.open(certification.url_credencial!, "_blank")
+                  window.open(
+                    certification.url_credencial!,
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
                 }
               >
                 <ExternalLink />

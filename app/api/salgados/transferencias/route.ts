@@ -5,7 +5,7 @@ import {
   PIX_KEY_TYPES,
   type PixKeyType,
 } from "@/lib/abacatepay";
-import { isAdmin } from "@/lib/permissions";
+import { denyUnlessOwnerOrAdmin } from "@/lib/session";
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 
@@ -36,20 +36,11 @@ function normalizeKey(key: string, type: PixKeyType) {
 
 export async function POST(req: NextRequest) {
   try {
-    const {
-      colaborador_id: employeeId,
-      amount,
-      description,
-      pix_key,
-      pix_key_type,
-    } = await req.json();
+    // O admin vem do cookie de sessão assinado, nunca do colaborador_id do corpo.
+    const denied = await denyUnlessOwnerOrAdmin(req, null);
+    if (denied) return denied;
 
-    if (!(await isAdmin(Number(employeeId)))) {
-      return NextResponse.json(
-        { error: "Apenas administradores podem solicitar saques" },
-        { status: 403 },
-      );
-    }
+    const { amount, description, pix_key, pix_key_type } = await req.json();
 
     const amountValue = Number(amount);
     if (!Number.isFinite(amountValue) || amountValue < MIN_AMOUNT_REAIS) {
